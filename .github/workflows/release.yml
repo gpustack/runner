@@ -1,0 +1,54 @@
+# This workflow runs for releasing the package to PyPI.
+# It triggers on workflow dispatch or when a tag matching 'v*.*.*' is pushed.
+
+name: release
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  INPUT_TOKEN: ${{ secrets.CI_PYPI_API_TOKEN }}
+  INPUT_PROJECT: gpustack-runner
+
+jobs:
+  # Build wheel and source distributions, and upload them to PyPI and GitHub Releases.
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.20"
+          enable-cache: true
+          python-version: 3.11
+      - name: Build
+        run: |
+          make build
+      - name: Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: ${{ !contains(github.ref, 'rc') }}
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref, 'rc') }}
+          files: dist/*
+      - name: Publish
+        run: |
+          uv publish --token ${INPUT_TOKEN}
+          uv run --with ${INPUT_PROJECT} --no-project --python -c "import runner; print(runner.__version__)"

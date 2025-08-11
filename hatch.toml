@@ -1,0 +1,23 @@
+[version]
+source = "vcs"
+fallback-version = "0.0.1"
+
+[version.raw-options]
+version_scheme = "no-guess-dev"
+
+[build.targets.sdist]
+exclude = [
+    "/.github",
+    "/.venv",
+    "/dist",
+    "/tools"
+]
+
+[build.targets.wheel]
+sources = [
+    "runner"
+]
+macos-max-compat = true
+
+[build.hooks.vcs]
+version-file = "runner/__about__.py"
