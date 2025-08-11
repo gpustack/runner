@@ -1,0 +1,56 @@
+# IDE or OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# C extensions
+*.so
+
+# Python-generated files
+_version.py
+_version_appendix.py
+__pycache__/
+__pypackages__/
+*.py[oc]
+*$py.class
+build/
+downloads/
+dist/
+eggs/
+.eggs/
+parts/
+sdist/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+env/
+venv/
+.env/
+.venv/
+ENV/
+VENV/
+env.bak/
+venv.bak/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
