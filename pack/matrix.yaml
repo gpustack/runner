@@ -1,0 +1,102 @@
+# Runner Packing Rules
+#
+# - backend:   (Required) The accelerated backend to pack for,
+#              used to select the packing rules and Dockerfile below `pack` directory.
+# - services:  (Optional) The inference service to pack for,
+#              used to select the Docker build phase described in `pack/${backend}/Dockerfile`.
+#              Default to `voxbox` and `vllm`.
+# - platforms: (Optional) The platforms to build for,
+#              used to select the Docker Linux build platforms.
+#              Default to `linux/amd64` and `linux/arm64`.
+# - args:      (Optional) The build arguments to pass to the Docker build,
+#              used to override the default build arguments in `pack/${backend}/Dockerfile`.
+
+rules:
+
+  #
+  # Ascend CANN
+  #
+
+  ## Ascend CANN 8.2.rc1, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "voxbox"
+      - "mindie"
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2.rc1"
+      - "CANN_ARCHS=910b"
+  ## Ascend CANN 8.2.rc1, using CANN Kernel for 310P.
+  ##
+  - backend: "cann"
+    services:
+      - "voxbox"
+      - "mindie"
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2.rc1"
+      - "CANN_ARCHS=310p"
+
+  #
+  # Iluvatar CoreX
+  #
+
+  ## Iluvatar CoreX 4.2.0
+  ##
+  - backend: "corex"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "COREX_VERSION=4.2.0"
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## NVIDIA CUDA 12.4.1, using PyTorch +cu126 in linux/amd64.
+  ##
+  - backend: "cuda"
+    args:
+      - "PYTHON_VERSION=3.11"
+      - "CMAKE_MAX_JOBS=2"
+      - "CUDA_VERSION=12.4.1"
+      - "VOXBOX_TORCH_CUDA_VERSION=12.6.3"
+      - "VLLM_TORCH_CUDA_VERSION=12.6.3"
+  ## NVIDIA CUDA 12.6.3, using PyTorch +cu126 in linux/amd64.
+  ##
+  - backend: "cuda"
+    args:
+      - "CMAKE_MAX_JOBS=2"
+      - "CUDA_VERSION=12.6.3"
+  ## NVIDIA CUDA 12.8.1, using PyTorch +cu128 in both linux/amd64 and linux/arm64.
+  ##
+  - backend: "cuda"
+    args:
+      - "CMAKE_MAX_JOBS=2"
+      - "CUDA_VERSION=12.8.1"
+
+  #
+  # Hygon DTK
+  #
+
+  ## Hygon DTK 25.04.1
+  ##
+  - backend: "dtk"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "DTK_VERSION=25.04.1"
+
+  #
+  # AMD ROCm
+  #
+
+  ## AMD ROCm 6.3.4, using PyTorch +rocm6.3 in linux/amd64.
+  ##
+  - backend: "rocm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "CMAKE_MAX_JOBS=8"
+      - "ROCM_VERSION=6.3.4"

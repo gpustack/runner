@@ -1,0 +1,15 @@
+# https://github.com/codespell-project/codespell#using-a-config-file
+[codespell]
+
+# Comma-separated list of files to skip.
+skip = "*.json,*.jsonl,*.patch,*.txt"
+
+# Comma separated list of words to be ignored. Words must be lowercased.
+ignore-words-list = "ans, als, hel, boostrap, childs, te, vas, hsa, ment"
+
+# Custom dictionary file that contains spelling corrections.
+# Run with option '--dictionary=-' to include also default dictionary.
+dictionary = .codespelldict
+
+# Check file names as well.
+check-filenames = true

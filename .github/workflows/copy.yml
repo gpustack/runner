@@ -1,0 +1,74 @@
+# This workflow copies a Docker image from a source registry to Docker Hub.
+# It uses the `skopeo` tool to perform the copy operation.
+# The source image is specified in the format "namespace/name:tag".
+# The destination image is automatically suffixed with "-vanilla".
+# The workflow is triggered manually via the GitHub Actions UI.
+
+name: copy
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      src-registry:
+        description: 'Source Docker registry.'
+        required: false
+        default: 'docker.io'
+        type: string
+      src-image:
+        description: 'Source Docker image, inform of "namespace/name:tag".'
+        required: true
+        type: string
+      src-username:
+        description: 'Username of Source Docker registry.'
+        required: false
+        type: string
+      src-token:
+        description: 'Temporary token of Source Docker registry.'
+        required: false
+        type: string
+      dst-image-tag:
+        description: 'Destination Docker image tag, automatically suffixed with "-vanilla".'
+        required: true
+        type: string
+
+env:
+  INPUT_USERNAME: gpustack
+  INPUT_PASSWORD: ${{ secrets.CI_DOCKERHUB_PASSWORD }}
+  INPUT_NAMESPACE: gpustack
+  INPUT_REPOSITORY: runner
+
+jobs:
+  # Transfer Image.
+  copy:
+    runs-on: macos-14
+    steps:
+      - name: Deps
+        run: |
+          #!/usr/bin/env bash
+
+          brew install skopeo
+      - name: Copy
+        env:
+          INPUT_SRC_REGISTRY: ${{ inputs.src-registry }}
+          INPUT_SRC_IMAGE: ${{ inputs.src-image }}
+          INPUT_SRC_USERNAME: ${{ inputs.src-username }}
+          INPUT_SRC_TOKEN: ${{ inputs.src-token }}
+          INPUT_TAG: ${{ inputs.dst-image-tag }}
+        run: |
+          #!/usr/bin/env bash
+
+          if [[ -n "${INPUT_SRC_TOKEN}" ]]; then
+            skopeo login ${INPUT_SRC_REGISTRY} -u ${INPUT_SRC_USERNAME} -p ${INPUT_SRC_TOKEN}
+          fi
+          skopeo login docker.io -u ${INPUT_USERNAME} -p ${INPUT_PASSWORD}
+
+          skopeo copy docker://${INPUT_SRC_REGISTRY}/${INPUT_SRC_IMAGE} docker://docker.io/${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${INPUT_TAG}-vanilla --all --retry-delay 5s --retry-times 10

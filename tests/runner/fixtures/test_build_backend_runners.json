@@ -1,0 +1,114 @@
+[
+  [
+    "unknown",
+    {
+      "backend": "unknown"
+    },
+    []
+  ],
+  [
+    "cann:8.2.rc1:mindie",
+    {
+      "backend": "cann",
+      "backend_version": "8.2.rc1",
+      "service": "mindie"
+    },
+    [
+      {
+        "backend": "cann",
+        "versions": [
+          {
+            "variants": [
+              {
+                "services": [
+                  {
+                    "service": "mindie",
+                    "versions": [
+                      {
+                        "platforms": [
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
+                            "platform": "linux/amd64"
+                          },
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
+                            "platform": "linux/arm64"
+                          }
+                        ],
+                        "version": "2.1.rc1"
+                      }
+                    ]
+                  }
+                ],
+                "variant": "310p"
+              },
+              {
+                "services": [
+                  {
+                    "service": "mindie",
+                    "versions": [
+                      {
+                        "platforms": [
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+                            "platform": "linux/amd64"
+                          },
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+                            "platform": "linux/arm64"
+                          }
+                        ],
+                        "version": "2.1.rc1"
+                      }
+                    ]
+                  }
+                ],
+                "variant": "910b"
+              }
+            ],
+            "version": "8.2.rc1"
+          }
+        ]
+      }
+    ]
+  ],
+  [
+    "dtk:25.04.1:vllm",
+    {
+      "backend": "dtk",
+      "backend_version": "25.04.1",
+      "service": "vllm"
+    },
+    [
+      {
+        "backend": "dtk",
+        "versions": [
+          {
+            "variants": [
+              {
+                "services": [
+                  {
+                    "service": "vllm",
+                    "versions": [
+                      {
+                        "platforms": [
+                          {
+                            "docker_image": "gpustack/runner:dtk25.04-vllm0.8.5",
+                            "platform": "linux/amd64"
+                          }
+                        ],
+                        "version": "0.8.5"
+                      }
+                    ]
+                  }
+                ],
+                "variant": ""
+              }
+            ],
+            "version": "25.04.1"
+          }
+        ]
+      }
+    ]
+  ]
+]

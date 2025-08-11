@@ -1,0 +1,284 @@
+# This workflow packs the Docker images for the GPUStack runner.
+# It builds the images based on the matrix defined in `pack/matrix.yaml`.
+# It supports multiple backends and targets, and can create manifest lists for multi-arch support.
+# It also supports dry runs to check the matrix and Dockerfile without building images.
+# The workflow is triggered manually via the GitHub Actions UI.
+
+name: pack
+
+permissions:
+  contents: write
+  actions: read
+  pull-requests: write
+  id-token: write
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Control the Dockerfile and build context.
+      backend:
+        description: 'Backend, which accelerated backend to pack for.'
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - cann
+          - corex
+          - cuda
+          - dtk
+          - rocm
+      # Control the build stage.
+      target:
+        description: 'Target, which target to pack for, "runtime" is for runtime image, "services" is to build all services, or other specific target.'
+        required: false
+        type: choice
+        default: services
+        options:
+          - runtime
+          - services
+          - voxbox
+          - mindie
+          - vllm
+      # Since specific Backend and Target still result in many tags,
+      # we can leverage this to control packing one specific tag, even os/arch.
+      tag:
+        description: 'Tag (ignore -dev suffix), which tag to pack for. Pack all tags given by Backend and Target if not specified.'
+        required: false
+        type: string
+        default: ""
+      # Allow to pass arguments to the building,
+      # but recommended to code into the matrix.yaml.
+      args:
+        description: 'Arguments (using space to separate multiple items), which build arguments use for packing.'
+        required: false
+        type: string
+        default: ""
+      # Debug.
+      dry_run:
+        description: 'Dry run, print matrix and check the Dockerfile.'
+        required: false
+        type: boolean
+        default: false
+      # Do not append a `-dev` suffix to the tag.
+      for_release:
+        description: 'For release (without -dev suffix). Always be true if target is "runtime".'
+        required: false
+        type: boolean
+        default: false
+      # Ignore --cache-from.
+      with_cache:
+        description: 'With cache, specially meaning cache from previous built result.'
+        required: false
+        type: boolean
+        default: true
+      # Choice large GitHub hosted runner.
+      runner_profile:
+        description: 'Runner profile, which profile to use for the runner.'
+        required: false
+        type: choice
+        default: normal
+        options:
+          - normal
+          - 8x
+          - 16x
+          - 32x
+      # Clean the runner before packing.
+      runner_clean:
+        description: 'Runner clean before packing, which means to clean the runner before packing. Always be true if runner profile is "normal".'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  INPUT_USERNAME: gpustack
+  INPUT_PASSWORD: ${{ secrets.CI_DOCKERHUB_PASSWORD }}
+  INPUT_NAMESPACE: gpustack
+  INPUT_REPOSITORY: runner
+  INPUT_CACHE_REPOSITORY: runner-build-cache
+
+jobs:
+  # Expand the matrix based on the input parameters.
+  expand-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      build_jobs: ${{ steps.expand-matrix.outputs.build_jobs }}
+      manifest_jobs: ${{ steps.expand-matrix.outputs.manifest_jobs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Expand Matrix
+        id: expand-matrix
+        env:
+          INPUT_BACKEND: ${{ github.event.inputs.backend }}
+          INPUT_TARGET: ${{ github.event.inputs.target }}
+          INPUT_TAG: ${{ github.event.inputs.tag }}
+          INPUT_ARGS: ${{ github.event.inputs.args }}
+          INPUT_FOR_RELEASE: ${{ github.event.inputs.for_release }}
+          INPUT_RUNNER_PROFILE: ${{ github.event.inputs.runner_profile }}
+          INPUT_WORKSPACE: ${{ github.workspace }}/pack
+          INPUT_TEMPDIR: ${{ runner.temp }}
+        run: ${{ github.workspace }}/pack/expand_matrix.sh
+
+  # Build the Docker images per OS/ARCH.
+  build:
+    timeout-minutes: 360
+    needs:
+      - expand-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.expand-matrix.outputs.build_jobs) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Maximize Docker Build Space
+        if: ${{ github.event.inputs.dry_run == 'false' && (github.event.inputs.runner_clean == 'true' || github.event.inputs.runner_profile == 'normal') }}
+        uses: gpustack/.github/.github/actions/maximize-docker-build-space@main
+        with:
+          deep-clean: true
+          root-reserve-mb: 20480
+      - name: Setup BuildX
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+            env.BUILDKIT_STEP_LOG_MAX_SIZE=-1
+            env.BUILDKIT_STEP_LOG_MAX_SPEED=-1
+      - name: Login DockerHub
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.INPUT_USERNAME }}
+          password: ${{ env.INPUT_PASSWORD }}
+      - name: Get Metadata
+        id: metadata
+        env:
+          INPUT_WITH_CACHE: ${{ github.event.inputs.with_cache }}
+          INPUT_PLATFORM_TAG: ${{ matrix.platform_tag }}
+          INPUT_ARGS: ${{ join(matrix.args, ' ') }}
+        run: |
+          #!/usr/bin/env bash
+
+          set -eo pipefail
+
+          # Export tags to GH output.
+          echo "tags<<EOF" >> $GITHUB_OUTPUT
+          echo "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${INPUT_PLATFORM_TAG}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Export build_args to GH output.
+          echo "build_args<<EOF" >> $GITHUB_OUTPUT
+          for arg in ${INPUT_ARGS}; do
+            echo "$arg" >> $GITHUB_OUTPUT
+          done
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Export cache_from to GH output.
+          echo "cache_from<<EOF" >> $GITHUB_OUTPUT
+          if [[ "${INPUT_WITH_CACHE}" == "true" ]]; then
+            echo "type=registry,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${INPUT_PLATFORM_TAG}" >> $GITHUB_OUTPUT
+          fi
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Export cache_to to GH output.
+          echo "cache_to<<EOF" >> $GITHUB_OUTPUT
+          echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${INPUT_PLATFORM_TAG}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Package
+        timeout-minutes: 360
+        uses: docker/build-push-action@v6
+        with:
+          allow: |
+            network.host
+            security.insecure
+          call: ${{ github.event.inputs.dry_run == 'true' && 'check' || 'build' }}
+          ulimit: |
+            nofile=65536:65536
+          push: ${{ github.event.inputs.dry_run == 'false' }}
+          provenance: false
+          sbom: false
+          context: ${{ github.workspace }}/pack/${{ matrix.backend }}
+          file: ${{ github.workspace }}/pack/${{ matrix.backend }}/Dockerfile
+          platforms: ${{ matrix.platform }}
+          target: ${{ matrix.service }}
+          tags: |
+            ${{ steps.metadata.outputs.tags }}
+          build-args: |
+            ${{ steps.metadata.outputs.build_args }}
+          cache-from: |
+            ${{ steps.metadata.outputs.cache_from }}
+          cache-to: |
+            ${{ steps.metadata.outputs.cache_to }}
+
+  # Pack the Docker images into manifest lists.
+  manifest:
+    if: ${{ github.event.inputs.dry_run == 'false' }}
+    needs:
+      - expand-matrix
+      - build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.INPUT_USERNAME }}
+          password: ${{ env.INPUT_PASSWORD }}
+      - name: Manifest
+        env:
+          INPUT_MANIFEST_JOBS: ${{ needs.expand-matrix.outputs.manifest_jobs }}
+        run: |
+          #!/usr/bin/env bash
+
+          set -eo pipefail
+
+          # Iterate all items of manifest jobs.
+          for TAG in $(echo "${INPUT_MANIFEST_JOBS}" | jq -r 'keys[]'); do
+              PLATFORM_TAGS="$(echo "${INPUT_MANIFEST_JOBS}" | jq -r \
+                --arg tag "${TAG}" \
+                --arg repo "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}" \
+                '.[$tag] | map($repo + ":" + .) | join(" ")')"
+              echo "[INFO]: Creating manifest '${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}' with '${PLATFORM_TAGS}'"
+              docker manifest create --amend "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}" ${PLATFORM_TAGS}
+              docker manifest inspect "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}"
+              echo "[INFO]: Pushing manifest '${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}'"
+              docker manifest push --purge "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}"
+          done
+
+  # Submit a PR to the main branch.
+  merge-runner:
+    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.target != 'runtime' && github.event.inputs.for_release == 'true' }}
+    needs:
+      - expand-matrix
+      - manifest
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Merge Runner
+        env:
+          INPUT_MANIFEST_JOBS: ${{ needs.expand-matrix.outputs.manifest_jobs }}
+        run: ${{ github.workspace }}/pack/merge_runner.sh
+      - name: Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          delete-branch: true
+          commit-message: 'chore: update runner by gha workflow ${{ github.run_id }}'
+          title: 'chore: update runner by gha workflow ${{ github.run_id }}'
+          body: |
+            Update runner by GHA workflow [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
