@@ -1,6 +1,6 @@
 [
+  "cann",
   [
-    "cann",
     {
       "backend": "cann"
     },
@@ -115,8 +115,8 @@
       }
     ]
   ],
+  "corex",
   [
-    "corex",
     {
       "backend": "corex"
     },
@@ -141,8 +141,8 @@
       }
     ]
   ],
+  "cuda",
   [
-    "cuda",
     {
       "backend": "cuda"
     },
@@ -257,8 +257,8 @@
       }
     ]
   ],
+  "dtk",
   [
-    "dtk",
     {
       "backend": "dtk"
     },
@@ -283,8 +283,8 @@
       }
     ]
   ],
+  "rocm",
   [
-    "rocm",
     {
       "backend": "rocm"
     },
