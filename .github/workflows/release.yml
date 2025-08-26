@@ -1,0 +1,105 @@
+# This workflow runs for releasing the package to PyPI.
+# It triggers on workflow dispatch or when a tag matching 'v*.*.*' is pushed.
+
+name: release
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+      - "v*-dev"
+    tags:
+      - "v*.*.*"
+    paths-ignore:
+      - "!.github/workflows/release.yml"
+      - "pack/**"
+      - "docs/**"
+      - "tools/**"
+      - "**.md"
+      - "**.mdx"
+      - "**.png"
+      - "**.jpg"
+      - "**.jpeg"
+      - "**.gif"
+      - "**.webp"
+
+env:
+  INPUT_PROJECT: gpustack-runner
+
+jobs:
+  # Build wheel and source distributions, and upload them to PyPI and GitHub Releases.
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.20"
+          enable-cache: true
+          python-version: 3.11
+      - name: Build
+        run: |
+          make build
+      - name: Release Assets
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: ${{ !contains(github.ref, 'rc') }}
+          fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref, 'rc') }}
+          files: dist/*
+      - name: Publish
+        continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        env:
+          INPUT_TOKEN: ${{ startsWith(github.ref, 'refs/tags/') && secrets.CI_PYPI_API_TOKEN || secrets.CI_TEST_PYPI_API_TOKEN }}
+          INPUT_INDEX: ${{ startsWith(github.ref, 'refs/tags/') && 'pypi' || 'testpypi' }}
+          INPUT_WORKSPACE: ${{ github.workspace }}/gpustack_runner
+          INPUT_TEMPDIR: ${{ runner.temp }}
+        run: |
+          #!/usr/bin/env bash
+
+          set -eo pipefail
+
+          uv publish \
+            --index ${INPUT_INDEX} \
+            --token ${INPUT_TOKEN} || true
+
+          set -x
+          cat ${INPUT_WORKSPACE}/_version.py
+          cat ${INPUT_WORKSPACE}/_version_appendix.py
+          set +x
+
+          mkdir -p ${INPUT_TEMPDIR}/verify
+          cat <<EOF > ${INPUT_TEMPDIR}/verify/verify.py
+          import gpustack_runner as runner
+
+          print(runner.version)
+          print(runner.commit_id)
+          EOF
+
+          uv run \
+            --index https://pypi.org/simple/ \
+            --index https://test.pypi.org/simple/ \
+            --index-strategy unsafe-best-match \
+            --with ${INPUT_PROJECT} \
+            --isolated \
+            --no-project \
+            --active \
+            --verbose \
+            --script ${INPUT_TEMPDIR}/verify/verify.py

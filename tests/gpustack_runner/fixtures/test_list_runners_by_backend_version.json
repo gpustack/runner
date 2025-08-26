@@ -1,0 +1,71 @@
+[
+  [
+    "unknown",
+    {
+      "backend": "unknown"
+    },
+    []
+  ],
+  [
+    "dtk:25.04",
+    {
+      "backend": "dtk",
+      "backend_version": "25.04"
+    },
+    [
+      {
+        "backend": "dtk",
+        "backend_version": "25.04",
+        "original_backend_version": "25.04.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.8.5",
+        "original_service_version": "0.8.5",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:dtk25.04-vllm0.8.5"
+      },
+      {
+        "backend": "dtk",
+        "backend_version": "25.04",
+        "original_backend_version": "25.04.1",
+        "backend_variant": "",
+        "service": "voxbox",
+        "service_version": "0.0.19",
+        "original_service_version": "0.0.19",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:dtk25.04-voxbox0.0.19"
+      }
+    ]
+  ],
+  [
+    "dtk:25",
+    {
+      "backend": "dtk",
+      "backend_version_prefix": "25"
+    },
+    [
+      {
+        "backend": "dtk",
+        "backend_version": "25.04",
+        "original_backend_version": "25.04.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.8.5",
+        "original_service_version": "0.8.5",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:dtk25.04-vllm0.8.5"
+      },
+      {
+        "backend": "dtk",
+        "backend_version": "25.04",
+        "original_backend_version": "25.04.1",
+        "backend_variant": "",
+        "service": "voxbox",
+        "service_version": "0.0.19",
+        "original_service_version": "0.0.19",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:dtk25.04-voxbox0.0.19"
+      }
+    ]
+  ]
+]
