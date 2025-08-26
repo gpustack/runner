@@ -272,7 +272,7 @@ jobs:
           persist-credentials: false
       - name: Merge Runner
         env:
-          INPUT_MANIFEST_JOBS: ${{ needs.expand-matrix.outputs.manifest_jobs }}
+          INPUT_BUILD_JOBS: ${{ needs.expand-matrix.outputs.build_jobs }}
         run: ${{ github.workspace }}/pack/merge_runner.sh
       - name: Pull Request
         uses: peter-evans/create-pull-request@v7
