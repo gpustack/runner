@@ -43,16 +43,17 @@ if command -v gdate; then
     }
 fi
 
-MAX_COMPLETION_TOKENS="${MAX_COMPLETION_TOKENS:-"1024"}"
-FREQUENCY_PENALTY="${FREQUENCY_PENALTY:-"0.0"}"
-PRESENCE_PENALTY="${PRESENCE_PENALTY:-"0.0"}"
+MAX_COMPLETION_TOKENS="${MAX_COMPLETION_TOKENS:-"2048"}"
+FREQUENCY_PENALTY="${FREQUENCY_PENALTY:-"null"}"
+PRESENCE_PENALTY="${PRESENCE_PENALTY:-"null"}"
 RESPONSE_FORMAT="${RESPONSE_FORMAT:-"text"}"
+LOGPROBS="${LOGPROBS:-"null"}"
 TOP_LOGPROBS="${TOP_LOGPROBS:-"null"}"
-LOGPROBS="${LOGPROBS:-"false"}"
-SEED="${SEED:-"$(date +%s)"}"
+SEED="${SEED:-"null"}"
 STOP="${STOP:-"null"}"
-TEMP="${TEMP:-"1"}"
-TOP_P="${TOP_P:-"1"}"
+TEMP="${TEMP:-"null"}"
+TOP_P="${TOP_P:-"null"}"
+TOP_K="${TOP_K:-"null"}"
 TOOLS_WITH="${TOOLS_WITH:-"false"}"
 SYSTEM_PROMPT_WITH="${SYSTEM_PROMPT_WITH:-"true"}"
 
@@ -74,33 +75,76 @@ chat_completion() {
     while true; do
         DATA="$(echo -n "${DATA}" | jq -cr \
             --argjson max_completion_tokens "${MAX_COMPLETION_TOKENS}" \
-            --argjson frequency_penalty "${FREQUENCY_PENALTY}" \
-            --argjson presence_penalty "${PRESENCE_PENALTY}" \
             --argjson response_format "{\"type\":\"${RESPONSE_FORMAT}\"}" \
-            --argjson top_logprobs "${TOP_LOGPROBS}" \
-            --argjson logprobs "${LOGPROBS}" \
-            --argjson seed "${SEED}" \
-            --argjson stop "${STOP}" \
-            --argjson temp "${TEMP}" \
-            --argjson top_p "${TOP_P}" \
-            --argjson tools "$(printf '%s\n' "${TOOLS[@]}" | jq -cs .)" \
             '{
                 n: 1,
-                max_completion_tokens: $max_completion_tokens,
-                frequency_penalty: $frequency_penalty,
-                presence_penalty: $presence_penalty,
-                response_format: $response_format,
-                top_logprobs: $top_logprobs,
-                logprobs: $logprobs,
-                seed: $seed,
-                stop: $stop,
                 stream: true,
                 stream_options: {include_usage: true},
-                temperature: $temp,
-                top_p: $top_p,
-                tools: $tools,
-                parallel_tool_calls: false
+                max_completion_tokens: $max_completion_tokens,
+                response_format: $response_format,
               } * .')"
+        if [[ "${FREQUENCY_PENALTY}" != "null" || "${PRESENCE_PENALTY}" != "null" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson frequency_penalty "${FREQUENCY_PENALTY}" \
+                --argjson presence_penalty "${PRESENCE_PENALTY}" \
+                "${FREQUENCY_PENALTY}" \
+                '{
+                    frequency_penalty: $frequency_penalty,
+                    presence_penalty: $presence_penalty
+                } * .')"
+        fi
+        if [[ "${LOGPROBS}" == "true" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson logprobs "${LOGPROBS}" \
+                --argjson top_logprobs "${TOP_LOGPROBS}" \
+                '{
+                    logprobs: true,
+                    top_logprobs: $top_logprobs
+                } * .')"
+        fi
+        if [[ "${SEED}" != "null" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson seed "${SEED}" \
+                '{
+                    seed: $seed
+                } * .')"
+        fi
+        if [[ "${STOP}" != "null" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson stop "${STOP}" \
+                '{
+                    stop: $stop
+                } * .')"
+        fi
+        if [[ "${TEMP}" != "null" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson temp "${TEMP}" \
+                '{
+                    temperature: $temp
+                } * .')"
+        fi
+        if [[ "${TOP_P}" != "null" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson top_p "${TOP_P}" \
+                '{
+                    top_p: $top_p
+                } * .')"
+        fi
+        if [[ "${TOP_K}" != "null" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson top_k "${TOP_K}" \
+                '{
+                    top_k: $top_k
+                } * .')"
+        fi
+        if [[ "${TOOLS_WITH}" == "true" ]]; then
+            DATA="$(echo -n "${DATA}" | jq -cr \
+                --argjson tools "$(printf '%s\n' "${TOOLS[@]}" | jq -cs .)" \
+                '{
+                    tools: $tools,
+                    parallel_tool_calls: false
+                } * .')"
+        fi
         echo "Q: ${DATA}" >>"${LOG_FILE}"
         echo "${DATA}" >/tmp/request.json
 
@@ -207,7 +251,7 @@ chat_completion() {
                 LATC=$(((FIRST_TOKEN_RECEIVED_TIME - START_TIME + ELAPSED) / 1000))
                 TPS=0
                 if ((USAGE_TOTAL_TOKENS > 0 && ELAPSED > 0)); then
-                    TPS=$(echo "scale=2; $USAGE_TOTAL_TOKENS / $ELAPSED * 1000" | bc)
+                    TPS=$(echo "scale=2; $USAGE_TOTAL_TOKENS * 1000 / $ELAPSED" | bc)
                 fi
                 TTFT=$((FIRST_TOKEN_RECEIVED_TIME - START_TIME))
                 TPOT=0
@@ -263,12 +307,13 @@ echo "MAX_COMPLETION_TOKENS : ${MAX_COMPLETION_TOKENS}"
 echo "FREQUENCY_PENALTY     : ${FREQUENCY_PENALTY}"
 echo "PRESENCE_PENALTY      : ${PRESENCE_PENALTY}"
 echo "RESPONSE_FORMAT       : ${RESPONSE_FORMAT}"
-echo "TOP_LOGPROBS          : ${TOP_LOGPROBS}"
 echo "LOGPROBS              : ${LOGPROBS}"
+echo "TOP_LOGPROBS          : ${TOP_LOGPROBS}"
 echo "SEED                  : ${SEED}"
 echo "STOP                  : ${STOP}"
 echo "TEMP                  : ${TEMP}"
 echo "TOP_P                 : ${TOP_P}"
+echo "TOP_K                 : ${TOP_K}"
 echo "TOOLS_WITH            : ${TOOLS_WITH}"
 echo "TOOLS                 : $(printf '%s\n' "${TOOLNAMES[@]}" | jq -R . | jq -cs .)"
 echo "SYSTEM_PROMPT_WITH    : ${SYSTEM_PROMPT_WITH}"

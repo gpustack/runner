@@ -81,7 +81,7 @@ RUNTIME="${RUNTIMES[0]}"
 
 ENV_FILE="$(mktemp)"
 echo "$(tr '[:lower:]' '[:upper:]' <<< "${RUNTIME}")_VISIBLE_DEVICES=all" >"${ENV_FILE}"
-env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB)' >>"${ENV_FILE}"
+env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB)' >>"${ENV_FILE}" || true
 
 info "Running Docker container:"
 info "  - platform: '${OS}/${ARCH}'"
@@ -108,12 +108,9 @@ docker run --rm -it \
     --ipc host \
     --shm-size 2g \
     --runtime "${RUNTIME}" \
-    --volume "gpustack-runner-${RUNTIME}:/root/.cache" \
     --volume "${VOLUME}:${VOLUME}" \
     --platform "${OS}/${ARCH}" \
     --env-file "${ENV_FILE}" \
-    --group-add video \
-    --group-add render \
     --workdir "/" \
     "${IMAGE}" \
     "${ARGS[@]}"
