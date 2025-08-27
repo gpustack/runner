@@ -280,6 +280,28 @@
         "original_backend_version": "12.8.1",
         "backend_variant": "",
         "service": "vllm",
+        "service_version": "0.10.1",
+        "original_service_version": "0.10.1.1",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.8-vllm0.10.1"
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.8",
+        "original_backend_version": "12.8.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.10.1",
+        "original_service_version": "0.10.1.1",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.8-vllm0.10.1"
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.8",
+        "original_backend_version": "12.8.1",
+        "backend_variant": "",
+        "service": "vllm",
         "service_version": "0.10.0",
         "original_service_version": "0.10.0",
         "platform": "linux/amd64",
@@ -346,6 +368,28 @@
         "original_backend_version": "12.6.3",
         "backend_variant": "",
         "service": "vllm",
+        "service_version": "0.10.1",
+        "original_service_version": "0.10.1.1",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.6-vllm0.10.1"
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.6",
+        "original_backend_version": "12.6.3",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.10.1",
+        "original_service_version": "0.10.1.1",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.6-vllm0.10.1"
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.6",
+        "original_backend_version": "12.6.3",
+        "backend_variant": "",
+        "service": "vllm",
         "service_version": "0.10.0",
         "original_service_version": "0.10.0",
         "platform": "linux/amd64",
@@ -405,6 +449,28 @@
         "original_service_version": "0.0.19",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.19"
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.4",
+        "original_backend_version": "12.4.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.10.1",
+        "original_service_version": "0.10.1.1",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.4-vllm0.10.1"
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.4",
+        "original_backend_version": "12.4.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.10.1",
+        "original_service_version": "0.10.1.1",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.4-vllm0.10.1"
       },
       {
         "backend": "cuda",
