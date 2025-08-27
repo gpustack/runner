@@ -26,6 +26,17 @@
     "backend_version": "8.2",
     "original_backend_version": "8.2.rc1",
     "backend_variant": "310p",
+    "service": "vllm",
+    "service_version": "0.9.2",
+    "original_service_version": "0.9.2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2"
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc1",
+    "backend_variant": "310p",
     "service": "voxbox",
     "service_version": "0.0.19",
     "original_service_version": "0.0.19",
@@ -64,6 +75,17 @@
     "original_service_version": "0.10.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0"
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc1",
+    "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.9.2",
+    "original_service_version": "0.9.2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2"
   },
   {
     "backend": "cann",
@@ -312,6 +334,17 @@
     "backend_version": "8.2",
     "original_backend_version": "8.2.rc1",
     "backend_variant": "310p",
+    "service": "vllm",
+    "service_version": "0.9.2",
+    "original_service_version": "0.9.2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2"
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc1",
+    "backend_variant": "310p",
     "service": "voxbox",
     "service_version": "0.0.19",
     "original_service_version": "0.0.19",
@@ -350,6 +383,17 @@
     "original_service_version": "0.10.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0"
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc1",
+    "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.9.2",
+    "original_service_version": "0.9.2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2"
   },
   {
     "backend": "cann",
