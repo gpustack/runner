@@ -42,10 +42,12 @@ fi
 # Merge new runners with original runners, and distinct by docker_image.
 MERGED_RUNNERS="$(echo "${NEW_RUNNERS}" "${ORIGINAL_RUNNERS}" | jq -cs 'add | unique_by(.platform + .docker_image)')"
 
+# Normalize the merged runners by sorting them.
+MERGED_RUNNERS="$(echo "${MERGED_RUNNERS}" | jq -cr 'sort_by([.backend, (.backend_variant | explode | map(-.)), (.backend_version | explode | map(-.)), .service, (.service_version | split(".") | map(tonumber?) | map(-.))])')"
+
 # Review the merged runners.
 echo "[INFO] Merged Runners:"
-echo "${MERGED_RUNNERS}" | jq -r '.'
-echo "${MERGED_RUNNERS}" | jq -r '.' >"${OUTPUT_FILE}" || true
+jq -r '.' <<<"${MERGED_RUNNERS}" | tee "${OUTPUT_FILE}" || true
 
 #
 # Create fixtures for the merged runners.
@@ -73,5 +75,4 @@ done
 
 # Review the fixtures.
 echo "[INFO] Merged Fixtures:"
-echo "${OUTPUT_FIXTURES}" | jq -r '.'
-echo "${OUTPUT_FIXTURES}" | jq -r '.' >"${OUTPUT_FIXTURES_FILE}" || true
+jq -r '.' <<<"${OUTPUT_FIXTURES}" | tee "${OUTPUT_FIXTURES_FILE}" || true
