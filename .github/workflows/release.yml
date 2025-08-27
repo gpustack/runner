@@ -4,9 +4,9 @@
 name: release
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
-  actions: read
 
 defaults:
   run:
@@ -78,7 +78,7 @@ jobs:
 
           uv publish \
             --index ${INPUT_INDEX} \
-            --token ${INPUT_TOKEN} || true
+            --token ${INPUT_TOKEN} || ${{ !startsWith(github.ref, 'refs/tags/') }}
 
           set -x
           cat ${INPUT_WORKSPACE}/_version.py
@@ -89,15 +89,15 @@ jobs:
           cat <<EOF > ${INPUT_TEMPDIR}/verify/verify.py
           import gpustack_runner as runner
 
-          print(runner.version)
-          print(runner.commit_id)
+          print(f"version = {runner.version}")
+          print(f"commit_id = {runner.commit_id}")
           EOF
 
           uv run \
             --index https://pypi.org/simple/ \
             --index https://test.pypi.org/simple/ \
             --index-strategy unsafe-best-match \
-            --with ${INPUT_PROJECT} \
+            --with ${INPUT_PROJECT}==$(sed -n "s/^__version__ = version = '\(.*\)'/\1/p" ${INPUT_WORKSPACE}/_version.py) \
             --isolated \
             --no-project \
             --active \

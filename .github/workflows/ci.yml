@@ -4,9 +4,9 @@
 name: ci
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
-  actions: read
 
 defaults:
   run:
@@ -31,11 +31,6 @@ on:
       - "**.gif"
       - "**.webp"
   pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
     branches:
       - "main"
       - "v*-dev"

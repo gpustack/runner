@@ -7,9 +7,9 @@
 name: copy
 
 permissions:
+  actions: read
   contents: read
   pull-requests: read
-  actions: read
 
 defaults:
   run:
