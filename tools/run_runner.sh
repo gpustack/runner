@@ -83,6 +83,8 @@ ENV_FILE="$(mktemp)"
 echo "$(tr '[:lower:]' '[:upper:]' <<< "${RUNTIME}")_VISIBLE_DEVICES=all" >"${ENV_FILE}"
 env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB)' >>"${ENV_FILE}" || true
 
+CACHE_NAME="gpustack-runner-${RUNTIME}-${OS}-${ARCH}-$(md5sum <<< "${IMAGE}" | cut -c1-10)"
+
 info "Running Docker container:"
 info "  - platform: '${OS}/${ARCH}'"
 info "  - runtime:  '${RUNTIME}'"
@@ -108,6 +110,7 @@ docker run --rm -it \
     --ipc host \
     --shm-size 2g \
     --runtime "${RUNTIME}" \
+    --volume "${CACHE_NAME}:/root/.cache" \
     --volume "${VOLUME}:${VOLUME}" \
     --platform "${OS}/${ARCH}" \
     --env-file "${ENV_FILE}" \
