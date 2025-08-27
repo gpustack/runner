@@ -137,6 +137,7 @@ EOT
                 --arg tag "${TAG}${TAG_SUFFIX}" \
                 --argjson args "${ARGS}" \
                 --arg runner "${RUNNER}" \
+                --argjson platform_tag_cache "[\"${PLATFORM_TAG}\"]" \
                 --arg original_backend_version "${ORIGINAL_BACKEND_VERSION}" \
                 '[{
                     backend: $backend,
@@ -149,6 +150,7 @@ EOT
                     tag: $tag,
                     args: $args,
                     runner: $runner,
+                    platform_tag_cache: $platform_tag_cache,
                     original_backend_version: $original_backend_version,
                     original_service_version: "",
                   }] + .')"
@@ -175,13 +177,19 @@ EOT
         {
             echo "export ORIGINAL_SERVICE_VERSION=\${${SERVICE_UPPER}_VERSION}"
             cat <<EOT
-        IFS="." read -r SV_MAJOR SV_MINOR SV_PATCH SV_POST <<<"\${ORIGINAL_SERVICE_VERSION}"
+        IFS="." read -r SV_MAJOR SV_MINOR SV_PATCH SV_POST_RELEASE <<<"\${ORIGINAL_SERVICE_VERSION}"
         if [[ -z "\${SV_PATCH}" ]]; then
             SV_PATCH=0
         fi
         export SERVICE_VERSION="\${SV_MAJOR}.\${SV_MINOR}.\${SV_PATCH}"
+        export SERVICE_VERSION_MAJOR="\${SV_MAJOR}"
+        export SERVICE_VERSION_MINOR="\${SV_MINOR}"
+        export SERVICE_VERSION_PATCH="\${SV_PATCH}"
+        export SERVICE_VERSION_POST_RELEASE="\${SV_POST_RELEASE}"
 EOT
             echo "export TAG=${TAG_PREFIX}${SERVICE}\${SERVICE_VERSION}"
+            echo "export TAG_X=${TAG_PREFIX}${SERVICE}\${SERVICE_VERSION_MAJOR}"
+            echo "export TAG_XY=${TAG_PREFIX}${SERVICE}\${SERVICE_VERSION_MAJOR}.\${SERVICE_VERSION_MINOR}"
         } >>"${INPUT_TEMPDIR}/envs_dedicated"
         # Value from environment variable.
         source "${INPUT_TEMPDIR}/envs_dedicated" &&
@@ -191,6 +199,8 @@ EOT
             echo "[INFO] Skipping build tag ${TAG}${TAG_SUFFIX} for backend ${BACKEND} service ${SERVICE}..."
             continue
         fi
+        TAG_X="$(echo "${TAG_X}" | tr '[:upper:]' '[:lower:]')"
+        TAG_XY="$(echo "${TAG_XY}" | tr '[:upper:]' '[:lower:]')"
         # Generate.
         MANIFEST_JOBS="$(echo "${MANIFEST_JOBS}" | jq -cr \
             --arg tag "${TAG}${TAG_SUFFIX}" \
@@ -207,6 +217,8 @@ EOT
                 echo "[INFO] Skipping build tag ${PLATFORM_TAG} for backend ${BACKEND} service ${SERVICE}..."
                 continue
             fi
+            PLATFORM_TAG_X="${TAG_X}-${OS}-${ARCH}"
+            PLATFORM_TAG_XY="${TAG_XY}-${OS}-${ARCH}"
             RUNNER="ubuntu-22.04"
             if [[ "${PLATFORM}" == "linux/arm64" ]]; then
                 RUNNER="ubuntu-22.04-arm"
@@ -230,6 +242,7 @@ EOT
                 --arg tag "${TAG}${TAG_SUFFIX}" \
                 --argjson args "${ARGS}" \
                 --arg runner "${RUNNER}" \
+                --argjson platform_tag_cache "[\"${PLATFORM_TAG}\",\"${PLATFORM_TAG_XY}\",\"${PLATFORM_TAG_X}\"]" \
                 --arg original_backend_version "${ORIGINAL_BACKEND_VERSION}" \
                 --arg original_service_version "${ORIGINAL_SERVICE_VERSION}" \
                 '[{
@@ -243,6 +256,7 @@ EOT
                     tag: $tag,
                     args: $args,
                     runner: $runner,
+                    platform_tag_cache: $platform_tag_cache,
                     original_backend_version: $original_backend_version,
                     original_service_version: $original_service_version,
                   }] + .')"
@@ -273,6 +287,11 @@ echo "build_jobs="
 #      "CUDA_VERSION=12.6.3"
 #    ],
 #    "runner": "ubuntu-22.04-arm",
+#    "platform_tag_cache": [
+#      "cuda12.6-vllm0.9.2-linux-arm64",
+#      "cuda12.6-vllm0.9-linux-arm64",
+#      "cuda12.6-vllm0-linux-arm64",
+#    ],
 #    "original_backend_version": "12.6.3",
 #    "original_service_version": "0.9.2"
 #  },
@@ -289,6 +308,11 @@ echo "build_jobs="
 #      "CUDA_VERSION=12.6.3"
 #    ],
 #    "runner": "ubuntu-22.04",
+#    "platform_tag_cache": [
+#      "cuda12.6-vllm0.9.2-linux-amd64",
+#      "cuda12.6-vllm0.9-linux-amd64",
+#      "cuda12.6-vllm0-linux-amd64",
+#    ],
 #    "original_backend_version": "12.6.3",
 #    "original_service_version": "0.9.2",
 #  }

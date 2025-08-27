@@ -167,6 +167,7 @@ jobs:
         env:
           INPUT_WITH_CACHE: ${{ github.event.inputs.with_cache }}
           INPUT_PLATFORM_TAG: ${{ matrix.platform_tag }}
+          INPUT_PLATFORM_TAG_CACHE: ${{ join(matrix.platform_tag_cache, ' ') }}
           INPUT_ARGS: ${{ join(matrix.args, ' ') }}
         run: |
           #!/usr/bin/env bash
@@ -181,20 +182,24 @@ jobs:
           # Export build_args to GH output.
           echo "build_args<<EOF" >> $GITHUB_OUTPUT
           for arg in ${INPUT_ARGS}; do
-            echo "$arg" >> $GITHUB_OUTPUT
+            echo "${arg}" >> $GITHUB_OUTPUT
           done
           echo "EOF" >> $GITHUB_OUTPUT
 
           # Export cache_from to GH output.
           echo "cache_from<<EOF" >> $GITHUB_OUTPUT
           if [[ "${INPUT_WITH_CACHE}" == "true" ]]; then
-            echo "type=registry,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${INPUT_PLATFORM_TAG}" >> $GITHUB_OUTPUT
+            for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
+              echo "type=registry,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}" >> $GITHUB_OUTPUT
+            done
           fi
           echo "EOF" >> $GITHUB_OUTPUT
 
           # Export cache_to to GH output.
           echo "cache_to<<EOF" >> $GITHUB_OUTPUT
-          echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${INPUT_PLATFORM_TAG}" >> $GITHUB_OUTPUT
+          for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
+            echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}" >> $GITHUB_OUTPUT
+          done
           echo "EOF" >> $GITHUB_OUTPUT
       - name: Package
         timeout-minutes: 360
@@ -286,5 +291,7 @@ jobs:
           delete-branch: true
           commit-message: "chore: update runner by gha workflow ${{ github.run_id }}"
           title: "chore: update runner by gha workflow ${{ github.run_id }}"
+          reviewers: ${{ github.actor }}
+          assignees: ${{ github.actor }}
           body: |
             Update runner by GHA workflow [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
