@@ -93,21 +93,15 @@ jobs:
           print(f"commit_id = {runner.commit_id}")
           EOF
 
-          cat <<EOF > ${INPUT_TEMPDIR}/verify/requirements.txt
-          gpustack-runner==$(sed -n "s/^__version__ = version = '\(.*\)'/\1/p" ${INPUT_WORKSPACE}/_version.py)
-          EOF
+          sleep 30
 
-          for i in {1..20}; do
-            uv run \
-              --index https://pypi.org/simple/ \
-              --index https://test.pypi.org/simple/ \
-              --index-strategy unsafe-best-match \
-              --with-requirements ${INPUT_TEMPDIR}/verify/requirements.txt \
-              --isolated \
-              --no-project \
-              --active \
-              --verbose \
-              --script ${INPUT_TEMPDIR}/verify/verify.py && break
-            echo "Attempt $i failed, retrying in 3 seconds..."
-            sleep 3
-          done
+          uv run \
+            --index https://pypi.org/simple/ \
+            --index https://test.pypi.org/simple/ \
+            --index-strategy unsafe-best-match \
+            --with ${INPUT_PROJECT} \
+            --isolated \
+            --no-project \
+            --active \
+            --verbose \
+            --script ${INPUT_TEMPDIR}/verify/verify.py
