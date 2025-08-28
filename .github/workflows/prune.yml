@@ -1,0 +1,72 @@
+
+
+name: prune
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Control how to choice the backend to prune.
+      backend:
+        description: 'Backend, which accelerated backend to prune'
+        required: false
+        type: string
+      backend_version:
+        description: 'Backend version, which version of the backend to prune'
+        required: false
+        type: string
+      # Control how to choice the service to prune.
+      service:
+        description: 'Service, which service to prune'
+        required: false
+        type: string
+      service_version:
+        description: 'Service version, which version of the service to prune'
+        required: false
+        type: string
+
+jobs:
+  # Submit a PR to prune the runner.
+  prune-runner:
+    runs-on: ubuntu-22.04
+    steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 1
+            persist-credentials: false
+        - name: Prune Runner
+          env:
+            INPUT_BACKEND: ${{ github.event.inputs.backend }}
+            INPUT_BACKEND_VERSION: ${{ github.event.inputs.backend_version }}
+            INPUT_SERVICE: ${{ github.event.inputs.service }}
+            INPUT_SERVICE_VERSION: ${{ github.event.inputs.service_version }}
+            INPUT_WORKSPACE: ${{ github.workspace }}/pack
+            INPUT_TEMPDIR: ${{ runner.temp }}
+          run: ${{ github.workspace }}/pack/prune_runner.sh
+        - name: Generate Pull Request Token
+          id: generate-prt
+          uses: actions/create-github-app-token@v2
+          with:
+            app-id: ${{ secrets.CI_PRT_GENERATOR_ID }}
+            private-key: ${{ secrets.CI_PRT_GENERATOR_KEY }}
+        - name: Pull Request
+          uses: peter-evans/create-pull-request@v7
+          with:
+            token: ${{ steps.generate-prt.outputs.token }}
+            branch: "create-pull-request/prune-runner-${{ github.run_id }}"
+            delete-branch: true
+            commit-message: "chore: prune runner by gha workflow ${{ github.run_id }}"
+            title: "chore: prune runner by gha workflow ${{ github.run_id }}"
+            reviewers: ${{ github.actor }}
+            assignees: ${{ github.actor }}
+            body: |
+              Prune runner by GHA workflow [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).

@@ -261,7 +261,7 @@ jobs:
               docker manifest push --purge "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}"
           done
 
-  # Submit a PR to the main branch.
+  # Submit a PR to merge the runner.
   merge-runner:
     if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.target != 'runtime' && github.event.inputs.for_release == 'true' }}
     needs:
@@ -288,6 +288,7 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ steps.generate-prt.outputs.token }}
+          branch: "create-pull-request/merge-runner-${{ github.run_id }}"
           delete-branch: true
           commit-message: "chore: update runner by gha workflow ${{ github.run_id }}"
           title: "chore: update runner by gha workflow ${{ github.run_id }}"
