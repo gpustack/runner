@@ -56,15 +56,17 @@ build: prepare
 	uv build
 	@echo "--- $@ ---"
 
-DOCS_SERVE ?= false
 docs:
 	@echo "+++ $@ +++"
 	rm -rf site
 	uv run mkdocs build
-	if [[ "$(DOCS_SERVE)" == "true" ]]; then \
-		uv run mkdocs serve -o -w $(SRCDIR)/gpustack_runner; \
-	fi
 	@echo "--- $@ ---"
+
+docs-online: docs
+	@echo "+++ $@ +++"
+	uv run mkdocs serve -o -w $(SRCDIR)/gpustack_runner
+	@echo "--- $@ ---"
+
 
 PACKAGE_NAMESPACE ?= gpustack
 PACKAGE_REPOSITORY ?= runner
