@@ -9,13 +9,15 @@ set -eo pipefail
 usage() {
     echo ""
     echo "# Usage"
-    echo "  $(basename "$0") <image/image-tag> <volume> [args...]"
-    echo "    - image/image-tag: Docker image or image tag to run (default: 'gpustack/runner:cuda12.8-vllm0.10.0')"
-    echo "    - volume:          Host directory to mount into the container"
-    echo "    - args:            Additional arguments to pass to the Docker container"
+    echo "  [envs...] $(basename "$0") <image/image-tag> <volume> [args...]"
+    echo "    - envs            : Environment variables to pass into the container (e.g. VLLM_LOGGING_LEVEL=DEBUG)"
+    echo "    - image/image-tag : Docker image or image tag to run (default: 'gpustack/runner:cuda12.8-vllm0.10.0')"
+    echo "    - volume          : Host directory to mount into the container"
+    echo "    - args            : Additional arguments to pass to the Docker container"
     echo "  * This script is intended to run on Linux with Docker installed."
     echo "# Example"
-    echo "  $0 gpustack/runner:cuda12.8-vllm0.10.0 /path/to/data vllm serve --arg1 value1 --arg2 value2"
+    echo "    - attach run      : VLLM_LOGGING_LEVEL=DEBUG $(basename "$0") cuda12.8-vllm0.10.0 /path/to/data vllm serve --port 8080 --model /path/to/model ..."
+    echo -e "    - detach run      : \033[33mDRUN=true\033[0m VLLM_LOGGING_LEVEL=DEBUG $(basename "$0") cuda12.8-vllm0.10.0 /path/to/data vllm serve --port 8080 --model /path/to/model ..."
     echo "# Images"
     docker images --format "{{.Repository}}:{{.Tag}}" | grep -v '<none>' | grep '^gpustack/runner:' | sort -u | sed 's/^/    - /'
     echo ""
@@ -82,10 +84,24 @@ fi
 RUNTIME="${RUNTIMES[0]}"
 
 ENV_FILE="$(mktemp)"
-echo "$(tr '[:lower:]' '[:upper:]' <<< "${RUNTIME}")_VISIBLE_DEVICES=all" >"${ENV_FILE}"
-env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB)' >>"${ENV_FILE}" || true
+echo "$(tr '[:lower:]' '[:upper:]' <<<"${RUNTIME}")_VISIBLE_DEVICES=all" >"${ENV_FILE}"
+env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB|DRUN)' >>"${ENV_FILE}" || true
 
-CACHE_NAME="gpustack-runner-${RUNTIME}-${OS}-${ARCH}-$(md5sum <<< "${IMAGE}" | cut -c1-10)"
+CACHE_NAME="gpustack-runner-${RUNTIME}-${OS}-${ARCH}-$(md5sum <<<"${IMAGE}" | cut -c1-10)"
+
+CONTAINER_NAME="gpustack-runner-${RUNTIME}-$(date +%s)"
+
+DRUN="${DRUN:-"false"}"
+
+RUN_ARGS=("--name" "${CONTAINER_NAME}")
+if [[ "${DRUN}" == "true" ]]; then
+    RUN_ARGS+=("--detach" "--restart" "on-failure:3")
+    info "Running in detached mode"
+    info "To entry the container, use 'docker exec -it ${CONTAINER_NAME} /bin/bash'"
+    info "To view the container logs, use 'docker logs -f ${CONTAINER_NAME}'"
+else
+    RUN_ARGS+=("--rm" "-it")
+fi
 
 info "Running Docker container:"
 info "  - platform: '${OS}/${ARCH}'"
@@ -98,15 +114,21 @@ info "  - args  :   '${ARGS[*]}'"
 # Prepare
 
 cleanup() {
-    rm -f "${ENV_FILE}"
+    set +x
+    if [[ "${DRUN}" == "true" ]]; then
+        echo ""
+        info "To stop the container, use 'docker stop ${CONTAINER_NAME}'"
+        info "To remove the container, use 'docker rm -f ${CONTAINER_NAME}'"
+    else
+        rm -f "${ENV_FILE}"
+    fi
 }
 trap cleanup EXIT
 
 # Start
 
 set -x
-
-docker run --rm -it \
+docker run "${RUN_ARGS[@]}" \
     --privileged \
     --network host \
     --ipc host \
@@ -119,3 +141,8 @@ docker run --rm -it \
     --workdir "/" \
     "${IMAGE}" \
     "${ARGS[@]}"
+
+set +x
+if [[ $? -eq 0 ]] && [[ "${DRUN}" == "true" ]]; then
+    docker logs -f "${CONTAINER_NAME}" || true
+fi
