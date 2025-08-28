@@ -444,13 +444,23 @@ def build_backend_runners(  # noqa: C901
     # Sort the results for consistent ordering
     results.sort(key=lambda br: br.backend)
     for backend in results:
-        backend.versions.sort(key=lambda bv: bv.version)
+        backend.versions.sort(
+            key=lambda bv: [
+                int(x) if x.isdigit() else x for x in bv.version.split(".")
+            ],
+            reverse=True,
+        )
         for version in backend.versions:
             version.variants.sort(key=lambda bv: bv.variant)
             for variant in version.variants:
                 variant.services.sort(key=lambda s: s.service)
                 for service in variant.services:
-                    service.versions.sort(key=lambda sv: sv.version)
+                    service.versions.sort(
+                        key=lambda sv: [
+                            int(x) if x.isdigit() else x for x in sv.version.split(".")
+                        ],
+                        reverse=True,
+                    )
                     for service_version in service.versions:
                         service_version.platforms.sort(key=lambda p: p.platform)
 
@@ -605,11 +615,21 @@ def build_service_runners(  # noqa: C901
     # Sort the results for consistent ordering
     results.sort(key=lambda sr: sr.service)
     for service in results:
-        service.versions.sort(key=lambda sv: sv.version)
+        service.versions.sort(
+            key=lambda sv: [
+                int(x) if x.isdigit() else x for x in sv.version.split(".")
+            ],
+            reverse=True,
+        )
         for service_version in service.versions:
             service_version.backends.sort(key=lambda b: b.backend)
             for backend in service_version.backends:
-                backend.versions.sort(key=lambda bv: bv.version)
+                backend.versions.sort(
+                    key=lambda bv: [
+                        int(x) if x.isdigit() else x for x in bv.version.split(".")
+                    ],
+                    reverse=True,
+                )
                 for backend_version in backend.versions:
                     backend_version.variants.sort(key=lambda bv: bv.variant)
                     for variant in backend_version.variants:

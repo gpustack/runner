@@ -62,18 +62,18 @@
                       {
                         "platforms": [
                           {
-                            "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0",
+                            "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0",
                             "platform": "linux/amd64"
                           },
                           {
-                            "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0",
+                            "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0",
                             "platform": "linux/arm64"
                           }
                         ],
                         "variant": ""
                       }
                     ],
-                    "version": "12.4"
+                    "version": "12.8"
                   },
                   {
                     "variants": [
@@ -98,18 +98,18 @@
                       {
                         "platforms": [
                           {
-                            "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0",
+                            "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0",
                             "platform": "linux/amd64"
                           },
                           {
-                            "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0",
+                            "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0",
                             "platform": "linux/arm64"
                           }
                         ],
                         "variant": ""
                       }
                     ],
-                    "version": "12.8"
+                    "version": "12.4"
                   }
                 ]
               },
