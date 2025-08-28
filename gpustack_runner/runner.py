@@ -57,7 +57,7 @@ class Runner:
     The Docker image name.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: dict[str, Any]):
         for k, v in kwargs.items():
             if k in self.__dataclass_fields__:
                 setattr(self, k, v)
@@ -99,7 +99,7 @@ def convert_runners_to_dict(runners: Runners) -> list[dict]:
 
 
 @lru_cache
-def list_runners(**kwargs) -> Runners | list[dict]:
+def list_runners(**kwargs: dict[str, Any]) -> Runners | list[dict]:
     """
     Returns runner list that match the specified criteria.
 
@@ -457,6 +457,35 @@ def build_backend_runners(  # noqa: C901
     return convert_backend_runners_to_dict(results) if todict else results
 
 
+@lru_cache
+def list_backend_runners(**kwargs: dict[str, Any]) -> BackendRunners | list[dict]:
+    """
+    Returns backend runner list that match the specified criteria.
+
+    Args:
+        kwargs:
+            The criteria to filter backend runners, possible keys are:
+
+            - `backend`
+            - `backend_version`
+            - `backend_version_prefix`
+            - `backend_variant`
+            - `service`
+            - `service_version`
+            - `service_version_prefix`
+            - `platform`
+
+            Also accepts `todict` to return a list of dictionaries instead of BackendRunner objects.
+
+    Returns:
+         A list of matching backend runner.
+
+    """
+    todict = kwargs.pop("todict", False)
+    runners = list_runners(**kwargs)
+    return build_backend_runners(runners, todict=todict)
+
+
 def convert_service_runners_to_dict(
     service_runners: ServiceRunners,
 ) -> list[dict]:
@@ -587,3 +616,32 @@ def build_service_runners(  # noqa: C901
                         variant.platforms.sort(key=lambda p: p.platform)
 
     return convert_service_runners_to_dict(results) if todict else results
+
+
+@lru_cache
+def list_service_runners(**kwargs: dict[str, Any]) -> ServiceRunners | list[dict]:
+    """
+    Returns service runner list that match the specified criteria.
+
+    Args:
+        kwargs:
+            The criteria to filter service runners, possible keys are:
+
+            - `backend`
+            - `backend_version`
+            - `backend_version_prefix`
+            - `backend_variant`
+            - `service`
+            - `service_version`
+            - `service_version_prefix`
+            - `platform`
+
+            Also accepts `todict` to return a list of dictionaries instead of ServiceRunner objects.
+
+    Returns:
+         A list of matching service runner.
+
+    """
+    todict = kwargs.pop("todict", False)
+    runners = list_runners(**kwargs)
+    return build_service_runners(runners, todict=todict)

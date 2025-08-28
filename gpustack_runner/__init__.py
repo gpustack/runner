@@ -5,19 +5,19 @@ from .runner import (
     BackendRunners,
     Runners,
     ServiceRunners,
-    build_backend_runners,
-    build_service_runners,
+    list_backend_runners,
     list_runners,
+    list_service_runners,
 )
 
 __all__ = [
     "BackendRunners",
     "Runners",
     "ServiceRunners",
-    "build_backend_runners",
-    "build_service_runners",
     "commit_id",
+    "list_backend_runners",
     "list_runners",
+    "list_service_runners",
     "version",
     "version_tuple",
 ]

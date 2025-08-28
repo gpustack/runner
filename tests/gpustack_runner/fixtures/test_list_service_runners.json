@@ -14,15 +14,15 @@
     },
     [
       {
-        "backend": "cann",
+        "service": "vllm",
         "versions": [
           {
-            "variants": [
+            "backends": [
               {
-                "services": [
+                "backend": "cann",
+                "versions": [
                   {
-                    "service": "vllm",
-                    "versions": [
+                    "variants": [
                       {
                         "platforms": [
                           {
@@ -34,51 +34,31 @@
                             "platform": "linux/arm64"
                           }
                         ],
-                        "version": "0.10.0"
+                        "variant": "310p"
+                      },
+                      {
+                        "platforms": [
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0",
+                            "platform": "linux/amd64"
+                          },
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0",
+                            "platform": "linux/arm64"
+                          }
+                        ],
+                        "variant": "910b"
                       }
-                    ]
+                    ],
+                    "version": "8.2"
                   }
-                ],
-                "variant": "310p"
+                ]
               },
               {
-                "services": [
+                "backend": "cuda",
+                "versions": [
                   {
-                    "service": "vllm",
-                    "versions": [
-                      {
-                        "platforms": [
-                          {
-                            "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0",
-                            "platform": "linux/amd64"
-                          },
-                          {
-                            "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0",
-                            "platform": "linux/arm64"
-                          }
-                        ],
-                        "version": "0.10.0"
-                      }
-                    ]
-                  }
-                ],
-                "variant": "910b"
-              }
-            ],
-            "version": "8.2"
-          }
-        ]
-      },
-      {
-        "backend": "cuda",
-        "versions": [
-          {
-            "variants": [
-              {
-                "services": [
-                  {
-                    "service": "vllm",
-                    "versions": [
+                    "variants": [
                       {
                         "platforms": [
                           {
@@ -90,23 +70,13 @@
                             "platform": "linux/arm64"
                           }
                         ],
-                        "version": "0.10.0"
+                        "variant": ""
                       }
-                    ]
-                  }
-                ],
-                "variant": ""
-              }
-            ],
-            "version": "12.4"
-          },
-          {
-            "variants": [
-              {
-                "services": [
+                    ],
+                    "version": "12.4"
+                  },
                   {
-                    "service": "vllm",
-                    "versions": [
+                    "variants": [
                       {
                         "platforms": [
                           {
@@ -118,23 +88,13 @@
                             "platform": "linux/arm64"
                           }
                         ],
-                        "version": "0.10.0"
+                        "variant": ""
                       }
-                    ]
-                  }
-                ],
-                "variant": ""
-              }
-            ],
-            "version": "12.6"
-          },
-          {
-            "variants": [
-              {
-                "services": [
+                    ],
+                    "version": "12.6"
+                  },
                   {
-                    "service": "vllm",
-                    "versions": [
+                    "variants": [
                       {
                         "platforms": [
                           {
@@ -146,28 +106,18 @@
                             "platform": "linux/arm64"
                           }
                         ],
-                        "version": "0.10.0"
+                        "variant": ""
                       }
-                    ]
+                    ],
+                    "version": "12.8"
                   }
-                ],
-                "variant": ""
-              }
-            ],
-            "version": "12.8"
-          }
-        ]
-      },
-      {
-        "backend": "rocm",
-        "versions": [
-          {
-            "variants": [
+                ]
+              },
               {
-                "services": [
+                "backend": "rocm",
+                "versions": [
                   {
-                    "service": "vllm",
-                    "versions": [
+                    "variants": [
                       {
                         "platforms": [
                           {
@@ -175,15 +125,15 @@
                             "platform": "linux/amd64"
                           }
                         ],
-                        "version": "0.10.0"
+                        "variant": ""
                       }
-                    ]
+                    ],
+                    "version": "6.3"
                   }
-                ],
-                "variant": ""
+                ]
               }
             ],
-            "version": "6.3"
+            "version": "0.10.0"
           }
         ]
       }
