@@ -5,7 +5,8 @@ name: release
 
 permissions:
   actions: read
-  contents: read
+  contents: write
+  id-token: write
   pull-requests: read
 
 defaults:
