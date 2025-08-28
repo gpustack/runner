@@ -1,0 +1,51 @@
+# This file must be used with "source tools/activate" *from bash*
+# you cannot run it directly
+
+# Get tools path (only used if environment is relocatable).
+if [ -n "${BASH_VERSION:+x}" ] ; then
+    TOOLS_PATH="${BASH_SOURCE[0]}"
+    if [ "$TOOLS_PATH" = "$0" ]; then
+        # Only bash has a reasonably robust check for source'dness.
+        echo "You must source this script: \$ source $0" >&2
+        exit 33
+    fi
+elif [ -n "${ZSH_VERSION:+x}" ] ; then
+    TOOLS_PATH="${(%):-%x}"
+elif [ -n "${KSH_VERSION:+x}" ] ; then
+    TOOLS_PATH="${.sh.file}"
+fi
+
+TOOLS_PATH="$(cd "$(dirname "${TOOLS_PATH}")" && pwd)"
+
+deactivate () {
+    # Reset aliases
+    if ! [ -z "${_NEW_ALIASES:+x}" ] ; then
+        for a in $(echo ${_NEW_ALIASES}); do
+            unalias $a
+        done
+    fi
+    unset _NEW_ALIASES
+
+    # The hash command must be called to get it to forget past
+    # commands.
+    hash -r 2>/dev/null
+
+    # Self-remove
+    unset -f deactivate
+}
+
+# Check the content all bash scripts below the tools path,
+# if has "# Alias: <name>" then create an alias for it.
+_NEW_ALIASES=""
+for f in $(find "${TOOLS_PATH}" -type f -name "*.sh"); do
+    _alias_name=$(head -n 10 "$f" | grep '^# Alias: ' | head -n 1 | cut -d ':' -f2 | tr -d ' ')
+    if [ -n "${_alias_name:+x}" ]; then
+        _NEW_ALIASES="$_NEW_ALIASES $_alias_name"
+        alias $_alias_name="$f"
+    fi
+done
+export _NEW_ALIASES
+
+# The hash command must be called to get it to forget past
+# commands.
+hash -r 2>/dev/null

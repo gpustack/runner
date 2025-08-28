@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Alias: run_runner
+
 set -eo pipefail
 
 # Utils
@@ -13,7 +15,7 @@ usage() {
     echo "    - args:            Additional arguments to pass to the Docker container"
     echo "  * This script is intended to run on Linux with Docker installed."
     echo "# Example"
-    echo "  $0 gpustack/runner:cuda12.8-vllm0.10.0 /path/to/data --arg1 value1 --arg2 value2"
+    echo "  $0 gpustack/runner:cuda12.8-vllm0.10.0 /path/to/data vllm serve --arg1 value1 --arg2 value2"
     echo "# Images"
     docker images --format "{{.Repository}}:{{.Tag}}" | grep -v '<none>' | grep '^gpustack/runner:' | sort -u | sed 's/^/    - /'
     echo ""
