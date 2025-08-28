@@ -1,0 +1,48 @@
+site_name: GPUStack Runner
+
+theme:
+  name: material
+
+  features:
+    - content.tooltips
+    - content.tabs.link
+    - content.code.annotate
+    - content.code.copy
+    - content.code.select
+    - content.action.view
+    - content.action.edit
+    - header.autohide
+    - navigation.expand
+    - navigation.indexes
+    - navigation.path
+    - search.suggest
+    - search.highlight
+
+plugins:
+  - search
+  - offline
+  - mkdocstrings
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - md_in_html
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.critic
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra:
+  generator: false
+
+copyright: Copyright &copy; 2025, GPUStack Contributors
+
+nav:
+  - Modules:
+      - gpustack_runner: modules/gpustack_runner.md

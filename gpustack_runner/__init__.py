@@ -4,19 +4,19 @@ from ._version import commit_id, version, version_tuple
 from .runner import (
     BackendRunners,
     Runners,
+    ServiceRunners,
     build_backend_runners,
-    convert_backend_runners_to_dict,
-    convert_runners_to_dict,
+    build_service_runners,
     list_runners,
 )
 
 __all__ = [
     "BackendRunners",
     "Runners",
+    "ServiceRunners",
     "build_backend_runners",
+    "build_service_runners",
     "commit_id",
-    "convert_backend_runners_to_dict",
-    "convert_runners_to_dict",
     "list_runners",
     "version",
     "version_tuple",

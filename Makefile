@@ -1,5 +1,6 @@
 .SILENT:
 .DEFAULT_GOAL := ci
+.PHONY: docs
 
 SHELL := /bin/bash
 
@@ -53,6 +54,16 @@ build: prepare
 	@echo "+++ $@ +++"
 	rm -rf dist
 	uv build
+	@echo "--- $@ ---"
+
+DOCS_SERVE ?= false
+docs:
+	@echo "+++ $@ +++"
+	rm -rf site
+	uv run mkdocs build
+	if [[ "$(DOCS_SERVE)" == "true" ]]; then \
+		uv run mkdocs serve -o -w $(SRCDIR)/gpustack_runner; \
+	fi
 	@echo "--- $@ ---"
 
 PACKAGE_NAMESPACE ?= gpustack

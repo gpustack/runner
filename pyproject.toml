@@ -31,4 +31,8 @@ dev=[
     "pytest==8.4.1",
     "hatchling",
     "hatch-vcs",
+    "mkdocs>=1.6.1",
+    "mkdocstrings-python>=1.18.0",
+    "mkdocs-material>=9.6.18",
+    "pymdown-extensions>=10.16.1",
 ]

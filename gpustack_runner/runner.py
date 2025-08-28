@@ -65,7 +65,7 @@ class Runner:
 
 Runners = list[Runner]
 """
-Example of Runners:
+```
 [
     {
         "backend": "cann",
@@ -79,6 +79,7 @@ Example of Runners:
         "docker_image": "gpustack/runner:cann8.2-vllm0.10.0"
     }
 ]
+```
 """
 
 
@@ -86,8 +87,13 @@ def convert_runners_to_dict(runners: Runners) -> list[dict]:
     """
     Converts a list of Runner objects to a list of dictionaries.
 
-    :param runners: A list of Runner objects.
-    :return: A list of dictionaries created from the input Runner objects.
+    Args:
+        runners:
+            A list of Runner objects.
+
+    Returns:
+         A list of dictionaries created from the input Runner objects.
+
     """
     return [asdict(r, dict_factory=_remove_none_from_dict_) for r in runners]
 
@@ -97,17 +103,24 @@ def list_runners(**kwargs) -> Runners | list[dict]:
     """
     Returns runner list that match the specified criteria.
 
-    :param kwargs: The criteria to filter runners, possible keys are:
-            'backend',
-            'backend_version',
-            'backend_version_prefix',
-            'backend_variant',
-            'service',
-            'service_version',
-            'service_version_prefix',
-            'platform'.
-            Also accepts **todict** to return a list of dictionaries instead of Runner objects.
-    :return: A list of matching runner.
+    Args:
+        kwargs:
+            The criteria to filter runners, possible keys are:
+
+            - `backend`
+            - `backend_version`
+            - `backend_version_prefix`
+            - `backend_variant`
+            - `service`
+            - `service_version`
+            - `service_version_prefix`
+            - `platform`
+
+            Also accepts `todict` to return a list of dictionaries instead of Runner objects.
+
+    Returns:
+         A list of matching runner.
+
     """
     data_path = resources.files(__package__).joinpath(f"{Path(__file__).name}.json")
     with data_path.open("r", encoding="utf-8") as f:
@@ -239,7 +252,7 @@ class BackendRunner:
 
 BackendRunners = list[BackendRunner]
 """
-Example of BackendRunners:
+```
 [
     {
         "backend": "cann",
@@ -271,11 +284,12 @@ Example of BackendRunners:
         ]
     }
 ]
+```
 """
 
 ServiceRunners = list[ServiceRunner]
 """
-Example of ServiceRunners:
+```
 [
     {
         "service": "vllm",
@@ -307,6 +321,7 @@ Example of ServiceRunners:
         ]
     }
 ]
+```
 """
 
 
@@ -316,8 +331,13 @@ def convert_backend_runners_to_dict(
     """
     Converts a list of BackendRunner objects to a list of dictionaries.
 
-    :param backend_runners: A list of BackendRunner objects.
-    :return: A list of dictionaries created from the input BackendRunner objects.
+    Args:
+        backend_runners:
+            A list of BackendRunner objects.
+
+    Returns:
+        A list of dictionaries created from the input BackendRunner objects.
+
     """
     return [asdict(br, dict_factory=_remove_none_from_dict_) for br in backend_runners]
 
@@ -329,9 +349,15 @@ def build_backend_runners(  # noqa: C901
     """
     Builds a structured representation of backend runners from a list of Runner objects.
 
-    :param runners: A list of Runner objects.
-    :param todict: If True, returns a list of dictionaries instead of BackendRunner objects.
-    :return: A list of BackendRunner objects structured by backend, version, variant, service, and platform.
+    Args:
+        runners:
+            A list of Runner objects.
+        todict:
+            If True, returns a list of dictionaries instead of BackendRunner objects.
+
+    Returns:
+        A list of BackendRunner objects structured by backend, version, variant, service, and platform.
+
     """
     results: BackendRunners = []
 
@@ -437,8 +463,13 @@ def convert_service_runners_to_dict(
     """
     Converts a list of ServiceRunner objects to a list of dictionaries.
 
-    :param service_runners: A list of ServiceRunner objects.
-    :return: A list of dictionaries created from the input ServiceRunner objects.
+    Args:
+        service_runners:
+            A list of ServiceRunner objects.
+
+    Returns:
+        A list of dictionaries created from the input ServiceRunner objects.
+
     """
     return [asdict(sr, dict_factory=_remove_none_from_dict_) for sr in service_runners]
 
@@ -446,13 +477,19 @@ def convert_service_runners_to_dict(
 def build_service_runners(  # noqa: C901
     runners: Runners,
     todict: bool = False,
-) -> list[ServiceRunner] | list[dict]:
+) -> ServiceRunners | list[dict]:
     """
     Builds a structured representation of service runners from a list of Runner objects.
 
-    :param runners: A list of Runner objects.
-    :param todict: If True, returns a list of dictionaries instead of ServiceRunner objects.
-    :return: A list of ServiceRunner objects structured by service, version, backend, and platform.
+    Args:
+        runners:
+            A list of Runner objects.
+        todict:
+            If True, returns a list of dictionaries instead of ServiceRunner objects.
+
+    Returns:
+        A list of ServiceRunner objects structured by service, version, backend, and platform.
+
     """
     results: ServiceRunners = []
 
