@@ -30,6 +30,13 @@ deactivate () {
     # commands.
     hash -r 2>/dev/null
 
+    # Restore old PS1
+    if [ -n "${_OLD_PS1:-}" ] ; then
+        PS1="${_OLD_PS1:-}"
+        export PS1
+        unset _OLD_PS1
+    fi
+
     # Self-remove
     unset -f deactivate
 }
@@ -45,6 +52,11 @@ for f in $(find "${TOOLS_PATH}" -type f -name "*.sh"); do
     fi
 done
 export _NEW_ALIASES
+
+# Change prompt
+_OLD_PS1="${PS1:-}"
+PS1="(gpustack-runner) ${PS1:-}"
+export PS1
 
 # The hash command must be called to get it to forget past
 # commands.
