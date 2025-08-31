@@ -12,13 +12,13 @@ usage() {
     echo "# Usage"
     echo "  [envs...] ${name} <image/image-tag> <volume> [args...]"
     echo "    - envs            : Environment variables to pass into the container (e.g. VLLM_LOGGING_LEVEL=DEBUG)"
-    echo "    - image/image-tag : Docker image or image tag to run (default: 'gpustack/runner:cuda12.8-vllm0.10.0')"
+    echo "    - image/image-tag : Docker image or image tag to run (default: 'gpustack/runner:cuda12.4-vllm0.10.0')"
     echo "    - volume          : Host directory to mount into the container"
     echo "    - args            : Additional arguments to pass to the Docker container"
     echo "  * This script is intended to run on Linux with Docker installed."
     echo "# Example"
-    echo "    - VLLM_LOGGING_LEVEL=DEBUG ${name} cuda12.8-vllm0.10.0 /path/to/data vllm serve --port 8080 --model /path/to/model ..."
-    echo -e "    - \033[33mDRUN=true\033[0m VLLM_LOGGING_LEVEL=DEBUG ${name} cuda12.8-vllm0.10.0 /path/to/data vllm serve --port 8080 --model /path/to/model ..."
+    echo "    - VLLM_LOGGING_LEVEL=DEBUG ${name} cuda12.4-vllm0.10.0 /path/to/data vllm serve --port 8080 --model /path/to/model ..."
+    echo -e "    - \033[33mDRUN=true\033[0m VLLM_LOGGING_LEVEL=DEBUG ${name} cuda12.4-vllm0.10.0 /path/to/data vllm serve --port 8080 --model /path/to/model ..."
     echo "# Images"
     docker images --format "{{.Repository}}:{{.Tag}}" | grep -v '<none>' | grep '^gpustack/runner:' | sort -u | sed 's/^/    - /'
     echo ""
@@ -97,8 +97,18 @@ fi
 CONTAINER_NAME="gpustack-runner-${RUNTIME}-$(date +%s)"
 CACHE_NAME="gpustack-runner-${RUNTIME}-${OS}-${ARCH}-$(md5sum <<<"${IMAGE}" | cut -c1-10)"
 
+if [[ -n "${_OLD_ENV_FILE_HASH:-}" ]] && [[ -n "${_OLD_ENV_FILE:-}" ]] && [[ -f "${_OLD_ENV_FILE}" ]]; then
+    _ENV_FILE_HASH="$(sha256sum "${_OLD_ENV_FILE}" | awk '{print $1}')"
+    if [[ "${_ENV_FILE_HASH}" != "${_OLD_ENV_FILE_HASH}" ]] ; then
+        _ENV_FILE_HASH=""
+    fi
+fi
 ENV_FILE="$(mktemp)"
-env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB|DRUN)' >"${ENV_FILE}" || true
+if [[ -z "${_ENV_FILE_HASH}" ]]; then
+    env | grep -v -E '^(PATH|HOME|LANG|PWD|SHELL|LOG|XDG|SSH|LC|LS|_|USER|TERM|LESS|SHLVL|DBUS|OLDPWD|MOTD|LD|LIB|DRUN)' >"${ENV_FILE}" || true
+else
+    diff <(sort < "${_OLD_ENV_FILE}") <(env | grep -v -E '^(_OLD|DRUN)' | sort) | grep '^>' | sed 's/^> //' >"${ENV_FILE}" || true
+fi
 if ! grep -q "$(tr '[:lower:]' '[:upper:]' <<<"${RUNTIME}")_VISIBLE_DEVICES=" "${ENV_FILE}"; then
     echo "$(tr '[:lower:]' '[:upper:]' <<<"${RUNTIME}")_VISIBLE_DEVICES=all" >>"${ENV_FILE}"
 fi
@@ -177,15 +187,15 @@ postprocess() {
         info "To remove the container, use 'docker rm -f ${CONTAINER_NAME}'"
     fi
 }
-trap postprocess TERM INT EXIT
+trap postprocess EXIT
 
 # Start
 
 set -x
 docker run "${RUN_ARGS[@]}" "${IMAGE}" "${ARGS[@]}"
+set +x
 
 # shellcheck disable=SC2181
-if [[ $? -eq 0 ]] && [[ "${DRUN}" == "true" ]]; then
-    set +x
+if [[ "${DRUN}" == "true" ]]; then
     docker logs -f "${CONTAINER_NAME}" || true
 fi
