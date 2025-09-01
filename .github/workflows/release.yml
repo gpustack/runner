@@ -96,10 +96,18 @@ jobs:
 
           sleep 30
 
+          EXTRA_ARGS=()
+          if [[ "${INPUT_INDEX}" == "testpypi" ]]; then
+              EXTRA_ARGS+=(
+                "--index" "https://test.pypi.org/simple/"
+                "--index-strategy" "unsafe-best-match"
+              )
+          fi
+
+          set -x
           uv run \
             --index https://pypi.org/simple/ \
-            --index https://test.pypi.org/simple/ \
-            --index-strategy unsafe-best-match \
+            "${EXTRA_ARGS[@]}" \
             --with ${INPUT_PROJECT} \
             --isolated \
             --no-project \
