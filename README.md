@@ -1,4 +1,4 @@
-# GPUStack Runner (WIP)
+# GPUStack Runner
 
 This repository serves as the Docker image pack center for GPUStack Runner.
 It provides a collection of Dockerfiles to build images for various inference services across different accelerated
