@@ -57,11 +57,6 @@ class Runner:
     The Docker image name.
     """
 
-    def __init__(self, **kwargs: dict[str, Any]):
-        for k, v in kwargs.items():
-            if k in self.__dataclass_fields__:
-                setattr(self, k, v)
-
 
 Runners = list[Runner]
 """
@@ -125,7 +120,7 @@ def list_runners(**kwargs: dict[str, Any]) -> Runners | list[dict]:
     data_path = resources.files(__package__).joinpath(f"{Path(__file__).name}.json")
     with data_path.open("r", encoding="utf-8") as f:
         json_list = json.load(f)
-        runners = [Runner(**item) for item in json_list]
+        runners = [Runner.from_dict(item) for item in json_list]
 
     todict = kwargs.pop("todict", False)
     if not kwargs:
