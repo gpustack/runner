@@ -1,5 +1,25 @@
 # Borrowed from https://github.com/CoreyMSchafer/dotfiles/blob/master/settings/ruff.toml.
 
+exclude = [
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    "__pycache__",
+    "build",
+    "_build",
+    "dist",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".eggs",
+    "*.egg",
+    "*.egg-info",
+    ".tox",
+    ".nox",
+    ".ruff_cache",
+]
+
 [lint]
 
 # (These are all the default groups, even if you don’t currently select them)
@@ -73,6 +93,7 @@ extend-select = [
 ]
 
 ignore = [
+    "BLE001", # Flake8-blind-except - Blind except: consider specifying exception instead of using a bare except.
     "E501", # Pycodestyle - line too long.
     "D1", # Pydocstyle - missing docstring in public module, class, or function.
     "D200", # Pydocstyle - one blank line required before summary line.
@@ -94,6 +115,13 @@ parametrize-names-type = "csv"
 
 [lint.per-file-ignores]
 "tests/*.py" = ["D", "S101"]
+
+[lint.mccabe]
+max-complexity = 50
+
+[lint.pylint]
+max-branches = 60
+max-statements = 120
 
 [format]
 indent-style = "space"

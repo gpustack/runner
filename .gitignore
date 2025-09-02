@@ -12,6 +12,8 @@ _version.py
 _version_appendix.py
 __pycache__/
 __pypackages__/
+.pytest_cache/
+.ruff_cache/
 *.py[oc]
 *$py.class
 build/

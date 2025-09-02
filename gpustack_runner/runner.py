@@ -342,7 +342,7 @@ def convert_backend_runners_to_dict(
     return [asdict(br, dict_factory=_remove_none_from_dict_) for br in backend_runners]
 
 
-def build_backend_runners(  # noqa: C901
+def build_backend_runners(
     runners: Runners,
     todict: bool = False,
 ) -> BackendRunners | list[dict]:
@@ -513,7 +513,7 @@ def convert_service_runners_to_dict(
     return [asdict(sr, dict_factory=_remove_none_from_dict_) for sr in service_runners]
 
 
-def build_service_runners(  # noqa: C901
+def build_service_runners(
     runners: Runners,
     todict: bool = False,
 ) -> ServiceRunners | list[dict]:
