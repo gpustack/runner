@@ -16,7 +16,7 @@
 # 3.2. vllm-build-triton target.
 # 3.3. vllm-build-flashattention target.
 # 3.4. vllm-build-aiter target.
-# 4. vllm target.
+# 3.5. vllm target.
 #    - Install Torch.
 #    - Install vLLM from source.
 #    - Install Triton if existed.

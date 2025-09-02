@@ -13,7 +13,7 @@
 #    - Install Torch.
 #    - Install Dependencies.
 # 3.2. vllm-build-flashinfer target.
-# 4. vllm target.
+# 3.3. vllm target.
 #    - Install Torch.
 #    - Install vLLM.
 #    - Install FlashInfer if existed.
