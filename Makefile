@@ -74,10 +74,11 @@ PACKAGE_TAG ?= cuda12.4-vllm0.10.0
 package:
 	@echo "+++ $@ +++"
 	if [[ -z $$(command -v docker) ]]; then \
-		echo "Docker is not installed. Please install Docker to use this target."; \
+		echo "[FATAL] Docker is not installed. Please install Docker to use this target."; \
 		exit 1; \
 	fi
-	if [[ -z $$(docker buildx inspect --builder "gpustack") ]]; then \
+	if [[ -z $$(docker buildx inspect --builder "gpustack" 2>/dev/null) ]]; then \
+    	echo "[INFO] Creating new buildx builder 'gpustack'"; \
 	    docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2-52 --uninstall qemu-*; \
 	    docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2 --install all; \
 	    docker buildx create \
@@ -97,7 +98,7 @@ package:
 	    JOB_TARGET=$$(echo "$${BUILD_JOB}" | jq -r '.service'); \
 	    JOB_TAG=$(PACKAGE_NAMESPACE)/$(PACKAGE_REPOSITORY):$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag'); \
         JOB_ARGS=($$(echo "$${BUILD_JOB}" | jq -r '.args | map("--build-arg " + .) | join(" ")')); \
-        echo "### building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
+        echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
         set -x; \
         docker buildx build \
         	--pull \
@@ -108,6 +109,7 @@ package:
 			--target "$${JOB_TARGET}" \
 			--tag "$${JOB_TAG}" \
 			--file "$(SRCDIR)/pack/$${JOB_BACKEND}/Dockerfile" \
+			--progress plain \
 			$${JOB_ARGS[@]} \
 			$(SRCDIR)/pack/$${JOB_BACKEND}; \
 		set +x; \
