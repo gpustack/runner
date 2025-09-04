@@ -195,7 +195,6 @@ RUN_ARGS+=(
     "--runtime" "${RUNTIME}"
     "--name" "${CONTAINER_NAME}"
     "--network" "host"
-    "--ipc" "host"
     "--shm-size" "16g"
     "--volume" "/dev/shm:/dev/shm"
     "--volume" "${CACHE_NAME}:/root/.cache"
