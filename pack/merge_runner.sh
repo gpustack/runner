@@ -28,9 +28,9 @@ NEW_RUNNERS="$(echo "${INPUT_BUILD_JOBS}" | jq -cr \
         backend_variant: .backend_variant,
         service: .service,
         service_version: .service_version,
-        original_service_version: .original_service_version,
         platform: .platform,
         docker_image: ($namespace + "/" + $repository + ":" + .tag),
+        deprecated: (.deprecated // false),
     }' | jq -cs .)"
 
 # Load existing runners if exists.

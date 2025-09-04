@@ -6,9 +6,9 @@
     "backend_variant": "910b",
     "service": "mindie",
     "service_version": "2.1.rc1",
-    "original_service_version": "2.1.rc1",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1"
+    "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -17,9 +17,9 @@
     "backend_variant": "910b",
     "service": "mindie",
     "service_version": "2.1.rc1",
-    "original_service_version": "2.1.rc1",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1"
+    "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -28,9 +28,9 @@
     "backend_variant": "910b",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0"
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -39,9 +39,9 @@
     "backend_variant": "910b",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0"
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -50,9 +50,9 @@
     "backend_variant": "910b",
     "service": "vllm",
     "service_version": "0.9.2",
-    "original_service_version": "0.9.2",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2"
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -61,9 +61,9 @@
     "backend_variant": "910b",
     "service": "vllm",
     "service_version": "0.9.2",
-    "original_service_version": "0.9.2",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2"
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -72,9 +72,9 @@
     "backend_variant": "910b",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -83,9 +83,9 @@
     "backend_variant": "910b",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -94,9 +94,9 @@
     "backend_variant": "910b",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -105,9 +105,9 @@
     "backend_variant": "910b",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -116,9 +116,9 @@
     "backend_variant": "310p",
     "service": "mindie",
     "service_version": "2.1.rc1",
-    "original_service_version": "2.1.rc1",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1"
+    "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -127,9 +127,9 @@
     "backend_variant": "310p",
     "service": "mindie",
     "service_version": "2.1.rc1",
-    "original_service_version": "2.1.rc1",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1"
+    "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -138,9 +138,9 @@
     "backend_variant": "310p",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.10.0"
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -149,9 +149,9 @@
     "backend_variant": "310p",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.10.0"
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -160,9 +160,9 @@
     "backend_variant": "310p",
     "service": "vllm",
     "service_version": "0.9.2",
-    "original_service_version": "0.9.2",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2"
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -171,9 +171,9 @@
     "backend_variant": "310p",
     "service": "vllm",
     "service_version": "0.9.2",
-    "original_service_version": "0.9.2",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2"
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -182,9 +182,9 @@
     "backend_variant": "310p",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -193,9 +193,9 @@
     "backend_variant": "310p",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -204,9 +204,9 @@
     "backend_variant": "310p",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -215,9 +215,9 @@
     "backend_variant": "310p",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "corex",
@@ -226,9 +226,9 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.8.3",
-    "original_service_version": "0.8.3",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:corex4.2-vllm0.8.3"
+    "docker_image": "gpustack/runner:corex4.2-vllm0.8.3",
+    "deprecated": false
   },
   {
     "backend": "corex",
@@ -237,9 +237,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:corex4.2-voxbox0.0.20"
+    "docker_image": "gpustack/runner:corex4.2-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "corex",
@@ -248,9 +248,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:corex4.2-voxbox0.0.19"
+    "docker_image": "gpustack/runner:corex4.2-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -258,10 +258,10 @@
     "original_backend_version": "12.8.1",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.1"
+    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -269,21 +269,10 @@
     "original_backend_version": "12.8.1",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.1"
-  },
-  {
-    "backend": "cuda",
-    "backend_version": "12.8",
-    "original_backend_version": "12.8.1",
-    "backend_variant": "",
-    "service": "vllm",
-    "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0"
+    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -292,9 +281,20 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.8",
+    "original_backend_version": "12.8.1",
+    "backend_variant": "",
+    "service": "vllm",
+    "service_version": "0.10.0",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0"
+    "docker_image": "gpustack/runner:cuda12.8-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -303,9 +303,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -314,9 +314,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -325,9 +325,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -336,9 +336,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -346,10 +346,10 @@
     "original_backend_version": "12.6.3",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.1"
+    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -357,21 +357,10 @@
     "original_backend_version": "12.6.3",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.1"
-  },
-  {
-    "backend": "cuda",
-    "backend_version": "12.6",
-    "original_backend_version": "12.6.3",
-    "backend_variant": "",
-    "service": "vllm",
-    "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.0"
+    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -380,9 +369,20 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.6",
+    "original_backend_version": "12.6.3",
+    "backend_variant": "",
+    "service": "vllm",
+    "service_version": "0.10.0",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.0"
+    "docker_image": "gpustack/runner:cuda12.6-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -391,9 +391,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -402,9 +402,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -413,9 +413,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -424,9 +424,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -434,10 +434,10 @@
     "original_backend_version": "12.4.1",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.1"
+    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -445,10 +445,10 @@
     "original_backend_version": "12.4.1",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.1"
+    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -457,9 +457,9 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0"
+    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -468,9 +468,9 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0"
+    "docker_image": "gpustack/runner:cuda12.4-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -479,9 +479,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -490,9 +490,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.20"
+    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -501,9 +501,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "cuda",
@@ -512,9 +512,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.19"
+    "docker_image": "gpustack/runner:cuda12.4-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "dtk",
@@ -523,9 +523,9 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.8.5",
-    "original_service_version": "0.8.5",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:dtk25.04-vllm0.8.5"
+    "docker_image": "gpustack/runner:dtk25.04-vllm0.8.5",
+    "deprecated": false
   },
   {
     "backend": "dtk",
@@ -534,9 +534,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:dtk25.04-voxbox0.0.20"
+    "docker_image": "gpustack/runner:dtk25.04-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "dtk",
@@ -545,9 +545,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:dtk25.04-voxbox0.0.19"
+    "docker_image": "gpustack/runner:dtk25.04-voxbox0.0.19",
+    "deprecated": false
   },
   {
     "backend": "rocm",
@@ -555,10 +555,10 @@
     "original_backend_version": "6.3.4",
     "backend_variant": "",
     "service": "vllm",
-    "service_version": "0.10.1",
-    "original_service_version": "0.10.1.1",
+    "service_version": "0.10.1.1",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:rocm6.3-vllm0.10.1"
+    "docker_image": "gpustack/runner:rocm6.3-vllm0.10.1.1",
+    "deprecated": false
   },
   {
     "backend": "rocm",
@@ -567,9 +567,9 @@
     "backend_variant": "",
     "service": "vllm",
     "service_version": "0.10.0",
-    "original_service_version": "0.10.0",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:rocm6.3-vllm0.10.0"
+    "docker_image": "gpustack/runner:rocm6.3-vllm0.10.0",
+    "deprecated": false
   },
   {
     "backend": "rocm",
@@ -578,9 +578,9 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.20",
-    "original_service_version": "0.0.20",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:rocm6.3-voxbox0.0.20"
+    "docker_image": "gpustack/runner:rocm6.3-voxbox0.0.20",
+    "deprecated": false
   },
   {
     "backend": "rocm",
@@ -589,8 +589,8 @@
     "backend_variant": "",
     "service": "voxbox",
     "service_version": "0.0.19",
-    "original_service_version": "0.0.19",
     "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:rocm6.3-voxbox0.0.19"
+    "docker_image": "gpustack/runner:rocm6.3-voxbox0.0.19",
+    "deprecated": false
   }
 ]

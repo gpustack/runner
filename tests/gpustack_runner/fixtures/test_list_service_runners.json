@@ -22,6 +22,7 @@
                 "backend": "cann",
                 "versions": [
                   {
+                    "original_version": "8.2.rc1",
                     "variants": [
                       {
                         "platforms": [
@@ -58,6 +59,7 @@
                 "backend": "cuda",
                 "versions": [
                   {
+                    "original_version": "12.8.1",
                     "variants": [
                       {
                         "platforms": [
@@ -76,6 +78,7 @@
                     "version": "12.8"
                   },
                   {
+                    "original_version": "12.6.3",
                     "variants": [
                       {
                         "platforms": [
@@ -94,6 +97,7 @@
                     "version": "12.6"
                   },
                   {
+                    "original_version": "12.4.1",
                     "variants": [
                       {
                         "platforms": [
@@ -117,6 +121,7 @@
                 "backend": "rocm",
                 "versions": [
                   {
+                    "original_version": "6.3.4",
                     "variants": [
                       {
                         "platforms": [
@@ -133,6 +138,7 @@
                 ]
               }
             ],
+            "deprecated": false,
             "version": "0.10.0"
           }
         ]

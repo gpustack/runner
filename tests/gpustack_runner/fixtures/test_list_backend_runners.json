@@ -25,6 +25,7 @@
                     "service": "mindie",
                     "versions": [
                       {
+                        "deprecated": false,
                         "platforms": [
                           {
                             "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
@@ -48,6 +49,7 @@
                     "service": "mindie",
                     "versions": [
                       {
+                        "deprecated": false,
                         "platforms": [
                           {
                             "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
@@ -66,7 +68,8 @@
                 "variant": "910b"
               }
             ],
-            "version": "8.2"
+            "version": "8.2",
+            "original_version": "8.2.rc1"
           }
         ]
       }
@@ -91,6 +94,7 @@
                     "service": "vllm",
                     "versions": [
                       {
+                        "deprecated": false,
                         "platforms": [
                           {
                             "docker_image": "gpustack/runner:dtk25.04-vllm0.8.5",
@@ -105,7 +109,8 @@
                 "variant": ""
               }
             ],
-            "version": "25.04"
+            "version": "25.04",
+            "original_version": "25.04.1"
           }
         ]
       }

@@ -42,11 +42,7 @@ class Runner:
     """
     service_version: str
     """
-    The service version, ignored post-release version, e.g. "0.10.0", "0.4.10", etc.
-    """
-    original_service_version: str
-    """
-    The original service version, e.g. "0.10.0.1", "0.4.10.2", etc.
+    The service version, e.g. "0.10.0", "0.4.10", etc.
     """
     platform: str
     """
@@ -55,6 +51,10 @@ class Runner:
     docker_image: str
     """
     The Docker image name.
+    """
+    deprecated: bool = False
+    """
+    Deprecated runner or not.
     """
 
 
@@ -69,9 +69,9 @@ Runners = list[Runner]
         "backend_variant": "910b",
         "service": "vllm",
         "service_version": "0.10.0",
-        "original_service_version": "0.10.0",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cann8.2-vllm0.10.0"
+        "docker_image": "gpustack/runner:cann8.2-vllm0.10.0",
+        "deprecated": false
     }
 ]
 ```
@@ -179,6 +179,10 @@ class ServiceVersionedRunner:
     """
     The service version, e.g. "0.10.0", "0.4.10", etc.
     """
+    deprecated: bool = False
+    """
+    Deprecated runner or not.
+    """
     platforms: list[ServicePlatformedRunner] | None = None
     """
     A list of ServicePlatformedRunner objects, each containing platform and docker_image.
@@ -224,7 +228,11 @@ class BackendVariantRunner:
 class BackendVersionedRunner:
     version: str
     """
-    The backend version, e.g. "8.2.rc1", "12.4.1", "6.4.2", etc.
+    The backend version, e.g. "8.2", "12.4", "6.4", etc.
+    """
+    original_version: str
+    """
+    The original backend version, e.g. "8.2.rc1", "12.4.1", "6.4.2", etc.
     """
     variants: list[BackendVariantRunner]
     """
@@ -254,6 +262,7 @@ BackendRunners = list[BackendRunner]
         "versions": [
             {
                 "version": "8.2",
+                "original_version": "8.2.rc1",
                 "variants": [
                     {
                         "variant": "910b",
@@ -263,6 +272,7 @@ BackendRunners = list[BackendRunner]
                                 "versions": [
                                     {
                                         "version": "0.10.0",
+                                        "deprecated": false,
                                         "platforms": [
                                             {
                                                 "platform": "linux/amd64",
@@ -291,12 +301,14 @@ ServiceRunners = list[ServiceRunner]
         "versions": [
             {
                 "version": "0.10.0",
+                "deprecated": false,
                 "backends": [
                     {
                         "backend": "cann",
                         "versions": [
                             {
                                 "version": "8.2",
+                                "original_version": "8.2.rc1",
                                 "variants": [
                                     {
                                         "variant": "910b",
@@ -381,6 +393,7 @@ def build_backend_runners(
         if not version_entry:
             version_entry = BackendVersionedRunner(
                 version=runner.backend_version,
+                original_version=runner.original_backend_version,
                 variants=[],
             )
             backend_entry.versions.append(version_entry)
@@ -425,6 +438,7 @@ def build_backend_runners(
         if not service_version_entry:
             service_version_entry = ServiceVersionedRunner(
                 version=runner.service_version,
+                deprecated=runner.deprecated,
                 platforms=[],
             )
             service_entry.versions.append(service_version_entry)
@@ -552,6 +566,7 @@ def build_service_runners(
         if not service_version_entry:
             service_version_entry = ServiceVersionedRunner(
                 version=runner.service_version,
+                deprecated=runner.deprecated,
                 backends=[],
             )
             service_entry.versions.append(service_version_entry)
@@ -580,6 +595,7 @@ def build_service_runners(
         if not backend_version_entry:
             backend_version_entry = BackendVersionedRunner(
                 version=runner.backend_version,
+                original_version=runner.original_backend_version,
                 variants=[],
             )
             backend_entry.versions.append(backend_version_entry)

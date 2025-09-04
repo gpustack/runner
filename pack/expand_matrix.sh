@@ -152,7 +152,7 @@ EOT
                     runner: $runner,
                     platform_tag_cache: $platform_tag_cache,
                     original_backend_version: $original_backend_version,
-                    original_service_version: "",
+                    deprecated: false,
                   }] + .')"
         done
 
@@ -175,13 +175,12 @@ EOT
         # Prepare environment variables for sourcing.
         cp -f "${INPUT_TEMPDIR}/envs_shared" "${INPUT_TEMPDIR}/envs_dedicated"
         {
-            echo "export ORIGINAL_SERVICE_VERSION=\${${SERVICE_UPPER}_VERSION}"
+            echo "export SERVICE_VERSION=\${${SERVICE_UPPER}_VERSION}"
             cat <<EOT
-        IFS="." read -r SV_MAJOR SV_MINOR SV_PATCH SV_POST_RELEASE <<<"\${ORIGINAL_SERVICE_VERSION}"
+        IFS="." read -r SV_MAJOR SV_MINOR SV_PATCH SV_POST_RELEASE <<<"\${SERVICE_VERSION}"
         if [[ -z "\${SV_PATCH}" ]]; then
             SV_PATCH=0
         fi
-        export SERVICE_VERSION="\${SV_MAJOR}.\${SV_MINOR}.\${SV_PATCH}"
         export SERVICE_VERSION_MAJOR="\${SV_MAJOR}"
         export SERVICE_VERSION_MINOR="\${SV_MINOR}"
         export SERVICE_VERSION_PATCH="\${SV_PATCH}"
@@ -244,7 +243,6 @@ EOT
                 --arg runner "${RUNNER}" \
                 --argjson platform_tag_cache "[\"${PLATFORM_TAG}\",\"${PLATFORM_TAG_XY}\",\"${PLATFORM_TAG_X}\"]" \
                 --arg original_backend_version "${ORIGINAL_BACKEND_VERSION}" \
-                --arg original_service_version "${ORIGINAL_SERVICE_VERSION}" \
                 '[{
                     backend: $backend,
                     backend_version: $backend_version,
@@ -258,7 +256,7 @@ EOT
                     runner: $runner,
                     platform_tag_cache: $platform_tag_cache,
                     original_backend_version: $original_backend_version,
-                    original_service_version: $original_service_version,
+                    deprecated: false,
                   }] + .')"
         done
     done
@@ -293,7 +291,7 @@ echo "build_jobs="
 #      "cuda12.6-vllm0-linux-arm64",
 #    ],
 #    "original_backend_version": "12.6.3",
-#    "original_service_version": "0.9.2"
+#    "deprecated": false
 #  },
 #  {
 #    "backend": "cuda",
@@ -314,7 +312,7 @@ echo "build_jobs="
 #      "cuda12.6-vllm0-linux-amd64",
 #    ],
 #    "original_backend_version": "12.6.3",
-#    "original_service_version": "0.9.2",
+#    "deprecated": false
 #  }
 # ]
 echo "${BUILD_JOBS}" | jq -r '.'

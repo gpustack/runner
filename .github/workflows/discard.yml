@@ -1,7 +1,7 @@
-# This workflow is used to prune runners by creating a pull request.
+# This workflow is used to discard runners by creating a pull request.
 # It can be triggered manually via the GitHub Actions UI.
 
-name: prune
+name: discard
 
 permissions:
   actions: write
@@ -15,28 +15,28 @@ defaults:
 on:
   workflow_dispatch:
     inputs:
-      # Control how to choice the backend to prune.
+      # Control how to choice the backend to discard.
       backend:
-        description: 'Backend, which accelerated backend to prune'
+        description: 'Backend, which accelerated backend to discard'
         required: false
         type: string
       backend_version:
-        description: 'Backend version, which version of the backend to prune'
+        description: 'Backend version, which version of the backend to discard'
         required: false
         type: string
-      # Control how to choice the service to prune.
+      # Control how to choice the service to discard.
       service:
-        description: 'Service, which service to prune'
+        description: 'Service, which service to discard'
         required: false
         type: string
       service_version:
-        description: 'Service version, which version of the service to prune'
+        description: 'Service version, which version of the service to discard'
         required: false
         type: string
 
 jobs:
-  # Submit a PR to prune the runner.
-  prune-runner:
+  # Submit a PR to discard the runner.
+  discard-runner:
     runs-on: ubuntu-22.04
     steps:
         - name: Checkout
@@ -44,7 +44,7 @@ jobs:
           with:
             fetch-depth: 1
             persist-credentials: false
-        - name: Prune Runner
+        - name: Discard Runner
           env:
             INPUT_BACKEND: ${{ github.event.inputs.backend }}
             INPUT_BACKEND_VERSION: ${{ github.event.inputs.backend_version }}
@@ -52,7 +52,7 @@ jobs:
             INPUT_SERVICE_VERSION: ${{ github.event.inputs.service_version }}
             INPUT_WORKSPACE: ${{ github.workspace }}/pack
             INPUT_TEMPDIR: ${{ runner.temp }}
-          run: ${{ github.workspace }}/pack/prune_runner.sh
+          run: ${{ github.workspace }}/pack/discard_runner.sh
         - name: Generate Pull Request Token
           id: generate-prt
           uses: actions/create-github-app-token@v2
@@ -63,11 +63,11 @@ jobs:
           uses: peter-evans/create-pull-request@v7
           with:
             token: ${{ steps.generate-prt.outputs.token }}
-            branch: "create-pull-request/prune-runner-${{ github.run_id }}"
+            branch: "create-pull-request/discard-runner-${{ github.run_id }}"
             delete-branch: true
-            commit-message: "chore: prune runner by gha workflow ${{ github.run_id }}"
-            title: "chore: prune runner by gha workflow ${{ github.run_id }}"
+            commit-message: "chore: discard runner by gha workflow ${{ github.run_id }}"
+            title: "chore: discard runner by gha workflow ${{ github.run_id }}"
             reviewers: ${{ github.actor }}
             assignees: ${{ github.actor }}
             body: |
-              Prune runner by GHA workflow [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+              Discard runner by GHA workflow [${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
