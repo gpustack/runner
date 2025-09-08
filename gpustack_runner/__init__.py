@@ -56,7 +56,7 @@ Mapping of manufacturer to runtime backend.
 """
 
 _BACKEND_VISIBLE_DEVICES_ENV_MAPPING: dict[str, list[str]] = {
-    "cuda": ["NVIDIA_VISIBLE_DEVICES"],
+    "cuda": ["CUDA_VISIBLE_DEVICES"],
     "rocm": ["ROCR_VISIBLE_DEVICES"],
     "cann": ["ASCEND_RT_VISIBLE_DEVICES", "NPU_VISIBLE_DEVICES"],
     "dtk": ["HIP_VISIBLE_DEVICES"],
@@ -74,7 +74,7 @@ _CONTAINER_BACKEND_VISIBLE_DEVICES_ENV_MAPPING: dict[str, str] = {
     "corex": "ILUVATAR_VISIBLE_DEVICES",  ## TODO(thxCode): confirm with ILUVATAR
 }
 """
-Mapping of envs for container runtime to set visible devices for each backend.
+Mapping of envs for container runtime to set visible devices for a container.
 """
 
 
@@ -122,14 +122,13 @@ def backend_visible_devices_env(backend: str) -> list[str]:
     """
     Get the mapping of backend to its corresponding *_VISIBLE_DEVICES env list.
 
-    It is to tell the related backend toolkit which devices are visible inside a container.
+    It is used to tell the related backend toolkit which devices are visible inside a container.
 
     Args:
         backend: The runtime backend (e.g., 'cuda', 'rocm').
 
     Returns:
-        The environment variable name used to specify visible devices
-        for the given backend in containerized environments.
+        The environment variable name used to specify visible devices of toolkit.
 
     """
     return _BACKEND_VISIBLE_DEVICES_ENV_MAPPING.get(backend, [])
@@ -137,17 +136,20 @@ def backend_visible_devices_env(backend: str) -> list[str]:
 
 def container_backend_visible_devices_env(backend: str) -> str | None:
     """
-    Get the mapping of container backend to its corresponding *_VISIBLE_DEVICES env.
+    Get the mapping of container's backend to its corresponding *_VISIBLE_DEVICES env.
 
-    Doesn't kike `backend_visible_devices_env`,
-    this function returns the env for injecting host devices into container only.
+    Doesn't like `backend_visible_devices_env`,
+    it returns the env which is used to inject host devices into container only.
+
+    Args:
+        backend: The runtime backend (e.g., 'cuda', 'rocm').
 
     Returns:
         The environment variable name used by container runtimes
         to specify visible devices (used to inject host devices into container) for the given backend.
 
     """
-    return _BACKEND_VISIBLE_DEVICES_ENV_MAPPING.get(backend)
+    return _CONTAINER_BACKEND_VISIBLE_DEVICES_ENV_MAPPING.get(backend)
 
 
 __all__ = [
