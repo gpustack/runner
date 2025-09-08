@@ -101,8 +101,11 @@ ignore = [
     "D203", # Pydocstyle - one blank line required before class docstring.
     "D212", # Pydocstyle - summary line should be immediately after the opening quotes.
     "D401", # Pydocstyle - Checks for docstring first lines that are not in an imperative mood.
+    "G004", # Flake8-logging-format - logging format string does not use lazy % formatting.
     "INP001", # Flake8-no-pep420 - Checks for packages that are missing an __init__.py file.
     "S311", # Flake8-bandit - Standard pseudo-random generators are not suitable for security/cryptographic purposes.
+    "TD003", # Flake8-todos - Checks that a TODO comment is associated with a link to a relevant issue or ticket.
+    "FIX002", # Flake8-fixme - Checks for "TODO" comments.
     "TRY003", # Tryceratops - Checks for long exception messages that are not defined in the exception class itself.
     "PERF401", # Perflint - Checks for loops that can be replaced by a list comprehension.
     "RET504", # Flake8-return - Checks for variable assignments that immediately precede a return of the assigned variable.
@@ -122,6 +125,9 @@ max-complexity = 50
 [lint.pylint]
 max-branches = 60
 max-statements = 120
+max-returns = 20
+max-args = 20
+allow-magic-value-types = ["str", "bytes", "int"]
 
 [format]
 indent-style = "space"
