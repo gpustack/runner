@@ -94,7 +94,7 @@ def convert_runners_to_dict(runners: Runners) -> list[dict]:
 
 
 @lru_cache
-def list_runners(**kwargs: dict[str, Any]) -> Runners | list[dict]:
+def list_runners(**kwargs) -> Runners | list[dict]:
     """
     Returns runner list that match the specified criteria.
 
@@ -477,7 +477,7 @@ def build_backend_runners(
 
 
 @lru_cache
-def list_backend_runners(**kwargs: dict[str, Any]) -> BackendRunners | list[dict]:
+def list_backend_runners(**kwargs) -> BackendRunners | list[dict]:
     """
     Returns backend runner list that match the specified criteria.
 
@@ -650,7 +650,7 @@ def build_service_runners(
 
 
 @lru_cache
-def list_service_runners(**kwargs: dict[str, Any]) -> ServiceRunners | list[dict]:
+def list_service_runners(**kwargs) -> ServiceRunners | list[dict]:
     """
     Returns service runner list that match the specified criteria.
 
