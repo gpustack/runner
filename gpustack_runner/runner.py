@@ -145,6 +145,8 @@ def list_runners(**kwargs) -> Runners | list[dict]:
     for item in runners:
         match = True
         for key, value in kwargs.items():
+            if value is None:
+                continue
             if key.endswith("_prefix"):
                 attr_value = getattr(item, key[:-7])
                 if not attr_value.startswith(value):
