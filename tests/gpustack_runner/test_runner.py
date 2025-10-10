@@ -20,6 +20,19 @@ def test_list_runners_by_backend(name, filters, expected):
 @pytest.mark.parametrize(
     "name, filters, expected",
     load(
+        "test_list_runners_by_prefix.json",
+    ),
+)
+def test_list_runners_by_prefix(name, filters, expected):
+    actual = list_runners(**filters, todict=True)
+    assert actual == expected, (
+        f"case {name} expected {expected}, but got {actual} for filters: {filters}"
+    )
+
+
+@pytest.mark.parametrize(
+    "name, filters, expected",
+    load(
         "test_list_backend_runners.json",
     ),
 )

@@ -144,15 +144,22 @@ def list_runners(**kwargs) -> Runners | list[dict]:
     results: Runners = []
     for item in runners:
         match = True
-        for key, value in kwargs.items():
-            if value is None:
+        for key, expected in kwargs.items():
+            if expected is None:
                 continue
             if key.endswith("_prefix"):
-                attr_value = getattr(item, key[:-7])
-                if not attr_value.startswith(value):
+                actual = getattr(item, key[:-7])
+                expected_parts = expected.split(".")
+                actual_parts = actual.split(".")
+                if len(actual_parts) == len(expected_parts) == 1:
+                    if len(actual) < len(expected):
+                        expected, actual = actual, expected  # noqa: PLW2901
+                elif len(actual_parts) < len(expected_parts):
+                    expected, actual = actual, expected  # noqa: PLW2901
+                if not actual.startswith(expected):
                     match = False
                     break
-            elif getattr(item, key) != value:
+            elif getattr(item, key) != expected:
                 match = False
                 break
         if match:
