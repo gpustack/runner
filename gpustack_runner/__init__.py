@@ -3,6 +3,7 @@ from __future__ import annotations
 from ._version import commit_id, version, version_tuple
 from .runner import (
     BackendRunners,
+    DockerImage,
     Runners,
     ServiceRunners,
     list_backend_runners,
@@ -12,6 +13,7 @@ from .runner import (
 
 __all__ = [
     "BackendRunners",
+    "DockerImage",
     "Runners",
     "ServiceRunners",
     "commit_id",

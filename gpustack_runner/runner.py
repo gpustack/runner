@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from importlib import resources
@@ -9,8 +10,78 @@ from typing import Any
 
 from dataclasses_json import dataclass_json
 
+_RE_DOCKER_IMAGE = re.compile(
+    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?gpustack/runner:(?P<backend>(rocm|cann|neuware|dtk|corex|musa|cuda))(?P<backend_version>[\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<engine>(vllm|voxbox|mindie))(?P<engine_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
+)
+"""
+Regex for Docker image parsing,
+which captures the following named groups:
+    - `prefix`: The optional prefix before `gpustack/runner`, e.g. a registry URL or namespace.
+    - `backend`: The backend name, e.g. "cann", "cuda", "rocm", etc.
+    - `backend_version`: The backend version, ignored patch version, e.g. "8.2", "12.4", "6.3", etc.
+    - `backend_variant`: The optional backend variant, e.g. "910b", etc.
+    - `engine`: The engine name, e.g. "vllm", "voxbox".
+    - `engine_version`: The engine version, e.g. "0.10.0", "0.4.10", etc.
+    - `suffix`: The optional suffix after the engine version, e.g. "dev", etc.
+"""
 
-def _remove_none_from_dict_(d: list[tuple[str, Any]]) -> dict:
+
+@dataclass_json
+@dataclass
+class DockerImage:
+    prefix: str
+    backend: str
+    backend_version: str
+    backend_variant: str
+    engine: str
+    engine_version: str
+    suffix: str
+
+    @classmethod
+    def from_string(cls, image: str) -> DockerImage | None:
+        """
+        Parse the Docker image string into a DockerImage object.
+
+        The given image string must follow the below regex format:
+        `[prefix/]gpustack/runner:{backend}{backend_version}[-backend_variant]-{engine}{engine_version}[-suffix]`
+
+        Args:
+            image:
+                The Docker image string to parse.
+
+        Returns:
+            A DockerImage object containing the structured components of the Docker image, or None if the format is invalid.
+
+        """
+        match = _RE_DOCKER_IMAGE.fullmatch(image)
+        if not match:
+            return None
+        return cls(**{k: (v or "") for k, v in match.groupdict().items()})
+
+    def __str__(self):
+        parts = [
+            "",
+            "gpustack/runner:",
+            self.backend,
+            self.backend_version,
+        ]
+        if self.prefix:
+            parts[0] = f"{self.prefix}/"
+        if self.backend_variant:
+            parts.append(f"-{self.backend_variant}")
+        parts.extend(
+            [
+                "-",
+                self.engine,
+                self.engine_version,
+            ],
+        )
+        if self.suffix:
+            parts.append(f"-{self.suffix}")
+        return "".join(parts)
+
+
+def _remove_none_from_dict(d: list[tuple[str, Any]]) -> dict:
     """
     Removes keys with None values from the dictionary.
     """
@@ -90,7 +161,7 @@ def convert_runners_to_dict(runners: Runners) -> list[dict]:
          A list of dictionaries created from the input Runner objects.
 
     """
-    return [asdict(r, dict_factory=_remove_none_from_dict_) for r in runners]
+    return [asdict(r, dict_factory=_remove_none_from_dict) for r in runners]
 
 
 @lru_cache
@@ -355,7 +426,7 @@ def convert_backend_runners_to_dict(
         A list of dictionaries created from the input BackendRunner objects.
 
     """
-    return [asdict(br, dict_factory=_remove_none_from_dict_) for br in backend_runners]
+    return [asdict(br, dict_factory=_remove_none_from_dict) for br in backend_runners]
 
 
 def build_backend_runners(
@@ -528,7 +599,7 @@ def convert_service_runners_to_dict(
         A list of dictionaries created from the input ServiceRunner objects.
 
     """
-    return [asdict(sr, dict_factory=_remove_none_from_dict_) for sr in service_runners]
+    return [asdict(sr, dict_factory=_remove_none_from_dict) for sr in service_runners]
 
 
 def build_service_runners(

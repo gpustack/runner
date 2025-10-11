@@ -1,0 +1,54 @@
+[
+  [
+    "gpustack/runner:cuda12.8-vllm0.10.0",
+    "gpustack/runner:cuda12.8-vllm0.10.0",
+    {
+      "prefix": "",
+      "backend": "cuda",
+      "backend_version": "12.8",
+      "backend_variant": "",
+      "engine": "vllm",
+      "engine_version": "0.10.0",
+      "suffix": ""
+    }
+  ],
+  [
+    "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+    "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+    {
+      "prefix": "",
+      "backend": "cann",
+      "backend_version": "8.2",
+      "backend_variant": "910b",
+      "engine": "mindie",
+      "engine_version": "2.1.rc1",
+      "suffix": ""
+    }
+  ],
+  [
+    "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+    "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+    {
+      "prefix": "website.com/abc",
+      "backend": "cann",
+      "backend_version": "8.2",
+      "backend_variant": "910b",
+      "engine": "mindie",
+      "engine_version": "2.1.rc1",
+      "suffix": ""
+    }
+  ],
+  [
+    "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1-dev",
+    "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1-dev",
+    {
+      "prefix": "website.com/abc",
+      "backend": "cann",
+      "backend_version": "8.2",
+      "backend_variant": "910b",
+      "engine": "mindie",
+      "engine_version": "2.1.rc1",
+      "suffix": "dev"
+    }
+  ]
+]
