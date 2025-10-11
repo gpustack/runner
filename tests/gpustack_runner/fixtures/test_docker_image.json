@@ -7,8 +7,8 @@
       "backend": "cuda",
       "backend_version": "12.8",
       "backend_variant": "",
-      "engine": "vllm",
-      "engine_version": "0.10.0",
+      "service": "vllm",
+      "service_version": "0.10.0",
       "suffix": ""
     }
   ],
@@ -20,8 +20,8 @@
       "backend": "cann",
       "backend_version": "8.2",
       "backend_variant": "910b",
-      "engine": "mindie",
-      "engine_version": "2.1.rc1",
+      "service": "mindie",
+      "service_version": "2.1.rc1",
       "suffix": ""
     }
   ],
@@ -33,8 +33,8 @@
       "backend": "cann",
       "backend_version": "8.2",
       "backend_variant": "910b",
-      "engine": "mindie",
-      "engine_version": "2.1.rc1",
+      "service": "mindie",
+      "service_version": "2.1.rc1",
       "suffix": ""
     }
   ],
@@ -46,8 +46,8 @@
       "backend": "cann",
       "backend_version": "8.2",
       "backend_variant": "910b",
-      "engine": "mindie",
-      "engine_version": "2.1.rc1",
+      "service": "mindie",
+      "service_version": "2.1.rc1",
       "suffix": "dev"
     }
   ]

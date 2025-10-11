@@ -11,7 +11,7 @@ from typing import Any
 from dataclasses_json import dataclass_json
 
 _RE_DOCKER_IMAGE = re.compile(
-    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?gpustack/runner:(?P<backend>(rocm|cann|neuware|dtk|corex|musa|cuda))(?P<backend_version>[\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<engine>(vllm|voxbox|mindie))(?P<engine_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
+    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?gpustack/runner:(?P<backend>(rocm|cann|neuware|dtk|corex|musa|cuda))(?P<backend_version>[\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
 )
 """
 Regex for Docker image parsing,
@@ -20,9 +20,9 @@ which captures the following named groups:
     - `backend`: The backend name, e.g. "cann", "cuda", "rocm", etc.
     - `backend_version`: The backend version, ignored patch version, e.g. "8.2", "12.4", "6.3", etc.
     - `backend_variant`: The optional backend variant, e.g. "910b", etc.
-    - `engine`: The engine name, e.g. "vllm", "voxbox".
-    - `engine_version`: The engine version, e.g. "0.10.0", "0.4.10", etc.
-    - `suffix`: The optional suffix after the engine version, e.g. "dev", etc.
+    - `service`: The service name, e.g. "vllm", "voxbox".
+    - `service_version`: The service version, e.g. "0.10.0", "0.4.10", etc.
+    - `suffix`: The optional suffix after the service version, e.g. "dev", etc.
 """
 
 
@@ -33,8 +33,8 @@ class DockerImage:
     backend: str
     backend_version: str
     backend_variant: str
-    engine: str
-    engine_version: str
+    service: str
+    service_version: str
     suffix: str
 
     @classmethod
@@ -43,7 +43,7 @@ class DockerImage:
         Parse the Docker image string into a DockerImage object.
 
         The given image string must follow the below regex format:
-        `[prefix/]gpustack/runner:{backend}{backend_version}[-backend_variant]-{engine}{engine_version}[-suffix]`
+        `[prefix/]gpustack/runner:{backend}{backend_version}[-backend_variant]-{service}{service_version}[-suffix]`
 
         Args:
             image:
@@ -72,8 +72,8 @@ class DockerImage:
         parts.extend(
             [
                 "-",
-                self.engine,
-                self.engine_version,
+                self.service,
+                self.service_version,
             ],
         )
         if self.suffix:
