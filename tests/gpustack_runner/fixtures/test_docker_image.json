@@ -50,5 +50,18 @@
       "service_version": "2.1.rc1",
       "suffix": "dev"
     }
+  ],
+  [
+    "website.com/abc/gpustack/runner:HostX.Y-mindie2.1.rc1-dev",
+    "website.com/abc/gpustack/runner:HostX.Y-mindie2.1.rc1-dev",
+    {
+      "prefix": "website.com/abc",
+      "backend": "Host",
+      "backend_version": "X.Y",
+      "backend_variant": "",
+      "service": "mindie",
+      "service_version": "2.1.rc1",
+      "suffix": "dev"
+    }
   ]
 ]
