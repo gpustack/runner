@@ -30,6 +30,7 @@ on:
           - corex
           - cuda
           - dtk
+          - maca
           - rocm
       # Control the build stage.
       target:

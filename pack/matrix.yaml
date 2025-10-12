@@ -89,6 +89,18 @@ rules:
       - "DTK_VERSION=25.04.1"
 
   #
+  # MateX MACA
+  #
+
+  ## MateX MACA 3.0.0
+  ##
+  - backend: "maca"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "MACA_VERSION=3.0.0"
+
+  #
   # AMD ROCm
   #
 

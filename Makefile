@@ -70,6 +70,7 @@ docs-online: docs
 
 PACKAGE_NAMESPACE ?= gpustack
 PACKAGE_REPOSITORY ?= runner
+PACKAGE_TARGET ?= services
 PACKAGE_TAG ?= cuda12.4-vllm0.10.0
 package:
 	@echo "+++ $@ +++"
@@ -90,6 +91,7 @@ package:
 	fi
 	INPUT_NAMESPACE=$(PACKAGE_NAMESPACE) \
 	INPUT_REPOSITORY=$(PACKAGE_REPOSITORY) \
+	INPUT_TARGET=$(PACKAGE_TARGET) \
 	INPUT_TAG=$(PACKAGE_TAG) \
 		source $(SRCDIR)/pack/expand_matrix.sh; \
 	for BUILD_JOB in $$(echo "$${BUILD_JOBS}" | jq -cr '.[]'); do \
