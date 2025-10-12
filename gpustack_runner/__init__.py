@@ -9,6 +9,7 @@ from .runner import (
     list_backend_runners,
     list_runners,
     list_service_runners,
+    set_re_docker_image,
 )
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "list_backend_runners",
     "list_runners",
     "list_service_runners",
+    "set_re_docker_image",
     "version",
     "version_tuple",
 ]

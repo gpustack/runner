@@ -26,6 +26,45 @@ which captures the following named groups:
 """
 
 
+def set_re_docker_image(pattern: str):
+    """
+    Set the regex pattern for Docker image parsing.
+
+    Args:
+        pattern:
+            The regex pattern to set. It should capture the following named groups:
+            - `prefix`: The optional prefix before `gpustack/runner`, e.g. a registry URL or namespace.
+            - `backend`: The backend name, e.g. "cann", "cuda",
+            - `backend_version`: The backend version, ignored patch version, e.g. "8.2", "12.4", "6.3", etc.
+            - `backend_variant`: The optional backend variant, e.g. "910b", etc
+            - `service`: The service name, e.g. "vllm", "voxbox".
+            - `service_version`: The service version, e.g. "0.10.0
+            - `suffix`: The optional suffix after the service version, e.g. "dev", etc.
+
+    Raises:
+        ValueError:
+            If the provided pattern does not contain all required named groups.
+
+    """
+    global _RE_DOCKER_IMAGE
+
+    _RE_DOCKER_IMAGE = re.compile(pattern)
+
+    required_groups = {
+        "prefix",
+        "backend",
+        "backend_version",
+        "backend_variant",
+        "service",
+        "service_version",
+        "suffix",
+    }
+    if not required_groups.issubset(_RE_DOCKER_IMAGE.groupindex.keys()):
+        missing = required_groups - _RE_DOCKER_IMAGE.groupindex.keys()
+        msg = f"The provided pattern is missing required named groups: {missing}"
+        raise ValueError(msg)
+
+
 @dataclass_json
 @dataclass
 class DockerImage:
