@@ -550,6 +550,28 @@
     "deprecated": false
   },
   {
+    "backend": "maca",
+    "backend_version": "3.0",
+    "original_backend_version": "3.0.0",
+    "backend_variant": "",
+    "service": "vllm",
+    "service_version": "0.9.1",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:maca3.0-vllm0.9.1",
+    "deprecated": false
+  },
+  {
+    "backend": "maca",
+    "backend_version": "3.0",
+    "original_backend_version": "3.0.0",
+    "backend_variant": "",
+    "service": "voxbox",
+    "service_version": "0.0.20",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:maca3.0-voxbox0.0.20",
+    "deprecated": false
+  },
+  {
     "backend": "rocm",
     "backend_version": "6.3",
     "original_backend_version": "6.3.4",
