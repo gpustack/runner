@@ -1,3 +1,5 @@
+required-version = ">=0.8.22"
+
 [[index]]
 name = "pypi"
 url = "https://pypi.org/simple"

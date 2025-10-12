@@ -7,7 +7,9 @@ name = "gpustack-runner"
 description = "GPUStack Runner is library for registering runnable accelerated backends and services in GPUStack."
 readme = "README.md"
 requires-python = ">=3.10"
-license-files = ["LICEN[CS]E*"]
+authors = [{name = "GPUStack Authors", email = "contact@gpustack.ai"}]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

@@ -49,9 +49,9 @@ jobs:
           fetch-tags: true
           persist-credentials: false
       - name: Setup UV
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "0.7.20"
+          version: "0.8.24"
           enable-cache: true
           python-version: 3.11
       - name: Build

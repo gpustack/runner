@@ -91,7 +91,7 @@ package:
 	INPUT_NAMESPACE=$(PACKAGE_NAMESPACE) \
 	INPUT_REPOSITORY=$(PACKAGE_REPOSITORY) \
 	INPUT_TAG=$(PACKAGE_TAG) \
-		source $(SRCDIR)/pack/expand_matrix.sh
+		source $(SRCDIR)/pack/expand_matrix.sh; \
 	for BUILD_JOB in $$(echo "$${BUILD_JOBS}" | jq -cr '.[]'); do \
 	    JOB_BACKEND=$$(echo "$${BUILD_JOB}" | jq -r '.backend'); \
 	    JOB_PLATFORM=$$(echo "$${BUILD_JOB}" | jq -r '.platform'); \
