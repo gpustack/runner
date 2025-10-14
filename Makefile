@@ -27,10 +27,14 @@ install: deps
 	fi
 	@echo "--- $@ ---"
 
+CLEAN_UNTRACKED ?= false
 clean:
 	@echo "+++ $@ +++"
 	uv run pyclean -v $(SRCDIR)
 	rm -rf dist
+	if [[ "$(CLEAN_UNTRACKED)" == "true" ]]; then \
+		git clean -f .; \
+	fi
 	@echo "--- $@ ---"
 
 LINT_DIRTY ?= false
