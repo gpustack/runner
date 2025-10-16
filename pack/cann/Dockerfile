@@ -451,11 +451,14 @@ ENV VOXBOX_VERSION=${VOXBOX_VERSION}
 RUN <<EOF
     # VoxBox
 
+    unset UV_PRERELEASE
+
     # Install
     cat <<EOT >/tmp/requirements.txt
 transformers==4.51.3
 numba==0.61.2
 llvmlite==0.44.0  # Compatible with Python 3.11
+httpx<1.0
 vox-box==${VOXBOX_VERSION}
 EOT
     uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
