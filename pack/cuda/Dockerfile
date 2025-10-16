@@ -349,14 +349,8 @@ llvmlite==0.44.0  # Compatible with Python 3.11
 httpx<1.0
 vox-box==${VOXBOX_VERSION}
 EOT
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VOXBOX_TORCH_CUDA_VERSION}"
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )) || [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
+    uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
+        -r /tmp/requirements.txt
 
     # Cleanup
     rm -rf /var/tmp/* \
