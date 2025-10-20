@@ -70,6 +70,28 @@
     "backend_version": "8.2",
     "original_backend_version": "8.2.rc1",
     "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.9.1",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.1",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc1",
+    "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.9.1",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.1",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc1",
+    "backend_variant": "910b",
     "service": "voxbox",
     "service_version": "0.0.20",
     "platform": "linux/amd64",
