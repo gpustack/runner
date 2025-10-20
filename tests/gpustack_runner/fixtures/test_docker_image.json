@@ -63,5 +63,18 @@
       "service_version": "2.1.rc1",
       "suffix": "dev"
     }
+  ],
+  [
+    "gpustack/runner:cuda12.8-sglang0.5.3",
+    "gpustack/runner:cuda12.8-sglang0.5.3",
+    {
+      "prefix": "",
+      "backend": "cuda",
+      "backend_version": "12.8",
+      "backend_variant": "",
+      "service": "sglang",
+      "service_version": "0.5.3",
+      "suffix": ""
+    }
   ]
 ]

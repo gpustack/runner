@@ -20,6 +20,10 @@
 #    - Install AITER if existed.
 #    - Install dependencies.
 #    - Postprocess, review installation.
+# 3.6. sglang target.
+#    - Build SGLang from source (ROCm), including sgl-kernel.
+#    - Install sglang with HIP extras.
+#    - Postprocess, review installation.
 
 # Argument usage:
 # - PYTHON_VERSION: Version of Python to use.
@@ -50,6 +54,8 @@
 # - VLLM_AITER_VERSION: Version of AITER to use,
 #   which is used to build the AITER wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
+# - SGLANG_VERSION: Version of SGLang to use.
+
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
@@ -833,6 +839,113 @@ ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
     TOKENIZERS_PARALLELISM=false \
     SAFETENSORS_FAST_GPU=1 \
     HIP_FORCE_DEV_KERNARG=1
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+# Stage SGLang (inherits vLLM)
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=test/testDockerfile.rocm --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-linux-amd64 --target=sglang test
+#
+FROM vllm AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+ARG ROCM_ARCHS
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow \
+    ROCM_ARCHS=${ROCM_ARCHS}
+
+## Build args for SGLang
+ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
+ARG SGL_DEFAULT="main"
+ARG SGL_BRANCH=${SGL_DEFAULT}
+ARG BUILD_TYPE=all
+ARG NO_DEPS_FLAG=""
+ARG SGLANG_VERSION=0.5.3.post3
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+## Build SGLang from source (ROCm)
+RUN <<EOF
+    # Prepare Python dependencies required by SGLang build
+    uv pip install IPython orjson python-multipart torchao==0.9.0 pybind11
+
+    # Clean any previous installs
+    pip uninstall -y sgl_kernel sglang || true
+
+    # Clone and build
+    mkdir -p /sgl-workspace
+    pushd /sgl-workspace
+    git clone ${SGL_REPO}
+    cd sglang
+    # Prefer version tag if provided, otherwise fall back to branch selection
+    if [[ -n "${SGLANG_VERSION}" ]]; then
+      git fetch --tags --depth=1
+      if git rev-parse -q --verify "refs/tags/v${SGLANG_VERSION}" >/dev/null; then
+        echo "Checking out tag v${SGLANG_VERSION}"; git checkout -q "tags/v${SGLANG_VERSION}"
+      elif git rev-parse -q --verify "refs/tags/${SGLANG_VERSION}" >/dev/null; then
+        echo "Checking out tag ${SGLANG_VERSION}"; git checkout -q "tags/${SGLANG_VERSION}"
+      elif git rev-parse -q --verify "${SGLANG_VERSION}" >/dev/null; then
+        echo "Checking out commit/branch ${SGLANG_VERSION}"; git checkout -q "${SGLANG_VERSION}"
+      else
+        echo "Tag/branch ${SGLANG_VERSION} not found, falling back to ${SGL_BRANCH}"; git checkout -q "${SGL_BRANCH}"
+      fi
+    else
+      if [[ "${SGL_BRANCH}" == "${SGL_DEFAULT}" ]]; then
+        echo "Using ${SGL_DEFAULT}, default branch."; git checkout -q "${SGL_DEFAULT}"
+      else
+        echo "Using ${SGL_BRANCH} branch."; git checkout -q "${SGL_BRANCH}"
+      fi
+    fi
+
+    # Build sgl-kernel for ROCm
+    cd sgl-kernel
+    rm -f pyproject.toml
+    mv pyproject_rocm.toml pyproject.toml
+    AMDGPU_TARGET="gfx942" python setup_rocm.py install
+
+    # Install sglang Python package with HIP extras
+    cd ..
+    rm -f python/pyproject.toml
+    mv python/pyproject_other.toml python/pyproject.toml
+    if [[ "${BUILD_TYPE}" == "srt" ]]; then
+      python -m pip --no-cache-dir install -e "python[srt_hip]" --no-deps ${NO_DEPS_FLAG}
+    else
+      python -m pip --no-cache-dir install -e "python[all_hip]" --no-deps ${NO_DEPS_FLAG}
+    fi
+    popd
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess review
+RUN <<EOF
+    uv pip tree \
+        --package sglang \
+        --package vllm \
+        --package torch
+EOF
+
+## Performance environment variables
+ENV HIP_FORCE_DEV_KERNARG=1 \
+    HSA_NO_SCRATCH_RECLAIM=1 \
+    SGLANG_SET_CPU_AFFINITY=1 \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    NCCL_MIN_NCHANNELS=112 \
+    SGLANG_USE_AITER=1 \
+    SGLANG_MOE_PADDING=1 \
+    VLLM_FP8_PADDING=1 \
+    VLLM_FP8_ACT_PADDING=1 \
+    VLLM_FP8_WEIGHT_PADDING=1 \
+    VLLM_FP8_REDUCE_CONV=1 \
+    TORCHINDUCTOR_MAX_AUTOTUNE=1 \
+    TORCHINDUCTOR_MAX_AUTOTUNE_POINTWISE=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

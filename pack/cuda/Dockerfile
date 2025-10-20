@@ -19,6 +19,9 @@
 #    - Install FlashInfer if existed.
 #    - Install dependencies.
 #    - Postprocess, review installation.
+# 4. sglang target.
+#    - Install SGLang from PyPI (version controlled via SGLANG_VERSION).
+#    - Postprocess, review installation.
 
 # Argument usage:
 # - PYTHON_VERSION: Version of Python to use.
@@ -54,6 +57,8 @@
 # - VLLM_FLASHINFER_VERSION: Version of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
+# - SGLANG_VERSION: Version of SGLang to install (PyPI). Defaults to 0.5.3.post3.
+
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=12.8.1
@@ -73,6 +78,10 @@ ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python$
 ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 ARG VLLM_FLASHINFER_VERSION=0.3.1
 ARG VLLM_LMCACHE_VERSION=0.3.8
+
+# SGLang build args (mirroring vLLM)
+ARG SGLANG_VERSION=0.5.3.post3
+
 
 #
 # Stage Bake Runtime
@@ -954,3 +963,85 @@ ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
+
+# Stage SGLang (inherits vLLM)
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang${SGLANG_VERSION}-linux-amd64 --target=sglang pack/cuda
+#
+FROM vllm AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install SGLang
+
+ARG SGLANG_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+RUN <<EOF
+    # SGLang
+
+    # Install
+    uv pip install --verbose \
+        sglang==${SGLANG_VERSION}
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+httpx<1.0
+fastapi
+uvicorn
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package vllm \
+        --package torch
+EOF
+
+## Runtime Enhancements
+
+# Build-time switches
+ARG NCCL_ENABLE=1
+ARG NCCL_PACKAGE=nvidia-nccl-cu12
+ARG NCCL_VERSION=2.27.6
+ARG FLASHINFER_PREFETCH_CUBIN=1
+
+RUN <<EOF
+    # Runtime accelerators
+
+    # NCCL: configurable install via build args
+    if [[ "${NCCL_ENABLE}" == "1" ]]; then
+        uv pip install --no-cache-dir ${NCCL_PACKAGE}==${NCCL_VERSION} --force-reinstall --no-deps
+    fi
+
+    # FlashInfer cubin prefetch: only if package is present
+    if [[ "${FLASHINFER_PREFETCH_CUBIN}" == "1" ]]; then
+        python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('flashinfer') else 1)" \
+          && python -m flashinfer --download-cubin || true
+    fi
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF

@@ -238,6 +238,18 @@ EOT
                 --arg tag "${TAG}${TAG_SUFFIX}" \
                 --arg platform_tag "${PLATFORM_TAG}" \
                 '.[$tag] += [$platform_tag]')"
+            PLATFORM_TAG_CACHE="[\"${PLATFORM_TAG}\",\"${PLATFORM_TAG_XY}\",\"${PLATFORM_TAG_X}\"]"
+            if [[ "${SERVICE}" == "sglang" ]]; then
+                IFS="." read -r V_MAJOR V_MINOR V_PATCH V_POST <<<"${VLLM_VERSION}"
+                if [[ -z "${V_PATCH}" ]]; then V_PATCH=0; fi
+                VLLM_TAG="${TAG_PREFIX}vllm${V_MAJOR}.${V_MINOR}.${V_PATCH}"
+                VLLM_TAG_X="${TAG_PREFIX}vllm${V_MAJOR}"
+                VLLM_TAG_XY="${TAG_PREFIX}vllm${V_MAJOR}.${V_MINOR}"
+                VLLM_PLATFORM_TAG="${VLLM_TAG}-${OS}-${ARCH}"
+                VLLM_PLATFORM_TAG_X="${VLLM_TAG_X}-${OS}-${ARCH}"
+                VLLM_PLATFORM_TAG_XY="${VLLM_TAG_XY}-${OS}-${ARCH}"
+                PLATFORM_TAG_CACHE="[\"${PLATFORM_TAG}\",\"${PLATFORM_TAG_XY}\",\"${PLATFORM_TAG_X}\",\"${VLLM_PLATFORM_TAG}\",\"${VLLM_PLATFORM_TAG_XY}\",\"${VLLM_PLATFORM_TAG_X}\"]"
+            fi
             BUILD_JOBS="$(echo "${BUILD_JOBS}" | jq -cr \
                 --arg backend "${BACKEND}" \
                 --arg backend_version "${BACKEND_VERSION}" \
@@ -249,7 +261,7 @@ EOT
                 --arg tag "${TAG}${TAG_SUFFIX}" \
                 --argjson args "${ARGS}" \
                 --arg runner "${RUNNER}" \
-                --argjson platform_tag_cache "[\"${PLATFORM_TAG}\",\"${PLATFORM_TAG_XY}\",\"${PLATFORM_TAG_X}\"]" \
+                --argjson platform_tag_cache "${PLATFORM_TAG_CACHE}" \
                 --arg original_backend_version "${ORIGINAL_BACKEND_VERSION}" \
                 '[{
                     backend: $backend,
