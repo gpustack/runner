@@ -18,6 +18,11 @@ defaults:
 on:
   workflow_dispatch:
     inputs:
+      # Post operation for mutating a released image.
+      post_operation:
+        description: 'Post operation (dangerous), which operation to use for mutating a released image.'
+        required: false
+        type: string
       # Control the Dockerfile and build context.
       backend:
         description: 'Backend, which accelerated backend to pack for.'
@@ -117,6 +122,7 @@ jobs:
       - name: Expand Matrix
         id: expand-matrix
         env:
+          INPUT_POST_OPERATION: ${{ github.event.inputs.post_operation }}
           INPUT_BACKEND: ${{ github.event.inputs.backend }}
           INPUT_TARGET: ${{ github.event.inputs.target }}
           INPUT_TAG: ${{ github.event.inputs.tag }}
@@ -215,8 +221,8 @@ jobs:
           push: ${{ github.event.inputs.dry_run == 'false' }}
           provenance: false
           sbom: false
-          context: ${{ github.workspace }}/pack/${{ matrix.backend }}
-          file: ${{ github.workspace }}/pack/${{ matrix.backend }}/Dockerfile
+          context: ${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}
+          file: ${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}/Dockerfile
           platforms: ${{ matrix.platform }}
           target: ${{ matrix.service }}
           tags: |
@@ -264,7 +270,7 @@ jobs:
 
   # Submit a PR to merge the runner.
   merge-runner:
-    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.target != 'runtime' && github.event.inputs.for_release == 'true' }}
+    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.target != 'runtime' && github.event.inputs.for_release == 'true' && github.event.inputs.post_operation == '' }}
     needs:
       - expand-matrix
       - manifest

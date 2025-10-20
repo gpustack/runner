@@ -2,12 +2,20 @@
 
 set -eo pipefail
 
+INPUT_POST_OPERATION=${INPUT_POST_OPERATION:-""}
 INPUT_BACKEND="${INPUT_BACKEND:-"all"}"
 INPUT_TARGET=${INPUT_TARGET:-"services"}
 INPUT_FOR_RELEASE=${INPUT_FOR_RELEASE:-"false"}
 INPUT_RUNNER_PROFILE=${INPUT_RUNNER_PROFILE:-"normal"}
 INPUT_WORKSPACE="${INPUT_WORKSPACE:-"$(dirname "${BASH_SOURCE[0]}")"}"
 INPUT_TEMPDIR="${INPUT_TEMPDIR:-"/tmp"}"
+
+if [[ -n "${INPUT_POST_OPERATION}" ]]; then
+    INPUT_WORKSPACE="${INPUT_WORKSPACE}/.post_operation/${INPUT_POST_OPERATION}"
+fi
+echo "[INFO] Using workspace: ${INPUT_WORKSPACE}"
+echo "[INFO] Using tempdir: ${INPUT_TEMPDIR}"
+echo "[INFO] Expanding matrix for backend: ${INPUT_BACKEND}, target: ${INPUT_TARGET}, for_release: ${INPUT_FOR_RELEASE}, runner_profile: ${INPUT_RUNNER_PROFILE}"
 
 # Filter the rules based on the backend input.
 RULES="$(yq '.[]' \
@@ -64,8 +72,8 @@ for RULE in $(echo "${RULES}" | jq -cr '.[]'); do
     {
         echo "export ORIGINAL_BACKEND_VERSION=\${${BACKEND_UPPER}_VERSION}"
         cat <<EOT
-    IFS="." read -r BV_MAJOR BV_MINOR BV_PATCH BV_POST <<<"\${ORIGINAL_BACKEND_VERSION}"
-    export BACKEND_VERSION="\${BV_MAJOR}.\${BV_MINOR}"
+IFS="." read -r BV_MAJOR BV_MINOR BV_PATCH BV_POST <<<"\${ORIGINAL_BACKEND_VERSION}"
+export BACKEND_VERSION="\${BV_MAJOR}.\${BV_MINOR}"
 EOT
         if [[ "${BACKEND}" == "cann" ]]; then
             echo "export BACKEND_VARIANT=\${${BACKEND_UPPER}_ARCHS}"
@@ -75,7 +83,7 @@ EOT
     ARGS="$(echo "${RULE}" | jq -cr '.args')"
 
     # Prepare tag prefix/suffix.
-    TAG_PREFIX="${BACKEND}\${${BACKEND_UPPER}_VERSION%.*}-"
+    TAG_PREFIX="${BACKEND}\${BACKEND_VERSION}-"
     if [[ "${INPUT_TARGET}" == "runtime" ]]; then
         TAG_PREFIX="${BACKEND}\${${BACKEND_UPPER}_VERSION}-"
     fi
@@ -177,14 +185,14 @@ EOT
         {
             echo "export SERVICE_VERSION=\${${SERVICE_UPPER}_VERSION}"
             cat <<EOT
-        IFS="." read -r SV_MAJOR SV_MINOR SV_PATCH SV_POST_RELEASE <<<"\${SERVICE_VERSION}"
-        if [[ -z "\${SV_PATCH}" ]]; then
-            SV_PATCH=0
-        fi
-        export SERVICE_VERSION_MAJOR="\${SV_MAJOR}"
-        export SERVICE_VERSION_MINOR="\${SV_MINOR}"
-        export SERVICE_VERSION_PATCH="\${SV_PATCH}"
-        export SERVICE_VERSION_POST_RELEASE="\${SV_POST_RELEASE}"
+IFS="." read -r SV_MAJOR SV_MINOR SV_PATCH SV_POST_RELEASE <<<"\${SERVICE_VERSION}"
+if [[ -z "\${SV_PATCH}" ]]; then
+    SV_PATCH=0
+fi
+export SERVICE_VERSION_MAJOR="\${SV_MAJOR}"
+export SERVICE_VERSION_MINOR="\${SV_MINOR}"
+export SERVICE_VERSION_PATCH="\${SV_PATCH}"
+export SERVICE_VERSION_POST_RELEASE="\${SV_POST_RELEASE}"
 EOT
             echo "export TAG=${TAG_PREFIX}${SERVICE}\${SERVICE_VERSION}"
             echo "export TAG_X=${TAG_PREFIX}${SERVICE}\${SERVICE_VERSION_MAJOR}"
