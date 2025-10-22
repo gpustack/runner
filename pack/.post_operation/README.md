@@ -3,7 +3,9 @@
 Normally, images are immutable.
 However, for some needs, we have to modify the image's content while preserving its tag.
 
-**This behavior is dangerous and not recommended.**
+> [!CAUTION]
+> - This behavior is **DANGEROUS** and **NOT RECOMMENDED**.
+> - This behavior is **NOT IDEMPOTENT** and therefore **CANNOT BE REVERSED** after released.
 
 We leverage the matrix expansion feature of GPUStack Runner to achieve this, and document here the operations we perform.
 
