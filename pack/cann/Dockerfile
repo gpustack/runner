@@ -805,6 +805,7 @@ accelerate
 hf_transfer
 modelscope
 ray[client]>=2.47.1
+ray[default]>=2.47.1
 protobuf>3.20.0
 grpcio==1.71.0
 EOT

@@ -1,0 +1,71 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.4.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.4"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.4"
+      - "VLLM_VERSION=0.10.1.1"
+  ## Packed NVIDIA CUDA 12.6.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.10.1.1"
+  ## Packed NVIDIA CUDA 12.8.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.10.1.1"
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed AMD ROCm 6.3.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.3"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.3"
+      - "VLLM_VERSION=0.10.1.1"

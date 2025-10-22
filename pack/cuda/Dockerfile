@@ -679,14 +679,19 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
-## Install Ray Client
+## Enhance Ray
 
 RUN <<EOF
-    # Ray Client
+    # Ray
 
-    # Install Ray Client
+    # Install Ray Client and Default
     RAY_VERSION=$(pip show ray | grep Version: | cut -d' ' -f 2)
-    uv pip install "ray[client]==${RAY_VERSION}"
+    cat <<EOT >/tmp/requirements.txt
+ray[client]==${RAY_VERSION}
+ray[default]==${RAY_VERSION}
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
 
     # Cleanup
     rm -rf /var/tmp/* \
