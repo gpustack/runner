@@ -1,0 +1,115 @@
+rules:
+
+  #
+  # Ascend CANN
+  #
+
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.9.2"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.9.1"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 310P.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.9.2"
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.4.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.4"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.4"
+      - "VLLM_VERSION=0.10.1.1"
+  ## Packed NVIDIA CUDA 12.6.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.10.1.1"
+  ## Packed NVIDIA CUDA 12.8.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.10.1.1"
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed AMD ROCm 6.3.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.3"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.3"
+      - "VLLM_VERSION=0.10.1.1"
