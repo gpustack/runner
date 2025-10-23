@@ -21,7 +21,6 @@ rules:
   ##
   - backend: "cann"
     services:
-      - "voxbox"
       - "mindie"
       - "vllm"
     args:
@@ -31,7 +30,6 @@ rules:
   ##
   - backend: "cann"
     services:
-      - "voxbox"
       - "mindie"
       - "vllm"
     args:
@@ -45,6 +43,8 @@ rules:
   ## Iluvatar CoreX 4.2.0
   ##
   - backend: "corex"
+    services:
+      - "vllm"
     platforms:
       - "linux/amd64"
     args:
@@ -83,6 +83,8 @@ rules:
   ## Hygon DTK 25.04.1
   ##
   - backend: "dtk"
+    services:
+      - "vllm"
     platforms:
       - "linux/amd64"
     args:
@@ -95,6 +97,8 @@ rules:
   ## MateX MACA 3.0.0
   ##
   - backend: "maca"
+    services:
+      - "vllm"
     platforms:
       - "linux/amd64"
     args:
@@ -107,6 +111,8 @@ rules:
   ## AMD ROCm 6.3.4, using PyTorch +rocm6.3 in linux/amd64.
   ##
   - backend: "rocm"
+    services:
+      - "vllm"
     platforms:
       - "linux/amd64"
     args:

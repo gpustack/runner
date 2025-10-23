@@ -6,17 +6,13 @@
 #    - Upgrade Python if needed.
 #    - Install Python buildkit.
 #    - Install Platform toolkit.
-# 2. voxbox target.
-#    - Install Torch.
-#    - Install VoxBox.
-#    - Postprocess, review installation.
-# 3.1. vllm-build target.
+# 2.1. vllm-build target.
 #    - Install Torch.
 #    - Install Dependencies.
-# 3.2. vllm-build-triton target.
-# 3.3. vllm-build-flashattention target.
-# 3.4. vllm-build-aiter target.
-# 3.5. vllm target.
+# 2.2. vllm-build-triton target.
+# 2.3. vllm-build-flashattention target.
+# 2.4. vllm-build-aiter target.
+# 2.5. vllm target.
 #    - Install Torch.
 #    - Install vLLM from source.
 #    - Install Triton if existed.
@@ -33,12 +29,6 @@
 # - ROCM_ARCHS: Arch variant list supports for this runtime environment,
 #   by default, it relies on the Torch wheel,
 #   for example, https://github.com/pytorch/pytorch/blob/134179474539648ba7dee1317959529fbd0e7f89/.ci/docker/libtorch/build.sh#L42.
-# - VOXBOX_BASE_IMAGE: Base image for VoxBox.
-# - VOXBOX_VERSION: Version of VoxBox to use.
-# - VOXBOX_TORCH_VERSION: Version of Torch for VoxBox to use.
-# - VOXBOX_TORCH_ROCM_VERSION: Version of ROCM to use for Torch,
-#   which is used to build the components that depend on Torch for VoxBox,
-#   if not specified, it will be set as ROCM_VERSION.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
@@ -63,10 +53,6 @@ ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=6.3.4
 ARG ROCM_ARCHS
-ARG VOXBOX_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VOXBOX_VERSION=0.0.20
-ARG VOXBOX_TORCH_VERSION=2.7.1
-ARG VOXBOX_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.10.1.1
 ARG VLLM_TORCH_VERSION=2.7.1
@@ -309,109 +295,6 @@ ARG ROCM_ARCHS
 ENV ROCM_HOME="/opt/rocm" \
     ROCM_VERSION=${ROCM_VERSION} \
     ROCM_ARCHS=${ROCM_ARCHS}
-
-# Stage VoxBox
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-voxbox-linux-amd64 --target=voxbox pack/rocm
-#
-
-FROM ${VOXBOX_BASE_IMAGE} AS voxbox
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
-
-## Install Torch
-
-ARG VOXBOX_TORCH_VERSION
-ARG VOXBOX_TORCH_ROCM_VERSION
-
-ENV VOXBOX_TORCH_VERSION=${VOXBOX_TORCH_VERSION} \
-    VOXBOX_TORCH_ROCM_VERSION=${VOXBOX_TORCH_ROCM_VERSION}
-
-RUN <<EOF
-    # Torch
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-torch==${VOXBOX_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VOXBOX_TORCH_ROCM_VERSION}"
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
-    uv pip install \
-        numpy scipy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install VoxBox
-
-ARG VOXBOX_VERSION
-
-ENV VOXBOX_VERSION=${VOXBOX_VERSION}
-
-RUN <<EOF
-    # VoxBox
-
-    unset UV_PRERELEASE
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-transformers==4.51.3
-numba==0.61.2
-llvmlite==0.44.0  # Compatible with Python 3.11
-httpx<1.0
-vox-box==${VOXBOX_VERSION}
-EOT
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VOXBOX_TORCH_ROCM_VERSION}"
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --extra-index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Postprocess
-
-RUN <<EOF
-    # Postprocess
-
-    # Link if needed
-    if [[ ! -d ${ROCM_HOME} ]] && [[ -d /opt/rocm-${ROCM_VERSION} ]]; then
-        ln -vsf /opt/rocm-${ROCM_VERSION} ${ROCM_HOME}
-    fi
-
-    # Review
-    uv pip tree \
-        --package vox-box \
-        --package torch
-EOF
-
-## Entrypoint
-
-WORKDIR /
-ENTRYPOINT [ "tini", "--" ]
 
 # Stage vLLM Build
 #

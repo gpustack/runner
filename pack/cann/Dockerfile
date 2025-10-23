@@ -6,16 +6,12 @@
 #    - Upgrade Python if needed.
 #    - Install Python buildkit.
 #    - Install CANN buildkit if needed.
-# 2. voxbox target.
-#    - Install Torch.
-#    - Install VoxBox.
-#    - Postprocess, review installation.
-# 3. mindie target.
+# 2. mindie target.
 #    - Install Torch.
 #    - Install MindIE.
 #    - Install dependencies.
 #    - Postprocess, review installation.
-# 4. vllm target.
+# 3. vllm target.
 #    - Install Torch.
 #    - Install vLLM from source.
 #    - Install vLLM-Ascend from source.
@@ -29,9 +25,6 @@
 # - CANN_VERSION: Version of Ascend CANN runtime environment to use.
 # - CANN_ARCHS: Arch variant list supports for this runtime environment,
 #   it only support one architecture at present, eg. 310p, 910b and a3.
-# - VOXBOX_BASE_IMAGE: Base image for VoxBox.
-# - VOXBOX_VERSION: Version of VoxBox to use.
-# - VOXBOX_TORCH_VERSION: Version of Torch for VoxBox to use.
 # - MINDIE_BASE_IMAGE: Base image for MindIE.
 # - MINDIE_VERSION: Version of MindIE to use.
 # - MINDIE_TORCH_VERSION: Version of Torch for MindIE to use.
@@ -44,9 +37,6 @@ ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=8.2.rc1
 ARG CANN_ARCHS=910b
-ARG VOXBOX_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG VOXBOX_VERSION=0.0.20
-ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG MINDIE_VERSION=2.1.rc1
 ARG MINDIE_TORCH_VERSION=2.1.0
@@ -393,113 +383,6 @@ EOF
 ## Declare Environment
 
 ENV PATH="${CANN_HOME}/driver/tools:${PATH}"
-
-# Stage Install VoxBox
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann{CANN_VERSION%.*}-voxbox${VOXBOX_VERSION}-linux-amd64 --target=voxbox pack/cann
-#
-
-FROM ${VOXBOX_BASE_IMAGE} AS voxbox
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
-
-## Install Torch
-
-ARG VOXBOX_TORCH_VERSION
-
-ENV VOXBOX_TORCH_VERSION=${VOXBOX_TORCH_VERSION}
-
-RUN <<EOF
-    # Torch
-
-    # Install Torch
-    cat <<EOT >/tmp/requirements.txt
-torch==${VOXBOX_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    else
-        uv pip install \
-            -r /tmp/requirements.txt
-    fi
-    uv pip install \
-        torch-npu==${VOXBOX_TORCH_VERSION}.*
-    uv pip install \
-        numpy spicy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install VoxBox
-
-ARG VOXBOX_VERSION
-
-ENV VOXBOX_VERSION=${VOXBOX_VERSION}
-
-RUN <<EOF
-    # VoxBox
-
-    unset UV_PRERELEASE
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-transformers==4.51.3
-numba==0.61.2
-llvmlite==0.44.0  # Compatible with Python 3.11
-httpx<1.0
-vox-box==${VOXBOX_VERSION}
-EOT
-    uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-        -r /tmp/requirements.txt
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Postprocess
-
-RUN <<EOF
-    # Postprocess
-
-    # Hijack executable path
-    PYTHON_LIB_PREFIX=$(python3 -c "import sys; print(sys.base_prefix);")
-    mv ${PYTHON_LIB_PREFIX}/bin/vox-box ${PYTHON_LIB_PREFIX}/bin/vox-box_
-    cat <<EOT >${PYTHON_LIB_PREFIX}/bin/vox-box
-#!/usr/bin/bash
-
-source \${CANN_HOME}/ascend-toolkit/set_env.sh
-source \${CANN_HOME}/nnal/atb/set_env.sh
-
-export LD_LIBRARY_PATH=${PYTHON_LIB_PREFIX}/lib:${PYTHON_LIB_PREFIX}/lib64:\${LD_LIBRARY_PATH}
-
-exec \${BASH_SOURCE[0]}_ "\$@"
-EOT
-    chmod a+x ${PYTHON_LIB_PREFIX}/bin/vox-box
-
-    # Review
-    uv pip tree \
-        --package vox-box \
-        --package torch \
-        --package torch-npu
-EOF
-
-## Entrypoint
-
-WORKDIR /
-ENTRYPOINT [ "tini", "--" ]
 
 # Stage Install MindIE
 #
