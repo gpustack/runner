@@ -261,7 +261,7 @@
     "service_version": "0.0.20",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:corex4.2-voxbox0.0.20",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "corex",
@@ -272,7 +272,7 @@
     "service_version": "0.0.19",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:corex4.2-voxbox0.0.19",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
