@@ -177,28 +177,6 @@
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:corex4.2-vllm0.8.3",
         "deprecated": false
-      },
-      {
-        "backend": "corex",
-        "backend_version": "4.2",
-        "original_backend_version": "4.2.0",
-        "backend_variant": "",
-        "service": "voxbox",
-        "service_version": "0.0.20",
-        "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:corex4.2-voxbox0.0.20",
-        "deprecated": false
-      },
-      {
-        "backend": "corex",
-        "backend_version": "4.2",
-        "original_backend_version": "4.2.0",
-        "backend_variant": "",
-        "service": "voxbox",
-        "service_version": "0.0.19",
-        "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:corex4.2-voxbox0.0.19",
-        "deprecated": false
       }
     ]
   ],
