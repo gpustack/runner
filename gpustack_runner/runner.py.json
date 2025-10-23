@@ -91,50 +91,6 @@
     "backend": "cann",
     "backend_version": "8.2",
     "original_backend_version": "8.2.rc1",
-    "backend_variant": "910b",
-    "service": "voxbox",
-    "service_version": "0.0.20",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "910b",
-    "service": "voxbox",
-    "service_version": "0.0.20",
-    "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "910b",
-    "service": "voxbox",
-    "service_version": "0.0.19",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "910b",
-    "service": "voxbox",
-    "service_version": "0.0.19",
-    "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
     "backend_variant": "310p",
     "service": "mindie",
     "service_version": "2.1.rc1",
@@ -195,50 +151,6 @@
     "service_version": "0.9.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "310p",
-    "service": "voxbox",
-    "service_version": "0.0.20",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "310p",
-    "service": "voxbox",
-    "service_version": "0.0.20",
-    "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "310p",
-    "service": "voxbox",
-    "service_version": "0.0.19",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.2",
-    "original_backend_version": "8.2.rc1",
-    "backend_variant": "310p",
-    "service": "voxbox",
-    "service_version": "0.0.19",
-    "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19",
     "deprecated": false
   },
   {
