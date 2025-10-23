@@ -54,3 +54,5 @@ PRUNED_RUNNERS="$(jq -cr \
 # Review the pruned runners.
 echo "[INFO] Pruned Runners:"
 jq -r '.' <<<"${PRUNED_RUNNERS}" | tee "${INPUT_FILE}" || true
+
+"${INPUT_WORKSPACE}"/merge_runner.sh
