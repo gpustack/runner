@@ -471,27 +471,5 @@
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.3-vllm0.10.0",
     "deprecated": false
-  },
-  {
-    "backend": "rocm",
-    "backend_version": "6.3",
-    "original_backend_version": "6.3.4",
-    "backend_variant": "",
-    "service": "voxbox",
-    "service_version": "0.0.20",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:rocm6.3-voxbox0.0.20",
-    "deprecated": false
-  },
-  {
-    "backend": "rocm",
-    "backend_version": "6.3",
-    "original_backend_version": "6.3.4",
-    "backend_variant": "",
-    "service": "voxbox",
-    "service_version": "0.0.19",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:rocm6.3-voxbox0.0.19",
-    "deprecated": false
   }
 ]
