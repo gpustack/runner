@@ -96,7 +96,7 @@
     "service_version": "0.0.20",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -107,7 +107,7 @@
     "service_version": "0.0.20",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.20",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -118,7 +118,7 @@
     "service_version": "0.0.19",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -129,7 +129,7 @@
     "service_version": "0.0.19",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-voxbox0.0.19",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -206,7 +206,7 @@
     "service_version": "0.0.20",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -217,7 +217,7 @@
     "service_version": "0.0.20",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.20",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -228,7 +228,7 @@
     "service_version": "0.0.19",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -239,7 +239,7 @@
     "service_version": "0.0.19",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-310p-voxbox0.0.19",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "corex",
