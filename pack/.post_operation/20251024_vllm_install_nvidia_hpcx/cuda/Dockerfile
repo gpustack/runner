@@ -5,7 +5,7 @@ ARG NVIDIA_GDRCOPY_VERSION=2.4.1
 ARG NVIDIA_HPCX_VERSION=2.21.3
 ARG AWS_EFA_VERSION=1.43.3
 
-FROM gpustack/runner:cuda${CUDA_VERSION}-vllm${VLLM_VERSION} AS vllm
+FROM gpustack/runner:cuda${CUDA_VERSION}-vllm${VLLM_VERSION} AS vllm-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -40,17 +40,6 @@ RUN <<EOF
         && rm -rf /tmp/* \
         && rm -rf /var/cache/apt
 EOF
-
-
-# Stage vLLM Build
-
-FROM vllm AS vllm-build
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
 
 # Stage vLLM Build GDRCopy
 #
@@ -99,7 +88,7 @@ EOF
 # Stage vLLM
 #
 
-FROM vllm
+FROM vllm-build AS vllm
 
 ## Install GDRCopy,
 ## See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start-nccl.html#nccl-start-base-gdrcopy.
