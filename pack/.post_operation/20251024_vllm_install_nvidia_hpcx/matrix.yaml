@@ -1,0 +1,66 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.4.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.4"
+      - "VLLM_VERSION=0.10.0"
+      - "NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "NVIDIA_HPCX_VERSION=2.21.3"
+      - "AWS_EFA_VERSION=1.43.3"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.4"
+      - "VLLM_VERSION=0.10.1.1"
+      - "NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "NVIDIA_HPCX_VERSION=2.21.3"
+      - "AWS_EFA_VERSION=1.43.3"
+  ## Packed NVIDIA CUDA 12.6.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.10.0"
+      - "NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "NVIDIA_HPCX_VERSION=2.21.3"
+      - "AWS_EFA_VERSION=1.43.3"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.10.1.1"
+      - "NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "NVIDIA_HPCX_VERSION=2.21.3"
+      - "AWS_EFA_VERSION=1.43.3"
+  ## Packed NVIDIA CUDA 12.8.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.10.0"
+      - "NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "NVIDIA_HPCX_VERSION=2.22.1rc4"
+      - "AWS_EFA_VERSION=1.43.3"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.10.1.1"
+      - "NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "NVIDIA_HPCX_VERSION=2.22.1rc4"
+      - "AWS_EFA_VERSION=1.43.3"
