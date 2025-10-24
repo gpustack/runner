@@ -28,6 +28,9 @@
 # - CUDA_ARCHS: Arch variant list supports for this runtime environment,
 #   by default, it relies on the Torch wheel,
 #   for example, https://github.com/pytorch/pytorch/blob/d35b27dde516b6fb623a60566d4a05a3961ff10f/.ci/manywheel/build_cuda.sh#L56-L76.
+# - NVIDIA_GDRCOPY_VERSION: Version of NVIDIA GPUDirect RDMA Copy to use.
+# - NVIDIA_HPCX_VERSION: Version of NVIDIA HPC-X to use.
+# - AWS_EFA_VERSION: Version of AWS EFA to use.
 # - VOXBOX_BASE_IMAGE: Base image for VoxBox.
 # - VOXBOX_VERSION: Version of VoxBox to use.
 # - VOXBOX_TORCH_VERSION: Version of Torch for VoxBox to use.
@@ -58,6 +61,9 @@ ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.10.1.1
 ARG VLLM_TORCH_VERSION=2.7.1
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
+ARG VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1
+ARG VLLM_NVIDIA_HPCX_VERSION=2.21.3
+ARG VLLM_AWS_EFA_VERSION=1.43.3
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 ARG VLLM_FLASHINFER_VERSION=0.2.11
@@ -522,6 +528,55 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
+# Stage vLLM Build GDRCopy
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-gdrcopy-linux-amd64 --target=vllm-build-gdrcopy pack/cuda
+#
+
+FROM vllm-build AS vllm-build-gdrcopy
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build GDRCopy
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_NVIDIA_GDRCOPY_VERSION
+
+ENV VLLM_NVIDIA_GDRCOPY_VERSION=${VLLM_NVIDIA_GDRCOPY_VERSION}
+
+RUN <<EOF
+    # GDRCopy
+
+    # Install Dependencies
+    apt-get install -y --no-install-recommends \
+        build-essential \
+        devscripts \
+        debhelper \
+        fakeroot \
+        pkg-config \
+        dkms
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_NVIDIA_GDRCOPY_VERSION} --single-branch \
+        https://github.com/NVIDIA/gdrcopy gdrcopy
+
+    # Build
+    pushd /tmp/gdrcopy/packages && \
+        CUDA=/usr/local/cuda ./build-deb-packages.sh && \
+        tree -hs /tmp/gdrcopy/packages && \
+        mv /tmp/gdrcopy/packages /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
 # Stage vLLM
 #
 # Example build command:
@@ -537,6 +592,144 @@ ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
+
+## Install InfiniBand buildkit
+
+RUN <<EOF
+    # InfiniBand buildkit
+
+    # Install dependencies
+    apt-get install -y --no-install-recommends \
+        libnl-route-3-200 \
+        libnl-3-200 \
+        libnl-3-dev \
+        libnl-route-3-dev \
+        libibverbs1 \
+        libibverbs-dev \
+        librdmacm1 \
+        librdmacm-dev \
+        libibumad3 \
+        libibumad-dev \
+        ibverbs-utils \
+        ibverbs-providers
+
+    # Prepare
+    rm -f $(dpkg-query -L libibverbs-dev librdmacm-dev libibumad-dev | grep "\(\.so\|\.a\)$") || true
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Install GDRCopy,
+## See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start-nccl.html#nccl-start-base-gdrcopy.
+
+RUN --mount=type=bind,from=vllm-build-gdrcopy,source=/,target=/gdrcopy,rw <<EOF
+    # GDRCopy
+
+    if [[ ! -d /gdrcopy/workspace ]]; then
+        echo "Skipping GDRCopy installation for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    dpkg -i /gdrcopy/workspace/libgdrapi_*.deb && \
+        ldconfig -v
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Install NVIDIA HPC-X,
+## See https://catalog.ngc.nvidia.com/orgs/nvidia/containers/cuda-dl-base/layers?version=24.12-cuda12.6-devel-ubuntu24.04.
+
+ARG VLLM_NVIDIA_HPCX_VERSION
+
+ENV VLLM_NVIDIA_HPCX_VERSION=${VLLM_NVIDIA_HPCX_VERSION}
+
+RUN <<EOF
+    # NVIDIA HPC-X
+
+    # Prepare
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
+    source /etc/os-release
+
+    # Get Download Version
+    # If VLLM_NVIDIA_HPCX_VERSION=2.24.1_cuda13, VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD=2.24.1
+    # If VLLM_NVIDIA_HPCX_VERSION=2.22.1rc4, VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD=2.22.1
+    # If VLLM_NVIDIA_HPCX_VERSION=2.21.3, VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD=2.21.3
+    if [[ "${VLLM_NVIDIA_HPCX_VERSION}" == *"_cuda"* ]]; then
+        VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD=$(echo "${VLLM_NVIDIA_HPCX_VERSION}" | sed 's/_cuda.*//')
+    elif [[ "${VLLM_NVIDIA_HPCX_VERSION}" == *"rc"* ]]; then
+        VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD=$(echo "${VLLM_NVIDIA_HPCX_VERSION}" | sed 's/rc.*//')
+    else
+        VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD=${VLLM_NVIDIA_HPCX_VERSION}
+    fi
+
+    # Download
+    mkdir -p /opt/hpcx
+    curl --retry 3 --retry-connrefused -fL "https://content.mellanox.com/hpc/hpc-x/v${VLLM_NVIDIA_HPCX_VERSION}/hpcx-v${VLLM_NVIDIA_HPCX_VERSION_DOWNLOAD}-gcc-inbox-${ID}${VERSION_ID}-cuda${CUDA_MAJOR}-$(uname -m).tbz" | tar -jxv -C /opt/hpcx --strip-components 1
+
+    # Install
+    ln -sf /opt/hpcx/ompi /usr/local/mpi
+    ln -sf /opt/hpcx/ucx /usr/local/ucx
+    sed -i 's/^\(hwloc_base_binding_policy\) = core$/\1 = none/' /opt/hpcx/ompi/etc/openmpi-mca-params.conf
+    sed -i 's/^\(btl = self\)$/#\1/' /opt/hpcx/ompi/etc/openmpi-mca-params.conf
+    cat <<EOT > /etc/ld.so.conf.d/hpcx.conf
+/opt/hpcx/clusterkit/lib
+/opt/hpcx/hcoll/lib
+/opt/hpcx/nccl_rdma_sharp_plugin/lib
+/opt/hpcx/ncclnet_plugin/lib
+/opt/hpcx/ompi/lib
+/opt/hpcx/sharp/lib
+/opt/hpcx/ucc/lib
+/opt/hpcx/ucx/li
+EOT
+
+    # Review
+    ldconfig -v
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+ENV PATH="/usr/local/mpi/bin:/usr/local/ucx/bin:${PATH}" \
+    OPAL_PREFIX=/opt/hpcx/ompi \
+    OMPI_MCA_coll_hcoll_enable=0
+
+## Install AWS EFA,
+## See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start-nccl.html#nccl-start-base-enable.
+
+ARG VLLM_AWS_EFA_VERSION
+
+ENV VLLM_AWS_EFA_VERSION=${VLLM_AWS_EFA_VERSION}
+
+RUN <<EOF
+    # AWS EFA
+
+    # Download
+    curl --retry 3 --retry-connrefused -fL "https://efa-installer.amazonaws.com/aws-efa-installer-${VLLM_AWS_EFA_VERSION}.tar.gz" | tar -zxv -C /tmp
+
+    # Install
+    pushd /tmp/aws-efa-installer && \
+        ./efa_installer.sh -y --skip-kmod
+
+    # Prepare
+    rm /opt/amazon/efa/lib/libfabric.a || true
+
+    # Review
+    ldconfig -v
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+ENV PATH="${PATH}:/opt/amazon/efa/bin"
 
 ## Install Torch
 
@@ -644,7 +837,7 @@ RUN <<EOF
     fi
 
     # Install LMCache
-    if [[ "${TARGETARCH}" == "arm64" ]]; then
+    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )) || [[ "${TARGETARCH}" == "arm64" ]]; then
         CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
         if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
             CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"

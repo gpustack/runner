@@ -63,18 +63,27 @@ rules:
       - "CUDA_VERSION=12.4.1"
       - "VOXBOX_TORCH_CUDA_VERSION=12.6.3"
       - "VLLM_TORCH_CUDA_VERSION=12.6.3"
+      - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "VLLM_NVIDIA_HPCX_VERSION=2.21.3"
+      - "VLLM_AWS_EFA_VERSION=1.43.3"
   ## NVIDIA CUDA 12.6.3, using PyTorch +cu126 in linux/amd64.
   ##
   - backend: "cuda"
     args:
       - "CMAKE_MAX_JOBS=2"
       - "CUDA_VERSION=12.6.3"
+      - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "VLLM_NVIDIA_HPCX_VERSION=2.21.3"
+      - "VLLM_AWS_EFA_VERSION=1.43.3"
   ## NVIDIA CUDA 12.8.1, using PyTorch +cu128 in both linux/amd64 and linux/arm64.
   ##
   - backend: "cuda"
     args:
       - "CMAKE_MAX_JOBS=2"
       - "CUDA_VERSION=12.8.1"
+      - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
+      - "VLLM_NVIDIA_HPCX_VERSION=2.22.1rc4"
+      - "VLLM_AWS_EFA_VERSION=1.43.3"
 
   #
   # Hygon DTK
