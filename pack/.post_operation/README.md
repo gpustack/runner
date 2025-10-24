@@ -12,4 +12,5 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-10-20: Install `lmcache` package for CANN/CUDA/ROCm released images.
 - [x] 2025-10-22: Install `ray[client]` package for CANN/CUDA/ROCm released images.
 - [x] 2025-10-22: Install `ray[default]` package for CUDA/ROCm released images.
+- [ ] 2025-10-22: Reinstall `lmcache` package for CUDA released images.
 - [ ] 2025-10-24: Install NVIDIA HPC-X suit for CUDA released images.
