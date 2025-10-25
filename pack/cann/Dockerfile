@@ -38,7 +38,7 @@ ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=8.2.rc2
 ARG CANN_ARCHS=910b
 ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG MINDIE_VERSION=2.1.rc1
+ARG MINDIE_VERSION=2.1.rc2
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.10.1.1
@@ -424,9 +424,6 @@ EOT
     fi
     uv pip install \
         torch-npu==${MINDIE_TORCH_VERSION}.*
-    uv pip install \
-        numpy==1.26.4 \
-        scipy==1.15.3
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -448,10 +445,9 @@ RUN <<EOF
 absl-py==2.2.2
 accelerate==0.34.2
 aiohappyeyeballs==2.6.1
-aiohttp==3.11.18
-aiosignal==1.3.2
+aiohttp==3.12.15
+aiosignal==1.4.0
 attrs==24.3.0
-av==14.3.0
 certifi==2024.8.30
 cloudpickle==3.0.0
 cpm-kernels==1.0.11
@@ -459,7 +455,7 @@ decorator==5.2.1
 easydict==1.13
 einops==0.8.1
 et-xmlfile==1.1.0
-frozenlist==1.6.0
+frozenlist==1.7.0
 fuzzywuzzy==0.18.0
 gevent==24.2.1
 geventhttpclient==2.3.1
@@ -469,8 +465,10 @@ icetk==0.0.4
 idna==2.8
 jieba==0.42.1
 Jinja2==3.1.6
+jiter==0.11.0
+joblib==1.4.2
+json5==0.12.1
 jsonlines==4.0.0
-jsonschema-specifications==2025.4.1
 jsonschema==4.23.0
 latex2mathml==3.77.0
 loguru==0.7.2
@@ -481,8 +479,12 @@ ml_dtypes==0.5.0
 multidict==6.4.3
 nltk==3.9.1
 numba==0.61.2
-onnx==1.17.0
+numpy==1.26.4
+onnx==1.19.0
+openai==1.108.1
+opencv-python-headless==4.11.0.86
 openpyxl==3.1.5
+orjson==3.11.3
 pandas==2.2.3
 pillow==11.2.1
 prettytable==3.11.0
@@ -496,18 +498,19 @@ requests==2.32.3
 rouge-score==0.1.2
 rouge==1.0.1
 sacrebleu==2.4.3
+scipy==1.15.3
 text-generation==0.7.0
 thefuzz==0.22.1
 tiktoken==0.7.0
 tornado==6.4.2
 tqdm==4.67.1
-transformers==4.52.3
+transformers==4.63.3
 safetensors==0.5.3
 tritonclient==2.49.0
 typing_extensions==4.13.2
 tzdata==2024.2
 urllib3==2.4.0
-yarl==1.20.0
+yarl==1.20.1
 zope.event==5.0
 zope.interface==7.0.3
 EOT
