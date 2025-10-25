@@ -49,7 +49,7 @@
 #   which is used to build the FlashInfer wheel.
 # - VLLM_FLASHINFER_VERSION: Version of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=12.6.3
 ARG CUDA_ARCHS
@@ -222,7 +222,6 @@ RUN <<EOF
         python${PYTHON_VERSION} \
         python${PYTHON_VERSION}-dev \
         python${PYTHON_VERSION}-venv \
-        python${PYTHON_VERSION}-distutils \
         python${PYTHON_VERSION}-lib2to3 \
         python${PYTHON_VERSION}-gdbm \
         python${PYTHON_VERSION}-tk \

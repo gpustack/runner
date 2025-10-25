@@ -17,23 +17,32 @@ rules:
   # Ascend CANN
   #
 
-  ## Ascend CANN 8.2.rc1, using CANN Kernel for 910B.
+  ## Ascend CANN 8.2.rc2, using CANN Kernel for A3.
   ##
   - backend: "cann"
     services:
       - "mindie"
       - "vllm"
     args:
-      - "CANN_VERSION=8.2.rc1"
+      - "CANN_VERSION=8.2.rc2"
+      - "CANN_ARCHS=a3"
+  ## Ascend CANN 8.2.rc2, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "mindie"
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2.rc2"
       - "CANN_ARCHS=910b"
-  ## Ascend CANN 8.2.rc1, using CANN Kernel for 310P.
+  ## Ascend CANN 8.2.rc2, using CANN Kernel for 310P.
   ##
   - backend: "cann"
     services:
       - "mindie"
       - "vllm"
     args:
-      - "CANN_VERSION=8.2.rc1"
+      - "CANN_VERSION=8.2.rc2"
       - "CANN_ARCHS=310p"
 
   #
@@ -58,8 +67,6 @@ rules:
   ##
   - backend: "cuda"
     args:
-      - "PYTHON_VERSION=3.11"
-      - "CMAKE_MAX_JOBS=2"
       - "CUDA_VERSION=12.4.1"
       - "VOXBOX_TORCH_CUDA_VERSION=12.6.3"
       - "VLLM_TORCH_CUDA_VERSION=12.6.3"
@@ -70,7 +77,6 @@ rules:
   ##
   - backend: "cuda"
     args:
-      - "CMAKE_MAX_JOBS=2"
       - "CUDA_VERSION=12.6.3"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
       - "VLLM_NVIDIA_HPCX_VERSION=2.21.3"
@@ -79,7 +85,6 @@ rules:
   ##
   - backend: "cuda"
     args:
-      - "CMAKE_MAX_JOBS=2"
       - "CUDA_VERSION=12.8.1"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
       - "VLLM_NVIDIA_HPCX_VERSION=2.22.1rc4"
@@ -117,7 +122,7 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 6.3.4, using PyTorch +rocm6.3 in linux/amd64.
+  ## AMD ROCm 6.4.4, using PyTorch +rocm6.4 in linux/amd64.
   ##
   - backend: "rocm"
     services:
@@ -125,5 +130,4 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "CMAKE_MAX_JOBS=8"
-      - "ROCM_VERSION=6.3.4"
+      - "ROCM_VERSION=6.4.4"

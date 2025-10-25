@@ -49,9 +49,9 @@
 #   which is used to build the AITER wheel.
 # - VLLM_AITER_VERSION: Version of AITER to use,
 #   which is used to build the AITER wheel.
-ARG PYTHON_VERSION=3.11
+ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
-ARG ROCM_VERSION=6.3.4
+ARG ROCM_VERSION=6.4.4
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.10.1.1
@@ -218,7 +218,6 @@ RUN <<EOF
         python${PYTHON_VERSION} \
         python${PYTHON_VERSION}-dev \
         python${PYTHON_VERSION}-venv \
-        python${PYTHON_VERSION}-distutils \
         python${PYTHON_VERSION}-lib2to3 \
         python${PYTHON_VERSION}-gdbm \
         python${PYTHON_VERSION}-tk \
@@ -274,19 +273,6 @@ EOT
         && rm -rf /tmp/*
 EOF
 
-## Install Platform toolkit
-
-RUN <<EOF
-    # Toolkit
-
-    uv pip install --system --no-build-isolation \
-        /opt/rocm/share/amd_smi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Declare Environment
 
 ARG ROCM_VERSION
@@ -295,6 +281,18 @@ ARG ROCM_ARCHS
 ENV ROCM_HOME="/opt/rocm" \
     ROCM_VERSION=${ROCM_VERSION} \
     ROCM_ARCHS=${ROCM_ARCHS}
+
+## Install Platform toolkit
+
+RUN <<EOF
+    # Toolkit
+
+    uv pip install --system amdsmi==${ROCM_VERSION}
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
 
 # Stage vLLM Build
 #
