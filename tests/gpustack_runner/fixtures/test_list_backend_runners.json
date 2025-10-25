@@ -11,7 +11,8 @@
     {
       "backend": "cann",
       "backend_version": "8.2",
-      "service": "mindie"
+      "service": "mindie",
+      "service_version": "2.1.rc2"
     },
     [
       {
@@ -28,15 +29,15 @@
                         "deprecated": false,
                         "platforms": [
                           {
-                            "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
+                            "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc2",
                             "platform": "linux/amd64"
                           },
                           {
-                            "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc1",
+                            "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc2",
                             "platform": "linux/arm64"
                           }
                         ],
-                        "version": "2.1.rc1"
+                        "version": "2.1.rc2"
                       }
                     ]
                   }
@@ -52,24 +53,48 @@
                         "deprecated": false,
                         "platforms": [
                           {
-                            "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+                            "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc2",
                             "platform": "linux/amd64"
                           },
                           {
-                            "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
+                            "docker_image": "gpustack/runner:cann8.2-910b-mindie2.1.rc2",
                             "platform": "linux/arm64"
                           }
                         ],
-                        "version": "2.1.rc1"
+                        "version": "2.1.rc2"
                       }
                     ]
                   }
                 ],
                 "variant": "910b"
+              },
+              {
+                "services": [
+                  {
+                    "service": "mindie",
+                    "versions": [
+                      {
+                        "deprecated": false,
+                        "platforms": [
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-a3-mindie2.1.rc2",
+                            "platform": "linux/amd64"
+                          },
+                          {
+                            "docker_image": "gpustack/runner:cann8.2-a3-mindie2.1.rc2",
+                            "platform": "linux/arm64"
+                          }
+                        ],
+                        "version": "2.1.rc2"
+                      }
+                    ]
+                  }
+                ],
+                "variant": "a3"
               }
             ],
             "version": "8.2",
-            "original_version": "8.2.rc1"
+            "original_version": "8.2.rc2"
           }
         ]
       }
@@ -80,7 +105,8 @@
     {
       "backend": "dtk",
       "backend_version": "25.04",
-      "service": "vllm"
+      "service": "vllm",
+      "service_version": "0.8.5"
     },
     [
       {
