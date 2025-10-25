@@ -504,7 +504,7 @@ thefuzz==0.22.1
 tiktoken==0.7.0
 tornado==6.4.2
 tqdm==4.67.1
-transformers==4.63.3
+transformers==4.46.3
 safetensors==0.5.3
 tritonclient==2.49.0
 typing_extensions==4.13.2
