@@ -74,8 +74,12 @@ docs-online: docs
 
 PACKAGE_NAMESPACE ?= gpustack
 PACKAGE_REPOSITORY ?= runner
+PACKAGE_CACHE_REPOSITORY ?= runner-build-cache
 PACKAGE_TARGET ?= services
 PACKAGE_TAG ?= cuda12.4-vllm0.10.0
+PACKAGE_WITH_CACHE ?= true
+PACKAGE_PUSH ?= false
+PACKAGE_CACHE_PUSH ?= false
 package:
 	@echo "+++ $@ +++"
 	if [[ -z $$(command -v docker) ]]; then \
@@ -104,6 +108,21 @@ package:
 	    JOB_TARGET=$$(echo "$${BUILD_JOB}" | jq -r '.service'); \
 	    JOB_TAG=$(PACKAGE_NAMESPACE)/$(PACKAGE_REPOSITORY):$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag'); \
         JOB_ARGS=($$(echo "$${BUILD_JOB}" | jq -r '.args | map("--build-arg " + .) | join(" ")')); \
+        JOB_PLATFORM_CACHE=$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag_cache | join(" ")'); \
+        JOB_EXTRA_ARGS=(); \
+        if [[ "$(PACKAGE_WITH_CACHE)" == "true" ]]; then \
+			for TAG_CACHE in $${JOB_PLATFORM_CACHE}; do \
+			    JOB_EXTRA_ARGS+=("--cache-from=type=registry,ref=$(PACKAGE_NAMESPACE)/$(PACKAGE_CACHE_REPOSITORY):$${TAG_CACHE}"); \
+			done; \
+		fi; \
+		if [[ "$(PACKAGE_PUSH)" == "true" ]] || [[ "$(PACKAGE_CACHE_PUSH)" == "true" ]]; then \
+		    for TAG_CACHE in $${JOB_PLATFORM_CACHE}; do \
+		    	JOB_EXTRA_ARGS+=("--cache-to=type=registry,ignore-error=true,mode=max,compression=gzip,ref=$(PACKAGE_NAMESPACE)/$(PACKAGE_CACHE_REPOSITORY):$${TAG_CACHE}"); \
+			done; \
+		fi; \
+		if [[ "$(PACKAGE_PUSH)" == "true" ]]; then \
+		    JOB_EXTRA_ARGS+=("--push"); \
+		fi; \
         echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
         set -x; \
         docker buildx build \
@@ -117,6 +136,7 @@ package:
 			--file "$(SRCDIR)/pack/$${JOB_BACKEND}/Dockerfile" \
 			--progress plain \
 			$${JOB_ARGS[@]} \
+			$${JOB_EXTRA_ARGS[@]} \
 			$(SRCDIR)/pack/$${JOB_BACKEND}; \
 		set +x; \
 	done

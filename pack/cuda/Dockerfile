@@ -45,28 +45,34 @@
 #   If not specified, it will be set as CUDA_VERSION.
 # - VLLM_BUILD_BASE_IMAGE: Base image for vLLM build,
 #   which is used to build wheels.
+# - VLLM_NVIDIA_GDRCOPY_VERSION: Version of NVIDIA GPUDirect RDMA Copy to use,
+#   which is used to build the GDRCopy deb.
+# - VLLM_NVIDIA_HPCX_VERSION: Version of NVIDIA HPC-X to use.
+# - VLLM_AWS_EFA_VERSION: Version of AWS EFA to use.
 # - VLLM_FLASHINFER_REPOSITORY: Repository URL of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
 # - VLLM_FLASHINFER_VERSION: Version of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
+# - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
-ARG CUDA_VERSION=12.6.3
+ARG CUDA_VERSION=12.8.1
 ARG CUDA_ARCHS
 ARG VOXBOX_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VOXBOX_VERSION=0.0.20
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.10.1.1
-ARG VLLM_TORCH_VERSION=2.7.1
+ARG VLLM_VERSION=0.10.2
+ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1
 ARG VLLM_NVIDIA_HPCX_VERSION=2.21.3
 ARG VLLM_AWS_EFA_VERSION=1.43.3
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
-ARG VLLM_FLASHINFER_VERSION=0.2.11
+ARG VLLM_FLASHINFER_VERSION=0.3.0
+ARG VLLM_LMCACHE_VERSION=0.3.6
 
 #
 # Stage Bake Runtime
@@ -412,7 +418,7 @@ torchvision
 torchaudio
 EOT
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )) || [[ "${TARGETARCH}" == "amd64" ]]; then
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
         uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
             -r /tmp/requirements.txt
     else
@@ -480,8 +486,7 @@ RUN <<EOF
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
     IFS="." read -r FI_MAJOR FI_MINOR FI_PATCH <<< "${VLLM_FLASHINFER_VERSION}"
 
-    # Support ARM64 only for CUDA 12.8 and above
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} <= 12.7" | bc -l) )) && [[ "${TARGETARCH}" != "amd64" ]]; then
+    if [[ "${TARGETARCH}" != "amd64" ]]; then
         echo "Skipping FlashInfer building for ${TARGETARCH}..."
         exit 0
     fi
@@ -748,7 +753,7 @@ torchvision
 torchaudio
 EOT
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )) || [[ "${TARGETARCH}" == "amd64" ]]; then
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
         uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
             -r /tmp/requirements.txt
     else
@@ -813,6 +818,10 @@ RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw 
     uv pip install \
         /flashinfer/workspace/*.whl
 
+    # Download pre-compiled cubins
+    FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
+    python -m flashinfer --download-cubin || echo "WARNING: Failed to download flashinfer cubins."
+
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/*
@@ -820,23 +829,24 @@ EOF
 
 ## Install LMCache
 
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
 RUN <<EOF
     # LMCache
-
-    VLLM_LMCACHE_VERSION=0.3.3
 
     # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L67-L129.
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
 
-    # Support ARM64 only for CUDA 12.8 and above
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} <= 12.7" | bc -l) )) && [[ "${TARGETARCH}" != "amd64" ]]; then
+    if [[ "${TARGETARCH}" != "amd64" ]]; then
         echo "Skipping LMCache building for ${TARGETARCH}..."
         exit 0
     fi
 
     # Install LMCache
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )) || [[ "${TARGETARCH}" == "arm64" ]]; then
+    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )); then
         CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
         if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
             CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
@@ -905,7 +915,8 @@ accelerate
 hf_transfer
 modelscope
 bitsandbytes>=${BITSANDBYTES_VERSION}
-timm==0.9.10
+timm>=1.0.17
+boto3
 EOT
     uv pip install \
         -r /tmp/requirements.txt
