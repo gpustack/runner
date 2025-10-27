@@ -134,6 +134,9 @@ package:
 			--target "$${JOB_TARGET}" \
 			--tag "$${JOB_TAG}" \
 			--file "$(SRCDIR)/pack/$${JOB_BACKEND}/Dockerfile" \
+			--attest "type=provenance,disabled=true" \
+			--attest "type=sbom,disabled=true" \
+		    --ulimit nofile=65536:65536 \
 			--progress plain \
 			$${JOB_ARGS[@]} \
 			$${JOB_EXTRA_ARGS[@]} \
