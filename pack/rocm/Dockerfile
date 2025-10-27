@@ -49,13 +49,14 @@
 #   which is used to build the AITER wheel.
 # - VLLM_AITER_VERSION: Version of AITER to use,
 #   which is used to build the AITER wheel.
+# - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=6.4.4
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.10.1.1
-ARG VLLM_TORCH_VERSION=2.7.1
+ARG VLLM_VERSION=0.10.2
+ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_TRITON_REPOSITORY=https://github.com/triton-lang/triton.git
@@ -63,7 +64,8 @@ ARG VLLM_TRITON_VERSION=3.3.1
 ARG VLLM_FLASHATTENTION_REPOSITORY=https://github.com/Dao-AILab/flash-attention.git
 ARG VLLM_FLASHATTENTION_VERSION=2.7.4
 ARG VLLM_AITER_REPOSITORY=https://github.com/ROCm/aiter.git
-ARG VLLM_AITER_VERSION=0.1.4
+ARG VLLM_AITER_VERSION=0.1.5
+ARG VLLM_LMCACHE_VERSION=0.3.6
 
 # Stage Bake Runtime
 #
@@ -356,7 +358,7 @@ requests
 pyyaml
 einops
 pandas
-triton==3.2
+triton==3.3.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -428,6 +430,12 @@ EOT
       && python -v -m build --no-isolation --wheel \
       && tree -hs /tmp/triton/python/dist \
       && mv /tmp/triton/python/dist /workspace
+    if [[ -d /tmp/triton/python/triton_kernels ]]; then
+        pushd /tmp/triton/python/triton_kernels \
+          && python -v -m build --no-isolation --wheel \
+          && tree -hs /tmp/triton/python/triton_kernels/dist \
+          && cp /tmp/triton/python/triton_kernels/dist/*.whl /workspace
+    fi
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -651,7 +659,7 @@ RUN <<EOF
     ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
     if [[ -z "${ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101"
+            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
         else
             ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         fi
@@ -734,10 +742,12 @@ EOF
 
 ## Install LMCache
 
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
 RUN <<EOF
     # LMCache
-
-    VLLM_LMCACHE_VERSION=0.3.3
 
     # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
 
@@ -750,12 +760,12 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    LC_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${LC_ROCM_ARCHS}" ]]; then
+    ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101"
+            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
         else
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
