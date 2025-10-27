@@ -27,6 +27,28 @@
     "original_backend_version": "8.2.rc2",
     "backend_variant": "a3",
     "service": "vllm",
+    "service_version": "0.10.2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann8.2-a3-vllm0.10.2",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc2",
+    "backend_variant": "a3",
+    "service": "vllm",
+    "service_version": "0.10.2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann8.2-a3-vllm0.10.2",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc2",
+    "backend_variant": "a3",
+    "service": "vllm",
     "service_version": "0.10.1.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-a3-vllm0.10.1.1",
@@ -93,6 +115,28 @@
     "original_backend_version": "8.2.rc2",
     "backend_variant": "910b",
     "service": "vllm",
+    "service_version": "0.10.2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.2",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc2",
+    "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.10.2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.2",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc2",
+    "backend_variant": "910b",
+    "service": "vllm",
     "service_version": "0.10.1.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-vllm0.10.1.1",
@@ -217,6 +261,28 @@
     "service_version": "2.1.rc2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-310p-mindie2.1.rc2",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc2",
+    "backend_variant": "310p",
+    "service": "vllm",
+    "service_version": "0.10.2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.10.2",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "8.2",
+    "original_backend_version": "8.2.rc2",
+    "backend_variant": "310p",
+    "service": "vllm",
+    "service_version": "0.10.2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann8.2-310p-vllm0.10.2",
     "deprecated": false
   },
   {
