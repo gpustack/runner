@@ -122,7 +122,7 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 6.4.4, using PyTorch +rocm6.4 in linux/amd64.
+  ## AMD ROCm 7.0.2, using PyTorch +rocm7.0 in linux/amd64.
   ##
   - backend: "rocm"
     services:
@@ -130,4 +130,4 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "ROCM_VERSION=6.4.4"
+      - "ROCM_VERSION=7.0.2"
