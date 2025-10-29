@@ -516,15 +516,16 @@ EOT
     FI_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${FI_CUDA_ARCHS}" ]]; then
         if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            FI_CUDA_ARCHS="7.5 8.0+PTX 8.9"
+            FI_CUDA_ARCHS="7.5 8.0 8.9"
         elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            FI_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0+PTX"
+            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a"
         else
-            FI_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0+PTX 10.0+PTX 12.0+PTX"
+            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 12.0"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export TORCH_CUDA_ARCH_LIST="${FI_CUDA_ARCHS}"
+    export FLASHINFER_CUDA_ARCH_LIST="${FI_CUDA_ARCHS}"
     export FLASHINFER_LOCAL_VERSION="cu${CUDA_MAJOR}${CUDA_MINOR}torch${TORCH_MAJOR}.${TORCH_MINOR}"
     export LD_PRELOAD="${CUDA_HOME}/lib64/libcudart.so:${LD_PRELOAD}"  # Ensure CUDA runtime is preloaded
     echo "Building FlashInfer with the following environment variables:"
@@ -875,7 +876,6 @@ RUN <<EOF
         fi
         export MAX_JOBS="${CMAKE_MAX_JOBS}"
         export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
-
         git -C /tmp clone --recursive --shallow-submodules \
             --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
             https://github.com/LMCache/LMCache.git lmcache
