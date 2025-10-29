@@ -1,0 +1,89 @@
+rules:
+
+  #
+  # Ascend CANN
+  #
+
+  ## Packed Ascend CANN 8.2, using CANN Kernel for A3.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=a3"
+      - "VLLM_VERSION=0.10.2"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.10.2"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.10.1.1"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.9.2"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.9.1"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 310P.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.10.2"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.10.1.1"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.10.0"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.9.2"
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.9.1"
