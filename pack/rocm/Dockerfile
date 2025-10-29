@@ -56,6 +56,7 @@ ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.11.0
+ARG VLLM_TORCH_SOURCE=radeon
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
@@ -314,6 +315,7 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ## Install Torch
 
+ARG VLLM_TORCH_SOURCE
 ARG VLLM_TORCH_VERSION
 ARG VLLM_TORCH_ROCM_VERSION
 
@@ -323,7 +325,26 @@ ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
 RUN <<EOF
     # Torch
 
-    # Install
+    # Install from radeon source.
+    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TORCH_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHVISION_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
+            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
+            exit 1
+        fi
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCH_URL}"
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHVISION_URL}"
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHAUDIO_URL}"
+        uv pip install \
+            numpy scipy
+        exit 0
+    fi
+
+    # Install from pytorch source.
     cat <<EOT >/tmp/requirements.txt
 torch==${VLLM_TORCH_VERSION}
 torchvision
