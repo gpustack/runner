@@ -63,7 +63,7 @@ ARG VOXBOX_VERSION=0.0.20
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.10.2
+ARG VLLM_VERSION=0.11.0
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1
@@ -71,8 +71,8 @@ ARG VLLM_NVIDIA_HPCX_VERSION=2.21.3
 ARG VLLM_AWS_EFA_VERSION=1.43.3
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
-ARG VLLM_FLASHINFER_VERSION=0.3.0
-ARG VLLM_LMCACHE_VERSION=0.3.6
+ARG VLLM_FLASHINFER_VERSION=0.3.1
+ARG VLLM_LMCACHE_VERSION=0.3.8
 
 #
 # Stage Bake Runtime
@@ -490,6 +490,15 @@ RUN <<EOF
         echo "Skipping FlashInfer building for ${TARGETARCH}..."
         exit 0
     fi
+
+    # Install Dependencies
+    cat <<EOT >/tmp/requirements.txt
+cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
+pynvml==${CUDA_MAJOR}
+nvidia-nvshmem-cu${CUDA_MAJOR}
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
