@@ -41,7 +41,7 @@ ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${
 ARG MINDIE_VERSION=2.1.rc2
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.10.2
+ARG VLLM_VERSION=0.11.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.7.1
 
@@ -690,8 +690,8 @@ RUN <<EOF
 accelerate
 hf_transfer
 modelscope
-ray[client]>=2.47.1
-ray[default]>=2.47.1
+ray[client]>=2.47.1,<=2.48.0
+ray[default]>=2.47.1,<=2.48.0
 protobuf>3.20.0
 grpcio==1.71.0
 EOT
