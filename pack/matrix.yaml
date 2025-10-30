@@ -85,6 +85,7 @@ rules:
   ##
   - backend: "cuda"
     args:
+      - "CMAKE_MAX_JOBS=1"
       - "CUDA_VERSION=12.8.1"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
       - "VLLM_NVIDIA_HPCX_VERSION=2.22.1rc4"

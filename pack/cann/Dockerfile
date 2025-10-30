@@ -654,7 +654,9 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm-${VLLM_VERSION}
-    VLLM_TARGET_DEVICE="empty" uv pip install --verbose /tmp/vllm-${VLLM_VERSION} --extra-index-url https://download.pytorch.org/whl/cpu/
+    VLLM_TARGET_DEVICE="empty" \
+        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
+        /tmp/vllm-${VLLM_VERSION}
     # Fix
     # - vLLM Ascend doesn't support triton, uninstall it.
     uv pip uninstall triton || true
@@ -668,7 +670,9 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_ASCEND_VERSION} --single-branch \
         https://github.com/vllm-project/vllm-ascend.git vllm-ascend-${VLLM_ASCEND_VERSION}
-    VLLM_TARGET_DEVICE="empty" pip install -v /tmp/vllm-ascend-${VLLM_ASCEND_VERSION} --extra-index-url https://download.pytorch.org/whl/cpu/ --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi
+    VLLM_TARGET_DEVICE="empty" \
+        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
+        /tmp/vllm-ascend-${VLLM_ASCEND_VERSION}
     # Fix
     # - Replace SoC version instead of compile.
     if [[ "${CANN_ARCHS}" == "310p" ]]; then

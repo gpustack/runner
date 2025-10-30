@@ -87,15 +87,15 @@ package:
 		exit 1; \
 	fi
 	if [[ -z $$(docker buildx inspect --builder "gpustack" 2>/dev/null) ]]; then \
-    	echo "[INFO] Creating new buildx builder 'gpustack'"; \
-	    docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2-52 --uninstall qemu-*; \
-	    docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2 --install all; \
-	    docker buildx create \
-	    	--name "gpustack" \
-	    	--driver "docker-container" \
-	    	--buildkitd-flags "--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host" \
-	    	--driver-opt "network=host,default-load=true,env.BUILDKIT_STEP_LOG_MAX_SIZE=-1,env.BUILDKIT_STEP_LOG_MAX_SPEED=-1" \
-	    	--bootstrap; \
+		echo "[INFO] Creating new buildx builder 'gpustack'"; \
+		docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2-52 --uninstall qemu-*; \
+		docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2 --install all; \
+		docker buildx create \
+			--name "gpustack" \
+			--driver "docker-container" \
+			--buildkitd-flags "--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host" \
+			--driver-opt "network=host,default-load=true,env.BUILDKIT_STEP_LOG_MAX_SIZE=-1,env.BUILDKIT_STEP_LOG_MAX_SPEED=-1" \
+			--bootstrap; \
 	fi
 	INPUT_NAMESPACE=$(PACKAGE_NAMESPACE) \
 	INPUT_REPOSITORY=$(PACKAGE_REPOSITORY) \
@@ -103,40 +103,39 @@ package:
 	INPUT_TAG=$(PACKAGE_TAG) \
 		source $(SRCDIR)/pack/expand_matrix.sh; \
 	for BUILD_JOB in $$(echo "$${BUILD_JOBS}" | jq -cr '.[]'); do \
-	    JOB_BACKEND=$$(echo "$${BUILD_JOB}" | jq -r '.backend'); \
-	    JOB_PLATFORM=$$(echo "$${BUILD_JOB}" | jq -r '.platform'); \
-	    JOB_TARGET=$$(echo "$${BUILD_JOB}" | jq -r '.service'); \
-	    JOB_TAG=$(PACKAGE_NAMESPACE)/$(PACKAGE_REPOSITORY):$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag'); \
-        JOB_ARGS=($$(echo "$${BUILD_JOB}" | jq -r '.args | map("--build-arg " + .) | join(" ")')); \
-        JOB_PLATFORM_CACHE=$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag_cache | join(" ")'); \
-        JOB_EXTRA_ARGS=(); \
-        if [[ "$(PACKAGE_WITH_CACHE)" == "true" ]]; then \
+		JOB_BACKEND=$$(echo "$${BUILD_JOB}" | jq -r '.backend'); \
+		JOB_PLATFORM=$$(echo "$${BUILD_JOB}" | jq -r '.platform'); \
+		JOB_TARGET=$$(echo "$${BUILD_JOB}" | jq -r '.service'); \
+		JOB_TAG=$(PACKAGE_NAMESPACE)/$(PACKAGE_REPOSITORY):$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag'); \
+		JOB_ARGS=($$(echo "$${BUILD_JOB}" | jq -r '.args | map("--build-arg " + .) | join(" ")')); \
+		JOB_PLATFORM_CACHE=$$(echo "$${BUILD_JOB}" | jq -r '.platform_tag_cache | join(" ")'); \
+		JOB_EXTRA_ARGS=(); \
+		if [[ "$(PACKAGE_WITH_CACHE)" == "true" ]]; then \
 			for TAG_CACHE in $${JOB_PLATFORM_CACHE}; do \
-			    JOB_EXTRA_ARGS+=("--cache-from=type=registry,ref=$(PACKAGE_NAMESPACE)/$(PACKAGE_CACHE_REPOSITORY):$${TAG_CACHE}"); \
+				JOB_EXTRA_ARGS+=("--cache-from=type=registry,ref=gpustack/runner-build-cache:$${TAG_CACHE}"); \
 			done; \
 		fi; \
 		if [[ "$(PACKAGE_PUSH)" == "true" ]] || [[ "$(PACKAGE_CACHE_PUSH)" == "true" ]]; then \
-		    for TAG_CACHE in $${JOB_PLATFORM_CACHE}; do \
-		    	JOB_EXTRA_ARGS+=("--cache-to=type=registry,ignore-error=true,mode=max,compression=gzip,ref=$(PACKAGE_NAMESPACE)/$(PACKAGE_CACHE_REPOSITORY):$${TAG_CACHE}"); \
+			for TAG_CACHE in $${JOB_PLATFORM_CACHE}; do \
+				JOB_EXTRA_ARGS+=("--cache-to=type=registry,ignore-error=true,mode=max,compression=gzip,ref=$(PACKAGE_NAMESPACE)/$(PACKAGE_CACHE_REPOSITORY):$${TAG_CACHE}"); \
 			done; \
 		fi; \
 		if [[ "$(PACKAGE_PUSH)" == "true" ]]; then \
-		    JOB_EXTRA_ARGS+=("--push"); \
+			JOB_EXTRA_ARGS+=("--push"); \
 		fi; \
-        echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
-        set -x; \
-        docker buildx build \
-        	--pull \
-            --allow network.host \
-            --allow security.insecure \
-        	--builder "gpustack" \
+		echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
+		set -x; \
+		docker buildx build \
+			--allow network.host \
+			--allow security.insecure \
+			--builder "gpustack" \
 			--platform "$${JOB_PLATFORM}" \
 			--target "$${JOB_TARGET}" \
 			--tag "$${JOB_TAG}" \
 			--file "$(SRCDIR)/pack/$${JOB_BACKEND}/Dockerfile" \
 			--attest "type=provenance,disabled=true" \
 			--attest "type=sbom,disabled=true" \
-		    --ulimit nofile=65536:65536 \
+			--ulimit nofile=65536:65536 \
 			--progress plain \
 			$${JOB_ARGS[@]} \
 			$${JOB_EXTRA_ARGS[@]} \

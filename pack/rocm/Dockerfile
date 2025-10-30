@@ -315,11 +315,13 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ## Install Torch
 
+ARG VLLM_TRITON_VERSION
 ARG VLLM_TORCH_SOURCE
 ARG VLLM_TORCH_VERSION
 ARG VLLM_TORCH_ROCM_VERSION
 
-ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
+ENV VLLM_TRITON_VERSION=${VLLM_TRITON_VERSION} \
+    VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
     VLLM_TORCH_ROCM_VERSION=${VLLM_TORCH_ROCM_VERSION}
 
 RUN <<EOF
@@ -329,6 +331,7 @@ RUN <<EOF
     if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TRITON_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "triton" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCH_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCHVISION_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCHAUDIO_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
@@ -336,6 +339,7 @@ RUN <<EOF
             echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
         fi
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TRITON_URL}"
         uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCH_URL}"
         uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHVISION_URL}"
         uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHAUDIO_URL}"
@@ -346,6 +350,7 @@ RUN <<EOF
 
     # Install from pytorch source.
     cat <<EOT >/tmp/requirements.txt
+triton=${VLLM_TRITON_VERSION}
 torch==${VLLM_TORCH_VERSION}
 torchvision
 torchaudio
@@ -371,15 +376,12 @@ EOF
 RUN <<EOF
     # Dependencies
 
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
     # Install
     cat <<EOT >/tmp/requirements.txt
 requests
 pyyaml
 einops
 pandas
-triton==3.3.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -444,13 +446,25 @@ EOT
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
+    TT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${TT_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
+            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
+        elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        else
+            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        fi
+    fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="${TT_ROCM_ARCHS}"
     echo "Building Triton with the following environment variables:"
     env
-    pushd /tmp/triton/python \
+
+    pushd /tmp/triton \
       && python -v -m build --no-isolation --wheel \
-      && tree -hs /tmp/triton/python/dist \
-      && mv /tmp/triton/python/dist /workspace
+      && tree -hs /tmp/triton/dist \
+      && mv /tmp/triton/dist /workspace
     if [[ -d /tmp/triton/python/triton_kernels ]]; then
         pushd /tmp/triton/python/triton_kernels \
           && python -v -m build --no-isolation --wheel \
@@ -571,6 +585,10 @@ RUN <<EOF
         exit 0
     fi
 
+    # Install Dependencies
+    uv pip install --reinstall \
+        pybind11>=3.0.1
+
     # Prepare
     TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
     echo "${TORCH_LIB_PREFIX}/torch/lib" >> /etc/ld.so.conf.d/python3.conf
@@ -590,7 +608,7 @@ RUN <<EOF
     fi
     AT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
     if [[ -z "${AT_ROCM_ARCHS}" ]]; then
-        AT_ROCM_ARCHS="gfx942"
+        AT_ROCM_ARCHS="gfx942;gfx950"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export GPU_ARCHS="${AT_ROCM_ARCHS}"
@@ -600,7 +618,7 @@ RUN <<EOF
     echo "Building AITER with the following environment variables:"
     env
     pushd /tmp/aiter \
-      && python -v -m build --no-isolation --wheel \
+      && python -v -m build --verbose --no-isolation --wheel \
       && tree -hs /tmp/aiter/dist \
       && mv /tmp/aiter/dist /workspace
 
@@ -627,17 +645,42 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ## Install Torch
 
+ARG VLLM_TRITON_VERSION
+ARG VLLM_TORCH_SOURCE
 ARG VLLM_TORCH_VERSION
 ARG VLLM_TORCH_ROCM_VERSION
 
-ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
+ENV VLLM_TRITON_VERSION=${VLLM_TRITON_VERSION} \
+    VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
     VLLM_TORCH_ROCM_VERSION=${VLLM_TORCH_ROCM_VERSION}
 
 RUN <<EOF
     # Torch
 
-    # Install
+    # Install from radeon source.
+    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TRITON_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "triton" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCH_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHVISION_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
+            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
+            exit 1
+        fi
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TRITON_URL}"
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCH_URL}"
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHVISION_URL}"
+        uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHAUDIO_URL}"
+        uv pip install \
+            numpy scipy
+        exit 0
+    fi
+
+    # Install from pytorch source.
     cat <<EOT >/tmp/requirements.txt
+triton=${VLLM_TRITON_VERSION}
 torch==${VLLM_TORCH_VERSION}
 torchvision
 torchaudio
@@ -677,19 +720,19 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${ROCM_ARCHS}" ]]; then
+    VL_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${VL_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
+            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
         elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         else
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
-    export PYTORCH_ROCM_ARCH="${ROCM_ARCHS}"
+    export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
 
     # Install
     EXTRA_INDEX_URL="https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR}"
@@ -699,7 +742,9 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm-${VLLM_VERSION}
-    VLLM_TARGET_DEVICE="rocm" uv pip install --verbose /tmp/vllm-${VLLM_VERSION} --extra-index-url ${EXTRA_INDEX_URL}
+    VLLM_TARGET_DEVICE="rocm" \
+        uv pip install --no-build-isolation --verbose --extra-index-url ${EXTRA_INDEX_URL} \
+        /tmp/vllm-${VLLM_VERSION}
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -717,7 +762,7 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw <<EOF
     fi
 
     # Install
-    uv pip install \
+    uv pip install --no-build-isolation --no-deps \
         /triton/workspace/*.whl
 
     # Cleanup
@@ -736,7 +781,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     fi
 
     # Install
-    uv pip install \
+    uv pip install --no-build-isolation --no-deps \
         /flashattention/workspace/*.whl
 
     # Cleanup
@@ -755,7 +800,7 @@ RUN --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     fi
 
     # Install
-    uv pip install \
+    uv pip install --no-build-isolation \
         /aiter/workspace/*.whl
 
     # Cleanup
@@ -783,18 +828,18 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${ROCM_ARCHS}" ]]; then
+    LC_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${LC_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
+            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
         elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         else
-            ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export PYTORCH_ROCM_ARCH="${ROCM_ARCHS}"
+    export PYTORCH_ROCM_ARCH="${LC_ROCM_ARCHS}"
     export TORCH_DONT_CHECK_COMPILER_ABI=1
     export CXX=hipcc
     export BUILD_WITH_HIP=1
@@ -806,7 +851,8 @@ RUN <<EOF
     if [[ "${TARGETARCH}" == "arm64" ]]; then
         sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
     fi
-    pip install -v --no-build-isolation /tmp/lmcache
+    uv pip install --no-build-isolation --verbose \
+        /tmp/lmcache
 
     # Cleanup
     rm -rf /var/tmp/* \

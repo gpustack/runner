@@ -518,15 +518,16 @@ EOT
         if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
             FI_CUDA_ARCHS="7.5 8.0 8.9"
         elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0"
+            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a"
         else
-            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0 10.0 12.0"
+            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 12.0"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export TORCH_CUDA_ARCH_LIST="${FI_CUDA_ARCHS}"
     export FLASHINFER_CUDA_ARCH_LIST="${FI_CUDA_ARCHS}"
     export FLASHINFER_LOCAL_VERSION="cu${CUDA_MAJOR}${CUDA_MINOR}torch${TORCH_MAJOR}.${TORCH_MINOR}"
+    export NVCC_THREADS=1
     export LD_PRELOAD="${CUDA_HOME}/lib64/libcudart.so:${LD_PRELOAD}"  # Ensure CUDA runtime is preloaded
     echo "Building FlashInfer with the following environment variables:"
     env
@@ -836,7 +837,7 @@ RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw 
     fi
 
     # Install
-    uv pip install \
+    uv pip install --no-build-isolation \
         /flashinfer/workspace/*.whl
 
     # Download pre-compiled cubins
@@ -887,11 +888,13 @@ RUN <<EOF
         fi
         export MAX_JOBS="${CMAKE_MAX_JOBS}"
         export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
+        export NVCC_THREADS=2
         git -C /tmp clone --recursive --shallow-submodules \
             --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
             https://github.com/LMCache/LMCache.git lmcache
         sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
-        pip install -v --no-build-isolation /tmp/lmcache
+        uv pip install --no-build-isolation --verbose \
+            /tmp/lmcache
     else
         uv pip install lmcache==${VLLM_LMCACHE_VERSION}
     fi
@@ -954,7 +957,7 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
-        --package flashinfer \
+        --package flashinfer-python \
         --package torch \
         --package lmcache
 EOF
