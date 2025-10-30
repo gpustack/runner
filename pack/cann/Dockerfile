@@ -17,6 +17,12 @@
 #    - Install vLLM-Ascend from source.
 #    - Install dependencies.
 #    - Postprocess, review installation.
+# 5. sglang target.
+#    - Build SGLang from source (Ascend/NPU), including sgl-kernel-npu and deep-ep.
+#    - Install sglang with NPU extras.
+#    - Ecosystem install: MemFabric and Triton Ascend.
+#    - Optional: Install BiSheng toolkit.
+#    - Postprocess, review installation.
 
 # Argument usage:
 # - PYTHON_VERSION: Version of Python to use.
@@ -33,6 +39,8 @@
 # - VLLM_ASCEND_VERSION: Version of vLLM Ascend to use,
 #   if not specified, it will fetch from the vLLM Ascend PyPi RSS.
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
+# - SGLANG_VERSION: Version of SGLang to use.
+
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=8.2.rc2
@@ -734,6 +742,128 @@ EOF
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+# Stage SGLang (inherits vLLM)
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/arm64 \
+#     --file=test/testDockerfile.cann \
+#     --tag=gpustack/runner:cann${CANN_VERSION%.*}-sglang-linux-arm64 \
+#     --target=sglang test
+#
+FROM vllm AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Build args for SGLang
+ARG SGL_REPO="https://github.com/sgl-project/sglang.git"
+ARG SGL_DEFAULT="main"
+ARG SGL_BRANCH=${SGL_DEFAULT}
+ARG BUILD_TYPE=srt
+ARG NO_DEPS_FLAG=""
+ARG SGLANG_VERSION=0.5.3.post3
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+## Build args for sgl-kernel-npu
+ARG SGL_KERNEL_NPU_REPO="https://github.com/sgl-project/sgl-kernel-npu.git"
+ARG SGL_KERNEL_NPU_BRANCH=${SGL_DEFAULT}
+## NPU ecosystem components
+ARG MEMFABRIC_URL="https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/mf_adapter-1.0.0-cp311-cp311-linux_aarch64.whl"
+ARG TRITON_ASCEND_URL="https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend-3.2.0%2Bgitb0ea0850-cp311-cp311-linux_aarch64.whl"
+ARG BISHENG_URL="https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/Ascend-BiSheng-toolkit_aarch64.run"
+
+## Ascend toolkit path
+ENV ASCEND_CANN_PATH="${CANN_HOME}/ascend-toolkit"
+
+## Install SGLang and NPU components
+RUN <<EOF
+    # Prepare Python build deps and utilities
+    uv pip install --verbose wheel build IPython orjson python-multipart pybind11
+
+    # Clean any previous installs
+    pip uninstall -y sgl_kernel_npu deep-ep sglang || true
+
+    # Ecosystem: MemFabric and Triton Ascend
+    uv pip install --no-cache-dir wheel==0.45.1
+    uv pip install --no-cache-dir ${MEMFABRIC_URL}
+    uv pip install --no-cache-dir ${TRITON_ASCEND_URL}
+
+    # Clone SGLang and install Python package (NPU extras)
+    mkdir -p /sgl-workspace && pushd /sgl-workspace
+    git clone ${SGL_REPO}
+    cd sglang
+    # Prefer version tag if provided, otherwise fall back to branch selection
+    if [[ -n "${SGLANG_VERSION}" ]]; then
+      git fetch --tags --depth=1
+      if git rev-parse -q --verify "refs/tags/v${SGLANG_VERSION}" >/dev/null; then
+        echo "Checking out tag v${SGLANG_VERSION}"; git checkout -q "tags/v${SGLANG_VERSION}"
+      elif git rev-parse -q --verify "refs/tags/${SGLANG_VERSION}" >/dev/null; then
+        echo "Checking out tag ${SGLANG_VERSION}"; git checkout -q "tags/${SGLANG_VERSION}"
+      elif git rev-parse -q --verify "${SGLANG_VERSION}" >/dev/null; then
+        echo "Checking out commit/branch ${SGLANG_VERSION}"; git checkout -q "${SGLANG_VERSION}"
+      elif [[ "${SGL_BRANCH}" != "${SGL_DEFAULT}" ]]; then
+        echo "Checking out branch ${SGL_BRANCH}"; git checkout -q "${SGL_BRANCH}"
+      else
+        echo "Using ${SGL_DEFAULT} default branch"
+      fi
+    else
+      if [[ "${SGL_BRANCH}" != "${SGL_DEFAULT}" ]]; then
+        echo "Checking out branch ${SGL_BRANCH}"; git checkout -q "${SGL_BRANCH}"
+      fi
+    fi
+    rm -f python/pyproject.toml
+    mv python/pyproject_other.toml python/pyproject.toml
+    if [[ "${BUILD_TYPE}" == "srt" ]]; then
+      python -m pip --no-cache-dir install -e "python[srt_npu]" ${NO_DEPS_FLAG}
+    else
+      python -m pip --no-cache-dir install -e "python[all_npu]" ${NO_DEPS_FLAG}
+    fi
+    popd
+
+    # Build sgl-kernel-npu and deep-ep wheels
+    git -C /sgl-workspace clone --depth 1 ${SGL_KERNEL_NPU_REPO} ${SGL_KERNEL_NPU_BRANCH:+--branch ${SGL_KERNEL_NPU_BRANCH}}
+    export LD_LIBRARY_PATH=${ASCEND_CANN_PATH}/latest/runtime/lib64/stub:$LD_LIBRARY_PATH
+    source ${ASCEND_CANN_PATH}/set_env.sh
+    pushd /sgl-workspace/sgl-kernel-npu
+    bash build.sh
+    pip install output/deep_ep*.whl output/sgl_kernel_npu*.whl --no-cache-dir
+    popd
+
+    # Link deep_ep cpp .so to package root for runtime discovery
+    cd "$(pip show deep-ep | awk '/^Location:/ {print $2}')" && ln -sf deep_ep/deep_ep_cpp*.so .
+
+    # Install BiSheng toolkit (Ascend)
+    wget ${BISHENG_URL} && chmod a+x Ascend-BiSheng-toolkit_aarch64.run && ./Ascend-BiSheng-toolkit_aarch64.run --install && rm Ascend-BiSheng-toolkit_aarch64.run
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess review
+RUN <<EOF
+    uv pip tree \
+        --package sglang \
+        --package torch \
+        --package torch-npu \
+        --package deep-ep
+EOF
+
+## Performance environment variables
+ENV PYTORCH_NPU_ALLOC_CONF=expandable_segments:True \
+    SGLANG_SET_CPU_AFFINITY=1 \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    HCCL_BUFFSIZE=200 \
+    SGLANG_NPU_USE_MLAPO=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

@@ -49,6 +49,7 @@ on:
           - voxbox
           - mindie
           - vllm
+          - sglang
       # Since specific Backend and Target still result in many tags,
       # we can leverage this to control packing one specific tag, even os/arch.
       tag:
