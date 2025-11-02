@@ -163,6 +163,11 @@ jobs:
             network=host
             env.BUILDKIT_STEP_LOG_MAX_SIZE=-1
             env.BUILDKIT_STEP_LOG_MAX_SPEED=-1
+          buildkitd-flags: |
+            --allow-insecure-entitlement=network.host
+            --allow-insecure-entitlement=security.insecure
+            --oci-worker-net=host
+            --oci-worker-gc-keepstorage=204800
       - name: Login DockerHub
         if: ${{ github.event.inputs.dry_run == 'false' }}
         uses: docker/login-action@v3
@@ -218,6 +223,7 @@ jobs:
           call: ${{ github.event.inputs.dry_run == 'true' && 'check' || 'build' }}
           ulimit: |
             nofile=65536:65536
+          shm-size: ${{ github.event.inputs.runner_profile == 'normal' && '4G' || '16G' }}
           push: ${{ github.event.inputs.dry_run == 'false' }}
           provenance: false
           sbom: false

@@ -93,8 +93,8 @@ package:
 		docker buildx create \
 			--name "gpustack" \
 			--driver "docker-container" \
-			--buildkitd-flags "--allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host" \
 			--driver-opt "network=host,default-load=true,env.BUILDKIT_STEP_LOG_MAX_SIZE=-1,env.BUILDKIT_STEP_LOG_MAX_SPEED=-1" \
+			--buildkitd-flags "--allow-insecure-entitlement=security.insecure --allow-insecure-entitlement=network.host --oci-worker-net=host --oci-worker-gc-keepstorage=204800" \
 			--bootstrap; \
 	fi
 	INPUT_NAMESPACE=$(PACKAGE_NAMESPACE) \
@@ -136,6 +136,7 @@ package:
 			--attest "type=provenance,disabled=true" \
 			--attest "type=sbom,disabled=true" \
 			--ulimit nofile=65536:65536 \
+			--shm-size 16G \
 			--progress plain \
 			$${JOB_ARGS[@]} \
 			$${JOB_EXTRA_ARGS[@]} \

@@ -585,10 +585,6 @@ RUN <<EOF
         exit 0
     fi
 
-    # Install Dependencies
-    uv pip install --reinstall \
-        pybind11>=3.0.1
-
     # Prepare
     TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
     echo "${TORCH_LIB_PREFIX}/torch/lib" >> /etc/ld.so.conf.d/python3.conf
@@ -618,7 +614,7 @@ RUN <<EOF
     echo "Building AITER with the following environment variables:"
     env
     pushd /tmp/aiter \
-      && python -v -m build --verbose --no-isolation --wheel \
+      && python setup.py bdist_wheel --dist-dir=dist \
       && tree -hs /tmp/aiter/dist \
       && mv /tmp/aiter/dist /workspace
 
