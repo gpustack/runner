@@ -510,8 +510,8 @@ EOT
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
     fi
     FI_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${FI_CUDA_ARCHS}" ]]; then
@@ -793,8 +793,8 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
     fi
     VL_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${LC_CUDA_ARCHS}" ]]; then
@@ -840,6 +840,14 @@ RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw 
     uv pip install --no-build-isolation \
         /flashinfer/workspace/*.whl
 
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+
     # Download pre-compiled cubins
     FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
     python -m flashinfer --download-cubin || echo "WARNING: Failed to download flashinfer cubins."
@@ -873,8 +881,8 @@ RUN <<EOF
         if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
             CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
         fi
-        if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-            CMAKE_MAX_JOBS="4"
+        if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+            CMAKE_MAX_JOBS="8"
         fi
         LC_CUDA_ARCHS="${CUDA_ARCHS}"
         if [[ -z "${LC_CUDA_ARCHS}" ]]; then
@@ -888,7 +896,7 @@ RUN <<EOF
         fi
         export MAX_JOBS="${CMAKE_MAX_JOBS}"
         export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
-        export NVCC_THREADS=2
+        export NVCC_THREADS=1
         git -C /tmp clone --recursive --shallow-submodules \
             --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
             https://github.com/LMCache/LMCache.git lmcache
