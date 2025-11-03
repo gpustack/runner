@@ -456,6 +456,28 @@
         "original_backend_version": "12.8.1",
         "backend_variant": "",
         "service": "vllm",
+        "service_version": "0.11.0",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.8-vllm0.11.0",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.8",
+        "original_backend_version": "12.8.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.11.0",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.8-vllm0.11.0",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.8",
+        "original_backend_version": "12.8.1",
+        "backend_variant": "",
+        "service": "vllm",
         "service_version": "0.10.2",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cuda12.8-vllm0.10.2",
