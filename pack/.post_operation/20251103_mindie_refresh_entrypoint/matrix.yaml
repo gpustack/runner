@@ -1,0 +1,47 @@
+rules:
+
+  #
+  # Ascend CANN
+  #
+
+  ## Packed Ascend CANN 8.2, using CANN Kernel for A3.
+  ##
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=a3"
+      - "MINDIE_VERSION=2.1.rc2"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "MINDIE_VERSION=2.1.rc2"
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "MINDIE_VERSION=2.1.rc1"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 310P.
+  ##
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "MINDIE_VERSION=2.1.rc2"
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=310p"
+      - "MINDIE_VERSION=2.1.rc1"
