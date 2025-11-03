@@ -223,7 +223,6 @@ jobs:
           call: ${{ github.event.inputs.dry_run == 'true' && 'check' || 'build' }}
           ulimit: |
             nofile=65536:65536
-          shm-size: '16G'
           push: ${{ github.event.inputs.dry_run == 'false' }}
           provenance: false
           sbom: false
