@@ -89,7 +89,7 @@ package:
 	if [[ -z $$(docker buildx inspect --builder "gpustack" 2>/dev/null) ]]; then \
 		echo "[INFO] Creating new buildx builder 'gpustack'"; \
 		docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2-52 --uninstall qemu-*; \
-		docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2 --install all; \
+		docker run --rm --privileged tonistiigi/binfmt:qemu-v9.2.2-52 --install all; \
 		docker buildx create \
 			--name "gpustack" \
 			--driver "docker-container" \
