@@ -33,6 +33,10 @@
 # - VLLM_ASCEND_VERSION: Version of vLLM Ascend to use,
 #   if not specified, it will fetch from the vLLM Ascend PyPi RSS.
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
+# - SGLANG_VERSION: Version of SGLang to use.
+# - SGLANG_VLLM_VERSION: Version of vLLM for SGLang to use.
+# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
+# - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=8.2.rc2
@@ -44,6 +48,11 @@ ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PY
 ARG VLLM_VERSION=0.11.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.7.1
+ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
+ARG SGLANG_VERSION=0.5.4.post2
+ARG SGLANG_VLLM_VERSION=0.8.5
+ARG SGLANG_TORCH_VERSION=2.6.0
+ARG SGLANG_KERNEL_VERSION=20250926
 
 #
 # Stage Bake Runtime
@@ -805,6 +814,248 @@ EOF
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+# Stage Install SGLang
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/cann
+#
+FROM ${SGLANG_BASE_IMAGE} AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install Protobuf
+
+RUN <<EOF
+    # Protobuf
+
+    # Install
+    apt-get update -y && apt-get install -y --no-install-recommends \
+        libgrpc-dev \
+        libgrpc++-dev \
+        libprotobuf-dev \
+        protobuf-compiler \
+        protobuf-compiler-grpc
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Install Torch
+
+ARG SGLANG_TORCH_VERSION
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION}
+
+RUN <<EOF
+    # Torch
+
+    # Install Torch
+    cat <<EOT >/tmp/requirements.txt
+torch==${SGLANG_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
+        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
+            -r /tmp/requirements.txt
+    else
+        uv pip install \
+            -r /tmp/requirements.txt
+    fi
+    uv pip install --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
+        torch-npu==${SGLANG_TORCH_VERSION}.*
+    uv pip install \
+        numpy==1.26.4 scipy==1.13.1
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install SGLang
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+ARG SGLANG_VLLM_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
+
+RUN <<EOF
+    # SGLang
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/Ascend/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+
+    # Install vLLM
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VLLM_VERSION} --single-branch \
+        https://github.com/vllm-project/vllm.git vllm-${SGLANG_VLLM_VERSION}
+    VLLM_TARGET_DEVICE="empty" \
+        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
+        /tmp/vllm-${SGLANG_VLLM_VERSION}
+
+    # Install Dependencies
+    cat <<EOT >/tmp/requirements.txt
+attrs==24.2.0
+decorator==5.1.1
+psutil==6.0.0
+pytest==8.3.2
+pytest-xdist==3.6.1
+pyyaml
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
+        uv pip install --verbose \
+            https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend-3.2.0.dev20250923-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+    else
+        uv pip install --verbose \
+            https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend-3.2.0%2Bgitb0ea0850-cp311-cp311-linux_aarch64.whl
+    fi
+
+    # Install SGLang
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
+    pushd /tmp/sglang-${SGLANG_VERSION}/python \
+        && rm -rf pyproject.toml \
+        && mv pyproject_other.toml pyproject.toml \
+        && uv pip install --verbose .[srt_npu]
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install SGLang Router
+
+RUN <<EOF
+    # SGlang Router
+
+    # Install Rust
+    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    export PATH="/root/.cargo/bin:${PATH}" \
+        && rustc --version \
+        && cargo --version
+
+    # Install build tools
+    uv pip install \
+        setuptools-rust maturin
+
+    # Install SGLang Router
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+    pushd /tmp/sglang/sgl-router \
+        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
+        && tree -hs /tmp/sglang/sgl-router/dist \
+        && uv pip install --force-reinstall /tmp/sglang/sgl-router/dist/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /root/.cache \
+        && rm -rf /root/.cargo \
+        && rm -rf /root/.rustup
+EOF
+
+## Install DeepEP
+
+ARG SGLANG_KERNEL_VERSION
+
+ENV SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
+
+RUN <<EOF
+    # DeepEP
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export LD_LIBRARY_PATH="${CANN_HOME}/ascend-toolkit/latest/runtime/lib64/stub:${LD_LIBRARY_PATH}"
+    source ${CANN_HOME}/ascend-toolkit/set_env.sh
+
+    # Install
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch ${SGLANG_KERNEL_VERSION} --single-branch \
+        https://github.com/sgl-project/sgl-kernel-npu.git sgl-kernel-npu
+    pushd /tmp/sgl-kernel-npu \
+        && ./build.sh \
+        && tree -hs /tmp/sgl-kernel-npu/output \
+        && uv pip install /tmp/sgl-kernel-npu/output/deep_ep*.whl /tmp/sgl-kernel-npu/output/sgl_kernel_npu*.whl
+
+    # Postprocess
+    cd "$(pip show deep-ep | awk '/^Location:/ {print $2}')" && ln -s deep_ep/deep_ep_cpp*.so
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Custom Ops
+
+RUN <<EOF
+    # Custom Ops
+
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
+        echo "Skipping Custom Ops installation on ${TARGETARCH}..."
+        exit 0
+    fi
+
+    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    ARCH="$(uname -m)"
+    UV_SKIP_WHEEL_FILENAME_CHECK=1 uv pip install --verbose \
+        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/ops/custom_ops-1.0.${CANN_ARCHS}-cp311-cp311-${OS}_${ARCH}.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sglang-router \
+        --package sgl-kernel-npu \
+        --package deep-ep \
+        --package triton-ascend \
+        --package custom-ops \
+        --package vllm \
+        --package torch \
+        --package torch-npu
+EOF
+
+## Entrypoint
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

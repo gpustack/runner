@@ -2,9 +2,8 @@
 #
 # - backend:   (Required) The accelerated backend to pack for,
 #              used to select the packing rules and Dockerfile below `pack` directory.
-# - services:  (Optional) The inference service to pack for,
+# - services:  (Required) The inference service to pack for,
 #              used to select the Docker build phase described in `pack/${backend}/Dockerfile`.
-#              Default to `voxbox` and `vllm`.
 # - platforms: (Optional) The platforms to build for,
 #              used to select the Docker Linux build platforms.
 #              Default to `linux/amd64` and `linux/arm64`.
@@ -23,6 +22,7 @@ rules:
     services:
       - "mindie"
       - "vllm"
+      - "sglang"
     args:
       - "CANN_VERSION=8.2.rc2"
       - "CANN_ARCHS=a3"
@@ -32,6 +32,7 @@ rules:
     services:
       - "mindie"
       - "vllm"
+      - "sglang"
     args:
       - "CANN_VERSION=8.2.rc2"
       - "CANN_ARCHS=910b"
@@ -66,6 +67,9 @@ rules:
   ## NVIDIA CUDA 12.4.1, using PyTorch +cu126 in linux/amd64.
   ##
   - backend: "cuda"
+    services:
+      - "voxbox"
+      - "vllm"
     args:
       - "CUDA_VERSION=12.4.1"
       - "VOXBOX_TORCH_CUDA_VERSION=12.6.3"
@@ -76,6 +80,9 @@ rules:
   ## NVIDIA CUDA 12.6.3, using PyTorch +cu126 in linux/amd64.
   ##
   - backend: "cuda"
+    services:
+      - "voxbox"
+      - "vllm"
     args:
       - "CUDA_VERSION=12.6.3"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
@@ -84,6 +91,9 @@ rules:
   ## NVIDIA CUDA 12.8.1, using PyTorch +cu128 in both linux/amd64 and linux/arm64.
   ##
   - backend: "cuda"
+    services:
+      - "voxbox"
+      - "vllm"
     args:
       - "CUDA_VERSION=12.8.1"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"

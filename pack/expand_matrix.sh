@@ -172,7 +172,8 @@ EOT
     # Iterate all services of the item.
     SERVICES=($(echo "${RULE}" | jq -cr '(.services[])?'))
     if [[ "${#SERVICES[@]}" -eq 0 ]]; then
-        SERVICES=("voxbox" "vllm")
+        echo "[WARN] No services defined for backend ${BACKEND}, skipping..."
+        continue
     fi
     for SERVICE in "${SERVICES[@]}"; do
         SERVICE_UPPER="$(echo "${SERVICE}" | tr '[:lower:]' '[:upper:]')"
