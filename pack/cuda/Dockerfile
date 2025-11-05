@@ -701,7 +701,7 @@ RUN <<EOF
 /opt/hpcx/ompi/lib
 /opt/hpcx/sharp/lib
 /opt/hpcx/ucc/lib
-/opt/hpcx/ucx/li
+/opt/hpcx/ucx/lib
 EOT
 
     # Review
