@@ -433,6 +433,28 @@
     "backend_version": "12.8",
     "original_backend_version": "12.8.1",
     "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.4.post2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.8-sglang0.5.4.post2",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.8",
+    "original_backend_version": "12.8.1",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.4.post2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cuda12.8-sglang0.5.4.post2",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.8",
+    "original_backend_version": "12.8.1",
+    "backend_variant": "",
     "service": "vllm",
     "service_version": "0.11.0",
     "platform": "linux/amd64",
@@ -565,6 +587,28 @@
     "backend_version": "12.6",
     "original_backend_version": "12.6.3",
     "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.4.post2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.6-sglang0.5.4.post2",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.6",
+    "original_backend_version": "12.6.3",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.4.post2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cuda12.6-sglang0.5.4.post2",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.6",
+    "original_backend_version": "12.6.3",
+    "backend_variant": "",
     "service": "vllm",
     "service_version": "0.11.0",
     "platform": "linux/amd64",
@@ -690,6 +734,28 @@
     "service_version": "0.0.19",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.19",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.4",
+    "original_backend_version": "12.4.1",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.4.post2",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.4-sglang0.5.4.post2",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.4",
+    "original_backend_version": "12.4.1",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.4.post2",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cuda12.4-sglang0.5.4.post2",
     "deprecated": false
   },
   {
