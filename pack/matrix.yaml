@@ -70,6 +70,7 @@ rules:
     services:
       - "voxbox"
       - "vllm"
+      - "sglang"
     args:
       - "CUDA_VERSION=12.4.1"
       - "VOXBOX_TORCH_CUDA_VERSION=12.6.3"
@@ -77,28 +78,35 @@ rules:
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
       - "VLLM_NVIDIA_HPCX_VERSION=2.21.3"
       - "VLLM_AWS_EFA_VERSION=1.43.3"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.4-vllm0.11.0"
+      - "SGLANG_KERNEL_VERSION=0.3.12"
   ## NVIDIA CUDA 12.6.3, using PyTorch +cu126 in linux/amd64.
   ##
   - backend: "cuda"
     services:
       - "voxbox"
       - "vllm"
+      - "sglang"
     args:
       - "CUDA_VERSION=12.6.3"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
       - "VLLM_NVIDIA_HPCX_VERSION=2.21.3"
       - "VLLM_AWS_EFA_VERSION=1.43.3"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.6-vllm0.11.0"
+      - "SGLANG_KERNEL_VERSION=0.3.12"
   ## NVIDIA CUDA 12.8.1, using PyTorch +cu128 in both linux/amd64 and linux/arm64.
   ##
   - backend: "cuda"
     services:
       - "voxbox"
       - "vllm"
+      - "sglang"
     args:
       - "CUDA_VERSION=12.8.1"
       - "VLLM_NVIDIA_GDRCOPY_VERSION=2.4.1"
       - "VLLM_NVIDIA_HPCX_VERSION=2.22.1rc4"
       - "VLLM_AWS_EFA_VERSION=1.43.3"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.0"
 
   #
   # Hygon DTK

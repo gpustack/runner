@@ -74,6 +74,10 @@
 # - VLLM_FLASHINFER_VERSION: Version of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
+# - SGLANG_BASE_IMAGE: Base image for SGLang.
+# - SGLANG_VERSION: Version of SGLang to use.
+# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
+# - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=12.8.1
@@ -97,6 +101,11 @@ ARG VLLM_DEEPGEMM_VERSION=2.1.1.post3
 ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 ARG VLLM_FLASHINFER_VERSION=0.3.1
 ARG VLLM_LMCACHE_VERSION=0.3.8
+ARG SGLANG_BASE_IMAGE=vllm
+ARG SGLANG_VERSION=0.5.4.post2
+ARG SGLANG_TORCH_VERSION=${VLLM_TORCH_VERSION}
+ARG SGLANG_TORCH_CUDA_VERSION=${VLLM_TORCH_CUDA_VERSION}
+ARG SGLANG_KERNEL_VERSION=0.3.16.post4
 
 #
 # Stage Bake Runtime
@@ -1125,7 +1134,7 @@ RUN <<EOF
         CMAKE_MAX_JOBS="8"
     fi
     VL_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${LC_CUDA_ARCHS}" ]]; then
+    if [[ -z "${VL_CUDA_ARCHS}" ]]; then
         if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
             VL_CUDA_ARCHS="7.5 8.0+PTX 8.9"
         elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
@@ -1177,7 +1186,8 @@ RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw 
     fi
 
     # Download pre-compiled cubins
-    FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
+    export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
+    export FLASHINFER_LOGGING_LEVEL=warning
     python -m flashinfer --download-cubin || echo "WARNING: Failed to download flashinfer cubins."
 
     # Cleanup
@@ -1352,6 +1362,7 @@ RUN <<EOF
         --package vllm \
         --package flashinfer-python \
         --package torch \
+        --package triton \
         --package pplx-kernels \
         --package deep-gemm \
         --package deep-ep \
@@ -1361,6 +1372,250 @@ EOF
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+# Stage SGLang
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang-linux-amd64 --target=sglang pack/cuda
+#
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install Protobuf
+
+RUN <<EOF
+    # Protobuf
+
+    # Install
+    apt-get update -y && apt-get install -y --no-install-recommends \
+        libgrpc-dev \
+        libgrpc++-dev \
+        libprotobuf-dev \
+        protobuf-compiler \
+        protobuf-compiler-grpc
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Install Torch
+## It's recommended to use the same Torch version as vLLM for compatibility.
+## So we pass the Torch version from vLLM build stage.
+
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_CUDA_VERSION
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
+
+RUN <<EOF
+    # Torch
+
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]]; then
+        echo "Using the same Torch version as vLLM: ${SGLANG_TORCH_VERSION}"
+        exit 0
+    fi
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+torch==${SGLANG_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
+        uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
+            -r /tmp/requirements.txt
+    else
+        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
+            -r /tmp/requirements.txt
+    fi
+    uv pip install \
+        numpy scipy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install SGLang
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+ARG SGLANG_VLLM_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
+
+RUN <<EOF
+    # SGLang
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    SG_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${SG_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
+            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0"
+        else
+            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${SG_CUDA_ARCHS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export NVCC_THREADS=1
+
+    # Install SGLang
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
+    pushd /tmp/sglang-${SGLANG_VERSION}/python \
+        && uv pip install --verbose .[all]
+
+    # Download pre-compiled cubins
+    export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
+    export FLASHINFER_LOGGING_LEVEL=warning
+    python -m flashinfer --download-cubin
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install SGLang Router
+
+RUN <<EOF
+    # SGlang Router
+
+    # Install Rust
+    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    export PATH="/root/.cargo/bin:${PATH}" \
+        && rustc --version \
+        && cargo --version
+
+    # Install build tools
+    uv pip install \
+        setuptools-rust maturin
+
+    # Install SGLang Router
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+    pushd /tmp/sglang/sgl-router \
+        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
+        && tree -hs /tmp/sglang/sgl-router/dist \
+        && uv pip install --force-reinstall /tmp/sglang/sgl-router/dist/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /root/.cache \
+        && rm -rf /root/.cargo \
+        && rm -rf /root/.rustup
+EOF
+
+## Install SGLANG Kernel
+
+ARG SGLANG_KERNEL_VERSION
+
+ENV SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
+
+RUN <<EOF
+    # SGLANG Kernel
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+
+    # Download
+    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.7" | bc -l) )); then
+        IFS="." read -r KERNEL_MAJOR KERNEL_MINOR KERNEL_PATCH KERNEL_POST <<< "${SGLANG_KERNEL_VERSION}"
+        if [[ "${TARGETARCH}" == "arm64" ]] && [[ "${KERNEL_MAJOR}.${KERNEL_MINOR}" == "0.3" ]] && (( $(echo "${KERNEL_PATCH} < 15" | bc -l) )); then
+            uv pip install --force-reinstall --no-deps \
+                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_aarch64.whl
+        else
+            uv pip install --force-reinstall --no-deps \
+                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu124-cp310-abi3-manylinux2014_$(uname -m).whl
+        fi
+    elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+        uv pip install \
+            sgl-kernel==${SGLANG_KERNEL_VERSION}
+    else
+        uv pip install --force-reinstall --no-deps \
+            https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl
+    fi
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install Dependencies,
+    # see https://github.com/sgl-project/sglang/blob/41c10e67fcae6ac50dfe283655bdf545d224cba9/docker/Dockerfile#L181-L209.
+    cat <<EOT >/tmp/requirements.txt
+nvidia-cutlass-dsl==4.3.0.dev0
+datamodel_code_generator
+mooncake-transfer-engine==0.3.6.post1
+nixl
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sglang-router \
+        --package sgl-kernel \
+        --package flashinfer-python \
+        --package triton \
+        --package vllm \
+        --package torch \
+        --package deep-ep
+EOF
+
+## Entrypoint
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

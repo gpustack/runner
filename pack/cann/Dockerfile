@@ -39,6 +39,7 @@
 # - VLLM_ASCEND_VERSION: Version of vLLM Ascend to use,
 #   if not specified, it will fetch from the vLLM Ascend PyPi RSS.
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
+# - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_VLLM_VERSION: Version of vLLM for SGLang to use.
 # - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
@@ -986,14 +987,14 @@ RUN <<EOF
         && rm -rf /root/.rustup
 EOF
 
-## Install DeepEP
+## Install SGLANG Kernel
 
 ARG SGLANG_KERNEL_VERSION
 
 ENV SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
-    # DeepEP
+    # SGLANG Kernel
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
