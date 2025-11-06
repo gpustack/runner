@@ -17,6 +17,12 @@
 #    - Install vLLM-Ascend from source.
 #    - Install dependencies.
 #    - Postprocess, review installation.
+# 4. sglang target.
+#    - Install Torch.
+#    - Install SGLang from source.
+#    - Install SGLang Kernel/Router.
+#    - Install dependencies.
+#    - Postprocess, review installation.
 
 # Argument usage:
 # - PYTHON_VERSION: Version of Python to use.

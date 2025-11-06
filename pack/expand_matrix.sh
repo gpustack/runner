@@ -172,13 +172,13 @@ EOT
     # Iterate all services of the item.
     SERVICES=($(echo "${RULE}" | jq -cr '(.services[])?'))
     if [[ "${#SERVICES[@]}" -eq 0 ]]; then
-        echo "[WARN] No services defined for backend ${BACKEND}, skipping..."
+        echo "[WARN] No services defined for backend '${BACKEND}', skipping..."
         continue
     fi
     for SERVICE in "${SERVICES[@]}"; do
         SERVICE_UPPER="$(echo "${SERVICE}" | tr '[:lower:]' '[:upper:]')"
         if [[ "${INPUT_TARGET}" != "services" && "${INPUT_TARGET}" != "${SERVICE}" ]]; then
-            echo "[INFO] Skipping build service ${SERVICE} for backend ${BACKEND}..."
+            echo "[INFO] Skipping build service '${SERVICE}' for backend '${BACKEND}' as input target '${INPUT_TARGET}'..."
             continue
         fi
         # Prepare environment variables for sourcing.
@@ -204,7 +204,7 @@ EOT
             rm -f "${INPUT_TEMPDIR}/envs_dedicated"
         TAG="$(echo "${TAG}" | tr '[:upper:]' '[:lower:]')"
         if [[ -n "${INPUT_TAG}" ]] && [[ "${INPUT_TAG}" != "${TAG}"* ]]; then
-            echo "[INFO] Skipping build tag ${TAG}${TAG_SUFFIX} for backend ${BACKEND} service ${SERVICE}..."
+            echo "[INFO] Skipping build tag '${TAG}${TAG_SUFFIX}' for backend '${BACKEND}' service '${SERVICE}' as input tag '${INPUT_TAG}'..."
             continue
         fi
         TAG_X="$(echo "${TAG_X}" | tr '[:upper:]' '[:lower:]')"
@@ -222,7 +222,7 @@ EOT
             IFS="/" read -r OS ARCH VARIANT <<<"${PLATFORM}"
             PLATFORM_TAG="${TAG}-${OS}-${ARCH}"
             if [[ -n "${INPUT_TAG}" ]] && [[ "${PLATFORM_TAG}" != "${INPUT_TAG}"* ]]; then
-                echo "[INFO] Skipping build tag ${PLATFORM_TAG} for backend ${BACKEND} service ${SERVICE}..."
+                echo "[INFO] Skipping build tag '${PLATFORM_TAG}' for backend '${BACKEND}' service '${SERVICE}' as input tag '${INPUT_TAG}'..."
                 continue
             fi
             PLATFORM_TAG_X="${TAG_X}-${OS}-${ARCH}"

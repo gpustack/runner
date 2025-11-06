@@ -76,6 +76,7 @@ PACKAGE_NAMESPACE ?= gpustack
 PACKAGE_REPOSITORY ?= runner
 PACKAGE_CACHE_REPOSITORY ?= runner-build-cache
 PACKAGE_TARGET ?= services
+PACKAGE_POST_OPERATION ?=
 PACKAGE_TAG ?= cuda12.4-vllm0.10.0
 PACKAGE_WITH_CACHE ?= true
 PACKAGE_PUSH ?= false
@@ -99,6 +100,7 @@ package:
 	fi
 	INPUT_NAMESPACE=$(PACKAGE_NAMESPACE) \
 	INPUT_REPOSITORY=$(PACKAGE_REPOSITORY) \
+	INPUT_POST_OPERATION=$(PACKAGE_POST_OPERATION) \
 	INPUT_TARGET=$(PACKAGE_TARGET) \
 	INPUT_TAG=$(PACKAGE_TAG) \
 		source $(SRCDIR)/pack/expand_matrix.sh; \
@@ -123,6 +125,10 @@ package:
 		if [[ "$(PACKAGE_PUSH)" == "true" ]]; then \
 			JOB_EXTRA_ARGS+=("--push"); \
 		fi; \
+		JOB_LOCATION=$(SRCDIR)/pack/$${JOB_BACKEND}; \
+		if [[ -n "$(PACKAGE_POST_OPERATION)" ]]; then \
+		    JOB_LOCATION=$(SRCDIR)/pack/.post_operation/$(PACKAGE_POST_OPERATION)/$${JOB_BACKEND}; \
+		fi; \
 		echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
 		set -x; \
 		docker buildx build \
@@ -132,7 +138,7 @@ package:
 			--platform "$${JOB_PLATFORM}" \
 			--target "$${JOB_TARGET}" \
 			--tag "$${JOB_TAG}" \
-			--file "$(SRCDIR)/pack/$${JOB_BACKEND}/Dockerfile" \
+			--file "$${JOB_LOCATION}/Dockerfile" \
 			--attest "type=provenance,disabled=true" \
 			--attest "type=sbom,disabled=true" \
 			--ulimit nofile=65536:65536 \
@@ -140,7 +146,7 @@ package:
 			--progress plain \
 			$${JOB_ARGS[@]} \
 			$${JOB_EXTRA_ARGS[@]} \
-			$(SRCDIR)/pack/$${JOB_BACKEND}; \
+			$${JOB_LOCATION}; \
 		set +x; \
 	done
 	@echo "--- $@ ---"
