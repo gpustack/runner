@@ -104,7 +104,7 @@ ARG VLLM_DEEPEP_VERSION=1.2.1
 ARG VLLM_DEEPGEMM_VERSION=2.1.1.post3
 ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 ARG VLLM_FLASHINFER_VERSION=0.3.1
-ARG VLLM_LMCACHE_VERSION=0.3.8
+ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.4.post3
 ARG SGLANG_KERNEL_VERSION=0.3.16.post5
@@ -1274,36 +1274,32 @@ RUN <<EOF
     fi
 
     # Install LMCache
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )); then
-        CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-        if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-            CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-        fi
-        if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-            CMAKE_MAX_JOBS="8"
-        fi
-        LC_CUDA_ARCHS="${CUDA_ARCHS}"
-        if [[ -z "${LC_CUDA_ARCHS}" ]]; then
-            if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-                LC_CUDA_ARCHS="7.5 8.0+PTX 8.9"
-            elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-                LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0"
-            else
-                LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
-            fi
-        fi
-        export MAX_JOBS="${CMAKE_MAX_JOBS}"
-        export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
-        export NVCC_THREADS=1
-        git -C /tmp clone --recursive --shallow-submodules \
-            --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
-            https://github.com/LMCache/LMCache.git lmcache
-        sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
-        uv pip install --no-build-isolation --verbose \
-            /tmp/lmcache
-    else
-        uv pip install lmcache==${VLLM_LMCACHE_VERSION}
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    LC_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${LC_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0"
+        else
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
+    export NVCC_THREADS=1
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
+    uv pip install --no-build-isolation --verbose \
+        /tmp/lmcache
 
     # Cleanup
     rm -rf /var/tmp/* \
