@@ -56,7 +56,7 @@ ARG VLLM_VERSION=0.11.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.7.1
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.4.post2
+ARG SGLANG_VERSION=0.5.1
 ARG SGLANG_VLLM_VERSION=0.8.5
 ARG SGLANG_TORCH_VERSION=2.6.0
 ARG SGLANG_KERNEL_VERSION=20251106
@@ -946,8 +946,7 @@ EOT
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
     pushd /tmp/sglang-${SGLANG_VERSION}/python \
-        && rm -rf pyproject.toml \
-        && mv pyproject_other.toml pyproject.toml \
+        && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
         && uv pip install --verbose .[srt_npu]
 
     # Cleanup

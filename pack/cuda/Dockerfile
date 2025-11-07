@@ -102,10 +102,10 @@ ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 ARG VLLM_FLASHINFER_VERSION=0.3.1
 ARG VLLM_LMCACHE_VERSION=0.3.8
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.4.post2
+ARG SGLANG_VERSION=0.5.4.post3
 ARG SGLANG_TORCH_VERSION=${VLLM_TORCH_VERSION}
 ARG SGLANG_TORCH_CUDA_VERSION=${VLLM_TORCH_CUDA_VERSION}
-ARG SGLANG_KERNEL_VERSION=0.3.16.post4
+ARG SGLANG_KERNEL_VERSION=0.3.16.post5
 
 #
 # Stage Bake Runtime
@@ -1188,7 +1188,7 @@ RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw 
     # Download pre-compiled cubins
     export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
     export FLASHINFER_LOGGING_LEVEL=warning
-    python -m flashinfer --download-cubin || echo "WARNING: Failed to download flashinfer cubins."
+    python -m flashinfer --download-cubin
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1460,6 +1460,8 @@ ARG SGLANG_VLLM_VERSION
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
     SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
 
+## Install SGLang
+
 RUN <<EOF
     # SGLang
 
@@ -1529,9 +1531,9 @@ RUN <<EOF
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/* \
-        && rm -rf /root/.cache \
         && rm -rf /root/.cargo \
-        && rm -rf /root/.rustup
+        && rm -rf /root/.rustup \
+        && sed -i '$d' /root/.profile
 EOF
 
 ## Install SGLANG Kernel
@@ -1587,7 +1589,7 @@ RUN <<EOF
     cat <<EOT >/tmp/requirements.txt
 nvidia-cutlass-dsl==4.3.0.dev0
 datamodel_code_generator
-mooncake-transfer-engine==0.3.6.post1
+mooncake-transfer-engine==0.3.7.post2
 nixl
 EOT
     uv pip install \
