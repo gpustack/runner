@@ -20,7 +20,7 @@
 # 4. sglang target.
 #    - Install Torch.
 #    - Install SGLang from source.
-#    - Install SGLang Kernel/Router.
+#    - Install SGLang Router from source.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 
@@ -41,7 +41,6 @@
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
-# - SGLANG_VLLM_VERSION: Version of vLLM for SGLang to use.
 # - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
 ARG PYTHON_VERSION=3.11
@@ -56,8 +55,7 @@ ARG VLLM_VERSION=0.11.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.7.1
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.1.post3
-ARG SGLANG_VLLM_VERSION=0.8.5
+ARG SGLANG_VERSION=0.5.2
 ARG SGLANG_TORCH_VERSION=2.6.0
 ARG SGLANG_KERNEL_VERSION=20251106
 
@@ -895,10 +893,10 @@ EOF
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
-ARG SGLANG_VLLM_VERSION
+ARG SGLANG_KERNEL_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
     # SGLang
@@ -907,14 +905,15 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
-    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/Ascend/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
 
     # Install vLLM
+    SGLANG_VLLM_VERSION=0.8.5
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm-${SGLANG_VLLM_VERSION}
@@ -948,6 +947,21 @@ EOT
     pushd /tmp/sglang-${SGLANG_VERSION}/python \
         && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
         && uv pip install --verbose .[srt_npu]
+
+    export LD_LIBRARY_PATH="${CANN_HOME}/ascend-toolkit/latest/runtime/lib64/stub:${LD_LIBRARY_PATH}"
+    source ${CANN_HOME}/ascend-toolkit/set_env.sh
+
+    # Install SGLang Kernel
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch ${SGLANG_KERNEL_VERSION} --single-branch \
+        https://github.com/sgl-project/sgl-kernel-npu.git sgl-kernel-npu
+    pushd /tmp/sgl-kernel-npu \
+        && ./build.sh \
+        && tree -hs /tmp/sgl-kernel-npu/output \
+        && uv pip install /tmp/sgl-kernel-npu/output/deep_ep*.whl /tmp/sgl-kernel-npu/output/sgl_kernel_npu*.whl
+
+    # Postprocess SGLang Kernel (DeepEP)
+    cd "$(pip show deep-ep | awk '/^Location:/ {print $2}')" && ln -s deep_ep/deep_ep_cpp*.so
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -985,44 +999,8 @@ RUN <<EOF
         && rm -rf /root/.cargo \
         && rm -rf /root/.rustup \
         && sed -i '$d' /root/.profile \
+        && sed -i '$d' /root/.bashrc \
         && ccache --clear --clean
-EOF
-
-## Install SGLANG Kernel
-
-ARG SGLANG_KERNEL_VERSION
-
-ENV SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
-
-RUN <<EOF
-    # SGLANG Kernel
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export LD_LIBRARY_PATH="${CANN_HOME}/ascend-toolkit/latest/runtime/lib64/stub:${LD_LIBRARY_PATH}"
-    source ${CANN_HOME}/ascend-toolkit/set_env.sh
-
-    # Install
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch ${SGLANG_KERNEL_VERSION} --single-branch \
-        https://github.com/sgl-project/sgl-kernel-npu.git sgl-kernel-npu
-    pushd /tmp/sgl-kernel-npu \
-        && ./build.sh \
-        && tree -hs /tmp/sgl-kernel-npu/output \
-        && uv pip install /tmp/sgl-kernel-npu/output/deep_ep*.whl /tmp/sgl-kernel-npu/output/sgl_kernel_npu*.whl
-
-    # Postprocess
-    cd "$(pip show deep-ep | awk '/^Location:/ {print $2}')" && ln -s deep_ep/deep_ep_cpp*.so
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
 EOF
 
 ## Install Custom Ops

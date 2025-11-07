@@ -11,7 +11,7 @@
 #    - Postprocess, review installation.
 # 3.1. vllm-build target.
 #    - Install Torch.
-#    - Install Dependencies.
+#    - Install dependencies.
 #    - Build GDRCopy if allowed.
 #    - Build FlashInfer if allowed.
 #    - Build DeepGEMM if allowed.
@@ -32,10 +32,9 @@
 #    - Install LMCache.
 #    - Install dependencies.
 #    - Postprocess, review installation.
-# 4.1. sglang target.
-#    - Install Torch.
+# 4.1. sglang target, reuse vllm target.
 #    - Install SGLang from source.
-#    - Install SGLang Router/Kernel.
+#    - Install SGLang Router from source.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 
@@ -82,7 +81,6 @@
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
-# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
@@ -109,8 +107,6 @@ ARG VLLM_FLASHINFER_VERSION=0.3.1
 ARG VLLM_LMCACHE_VERSION=0.3.8
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.4.post3
-ARG SGLANG_TORCH_VERSION=${VLLM_TORCH_VERSION}
-ARG SGLANG_TORCH_CUDA_VERSION=${VLLM_TORCH_CUDA_VERSION}
 ARG SGLANG_KERNEL_VERSION=0.3.16.post5
 
 #
@@ -1419,59 +1415,19 @@ RUN <<EOF
         && rm -rf /var/cache/apt
 EOF
 
-## Install Torch
-## It's recommended to use the same Torch version as vLLM for compatibility.
-## So we pass the Torch version from vLLM build stage.
-
-ARG SGLANG_TORCH_VERSION
-ARG SGLANG_TORCH_CUDA_VERSION
-
-ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
-    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
-
-RUN <<EOF
-    # Torch
-
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]]; then
-        echo "Using the same Torch version as vLLM: ${SGLANG_TORCH_VERSION}"
-        exit 0
-    fi
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
-    uv pip install \
-        numpy scipy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install SGLang
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
-ARG SGLANG_VLLM_VERSION
+ARG SGLANG_KERNEL_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
-
-## Install SGLang
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
     # SGLang
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -1502,14 +1458,33 @@ RUN <<EOF
     pushd /tmp/sglang-${SGLANG_VERSION}/python \
         && uv pip install --verbose .[all]
 
-    # Download pre-compiled cubins
+    # Download FlashInfer pre-compiled cubins
     export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
     export FLASHINFER_LOGGING_LEVEL=warning
     python -m flashinfer --download-cubin
 
+    # Install pre-complied SGLang Kernel
+    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.7" | bc -l) )); then
+        IFS="." read -r KERNEL_MAJOR KERNEL_MINOR KERNEL_PATCH KERNEL_POST <<< "${SGLANG_KERNEL_VERSION}"
+        if [[ "${TARGETARCH}" == "arm64" ]] && [[ "${KERNEL_MAJOR}.${KERNEL_MINOR}" == "0.3" ]] && (( $(echo "${KERNEL_PATCH} < 15" | bc -l) )); then
+            uv pip install --force-reinstall --no-deps \
+                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_aarch64.whl
+        else
+            uv pip install --force-reinstall --no-deps \
+                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu124-cp310-abi3-manylinux2014_$(uname -m).whl
+        fi
+    elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+        uv pip install \
+            sgl-kernel==${SGLANG_KERNEL_VERSION}
+    else
+        uv pip install --force-reinstall --no-deps \
+            https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl
+    fi
+
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Install SGLang Router
@@ -1542,50 +1517,8 @@ RUN <<EOF
         && rm -rf /root/.cargo \
         && rm -rf /root/.rustup \
         && sed -i '$d' /root/.profile \
+        && sed -i '$d' /root/.bashrc \
         && ccache --clear --clean
-EOF
-
-## Install SGLANG Kernel
-
-ARG SGLANG_KERNEL_VERSION
-
-ENV SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
-
-RUN <<EOF
-    # SGLANG Kernel
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-
-    # Download
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.7" | bc -l) )); then
-        IFS="." read -r KERNEL_MAJOR KERNEL_MINOR KERNEL_PATCH KERNEL_POST <<< "${SGLANG_KERNEL_VERSION}"
-        if [[ "${TARGETARCH}" == "arm64" ]] && [[ "${KERNEL_MAJOR}.${KERNEL_MINOR}" == "0.3" ]] && (( $(echo "${KERNEL_PATCH} < 15" | bc -l) )); then
-            uv pip install --force-reinstall --no-deps \
-                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_aarch64.whl
-        else
-            uv pip install --force-reinstall --no-deps \
-                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu124-cp310-abi3-manylinux2014_$(uname -m).whl
-        fi
-    elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
-        uv pip install \
-            sgl-kernel==${SGLANG_KERNEL_VERSION}
-    else
-        uv pip install --force-reinstall --no-deps \
-            https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl
-    fi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
 EOF
 
 ## Install Dependencies
