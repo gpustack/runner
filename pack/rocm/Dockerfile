@@ -8,7 +8,7 @@
 #    - Install Platform toolkit.
 # 2.1. vllm-build target.
 #    - Install Torch.
-#    - Install Dependencies.
+#    - Install dependencies.
 #    - Build Triton if allowed.
 #    - Build FashAttention if allowed.
 #    - Build AITER if allowed.
@@ -18,6 +18,13 @@
 #    - Install Triton if existed.
 #    - Install FlashAttention if existed.
 #    - Install AITER if existed.
+#    - Install dependencies.
+#    - Postprocess, review installation.
+# 3.1. sglang-build target, reuse vllm target.
+#    - Build AITER if needed.
+# 3.2. sglang target.
+#    - Install SGLang/Kernel from source.
+#    - Install SGLang Router.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 
@@ -50,6 +57,11 @@
 # - VLLM_AITER_VERSION: Version of AITER to use,
 #   which is used to build the AITER wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
+# - SGLANG_BASE_IMAGE: Base image for SGLang.
+# - SGLANG_VERSION: Version of SGLang to use.
+# - SGLANG_AITER_VERSION: Version of AITER to use,
+#   which is used to build the AITER wheel.
+# - SGLANG_MOONCAKE_VERSION: Version of MoonCake to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
@@ -67,6 +79,10 @@ ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_AITER_REPOSITORY=https://github.com/ROCm/aiter.git
 ARG VLLM_AITER_VERSION=0.1.5.post4
 ARG VLLM_LMCACHE_VERSION=0.3.8
+ARG SGLANG_BASE_IMAGE=vllm
+ARG SGLANG_VERSION=0.5.4.post3
+ARG SGLANG_AITER_VERSION=0.1.6.post1
+ARG SGLANG_MOONCAKE_VERSION=0.3.7.post2
 
 # Stage Bake Runtime
 #
@@ -898,6 +914,407 @@ ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
     TOKENIZERS_PARALLELISM=false \
     SAFETENSORS_FAST_GPU=1 \
     HIP_FORCE_DEV_KERNARG=1
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+# Stage SGLang Prepare
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm{ROCM_VERSION%.*}-sglang-prepare-linux-amd64 --target=sglang-build pack/rocm
+#
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang-prepare
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install Tools
+
+RUN <<EOF
+    # Tools
+
+    # Install
+    apt-get update -y && apt-get install -y --no-install-recommends \
+        libgrpc-dev \
+        libgrpc++-dev \
+        libprotobuf-dev \
+        protobuf-compiler \
+        protobuf-compiler-grpc \
+        libtool \
+        autoconf \
+        librdmacm-dev \
+        rdma-core \
+        rdmacm-utils \
+        infiniband-diags \
+        ibverbs-utils \
+        libibverbs-dev \
+        openssh-server \
+        openmpi-bin \
+        openmpi-common \
+        libopenmpi-dev
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+# Stage SGLang Prepare AITER
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-prepare-aiter-linux-amd64 --target=sglang-prepare-aiter pack/rocm
+#
+
+FROM sglang-prepare AS sglang-prepare-aiter
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Prepare AITER
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_AITER_VERSION
+
+ENV SGLANG_AITER_VERSION=${SGLANG_AITER_VERSION}
+
+RUN <<EOF
+    # AITER
+
+    if [[ "${SGLANG_AITER_VERSION}" == "${VLLM_AITER_VERSION}" ]]; then
+        echo "Skipping AITER building as it is already built in vLLM..."
+        exit 0
+    fi
+
+    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${SGLANG_TORCH_VERSION}"
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+    IFS="." read -r AT_MAJOR AT_MINOR AT_PATCH <<< "${SGLANG_AITER_VERSION}"
+
+    # Support ARM64 only
+    if [[ "${TARGETARCH}" != "amd64" ]]; then
+        echo "Skipping AITER building for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Prepare
+    TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
+    echo "${TORCH_LIB_PREFIX}/torch/lib" >> /etc/ld.so.conf.d/python3.conf
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_AITER_VERSION} --single-branch \
+        ${VLLM_AITER_REPOSITORY} aiter
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    AT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${AT_ROCM_ARCHS}" ]]; then
+        AT_ROCM_ARCHS="gfx942;gfx950"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export GPU_ARCHS="${AT_ROCM_ARCHS}"
+    export LD_LIBRARY_PATH="${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
+    export BUILD_TARGET="rocm"
+    export PREBUILD_KERNELS=1
+    echo "Building AITER with the following environment variables:"
+    env
+    pushd /tmp/aiter \
+      && python setup.py bdist_wheel --dist-dir=dist \
+      && tree -hs /tmp/aiter/dist \
+      && mv /tmp/aiter/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+
+# Stage SGLang Prepare MoonCake
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-prepare-mooncake-linux-amd64 --target=sglang-prepare-mooncake pack/rocm
+#
+
+FROM sglang-prepare AS sglang-prepare-mooncake
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install Go
+
+RUN <<EOF
+    # Go
+
+    curl --retry 3 --retry-connrefused https://go.dev/dl/go1.22.2.linux-${TARGETARCH}.tar.gz | tar -xz -C /usr/local
+
+    # FIX: Hide Python3.10 to avoid issues with Python version mismatch.
+    PYTHON3_10_BIN=$(which python3.10 || true)
+    if [[ -n "${PYTHON3_10_BIN}" ]]; then
+        mv "${PYTHON3_10_BIN}" /tmp/python3.10
+    fi
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+## Prepare MoonCake
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_MOONCAKE_VERSION
+
+ENV SGLANG_MOONCAKE_VERSION=${SGLANG_MOONCAKE_VERSION}
+
+RUN <<EOF
+    # MoonCake
+
+    # Build MoonCake
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export BUILD_WITH_EP=1
+    echo "Building MoonCake with the following environment variables:"
+    env
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_MOONCAKE_VERSION} --single-branch \
+        https://github.com/kvcache-ai/Mooncake.git mooncake \
+    pushd /tmp/mooncake \
+        && ./dependencies.sh -y \
+        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DBUILD_EXAMPLES=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DWITH_EP=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build -j${MAX_JOBS} \
+        && ./scripts/build_wheel.sh \
+        && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
+        && mv /tmp/mooncake/mooncake-wheel/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage SGLang
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-linux-amd64 --target=sglang pack/rocm
+#
+
+FROM sglang-prepare AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install SGLang
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+RUN <<EOF
+    # SGLang
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    SG_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${SG_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
+            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
+        elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        else
+            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
+    export AMDGPU_TARGET="${SG_ROCM_ARCHS}"
+
+    # Install vLLM
+    EXTRA_INDEX_URL="https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR}"
+    if [[ "${TARGETARCH}" == "arm64" ]]; then
+        EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
+    fi
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/ROCm/vllm.git vllm \
+        && pushd /tmp/vllm \
+        && git checkout 9f6b92db47c3444b7a7d67451ba0c3a2d6af4c2c
+    VLLM_TARGET_DEVICE="rocm" \
+        uv pip install --no-build-isolation --verbose --extra-index-url ${EXTRA_INDEX_URL} \
+        /tmp/vllm
+
+    # Download SGLang
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
+
+    # Copy config files to support MI300X in virtualized environments (MI300X_VF).
+    # Symlinks will not be created in image build.
+    # See https://github.com/sgl-project/sglang/blob/09938e1f82334a98c124ae3352d893480963775f/docker/rocm.Dockerfile#L197C2-L200.
+    find /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/quantization/configs/ \
+         /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
+         -type f -name '*MI300X*' | xargs -I {} sh -c 'vf_config=$(echo "$1" | sed "s/MI300X/MI300X_VF/"); cp "$1" "$vf_config"' -- {}
+
+    # Install SGLang
+    pushd /tmp/sglang-${SGLANG_VERSION}/python \
+        && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
+        && uv pip install --verbose .[all_hip]
+
+    # Install SGLang Kernel
+    pushd /tmp/sglang-${SGLANG_VERSION}/sgl-kernel \
+        && if [[ -f pyproject_rocm.toml ]]; then mv pyproject_rocm.toml pyproject.toml; fi \
+        && python setup_rocm.py install
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+## Install SGLang Router
+
+RUN <<EOF
+    # SGlang Router
+
+    # Install Rust
+    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    export PATH="/root/.cargo/bin:${PATH}" \
+        && rustc --version \
+        && cargo --version
+
+    # Install build tools
+    uv pip install \
+        setuptools-rust maturin
+
+    # Install SGLang Router
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+    pushd /tmp/sglang/sgl-router \
+        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
+        && tree -hs /tmp/sglang/sgl-router/dist \
+        && uv pip install --force-reinstall /tmp/sglang/sgl-router/dist/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /root/.cargo \
+        && rm -rf /root/.rustup \
+        && sed -i '$d' /root/.profile \
+        && sed -i '$d' /root/.bashrc \
+        && ccache --clear --clean
+EOF
+
+## Install AITER
+
+RUN --mount=type=bind,from=sglang-prepare-aiter,source=/,target=/aiter,rw <<EOF
+    # AITER
+
+    if [[ ! -d /aiter/workspace ]]; then
+        echo "Skipping AITER building as it is already built in vLLM..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /aiter/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install MoonCake
+
+RUN --mount=type=bind,from=sglang-prepare-mooncake,source=/,target=/mooncake,rw <<EOF
+    # MoonCake
+
+    if [[ ! -d /mooncake/workspace ]]; then
+        echo "Skipping MoonCake installation for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /mooncake/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Reinstall Fast-Hadamard-Transform
+
+RUN <<EOF
+    # Fast-Hadamard-Transform
+
+    # Reinstall Fast-Hadamard-Transform
+    git -C /tmp clone --recursive --shallow-submodules \
+        --branch rocm --single-branch \
+        https://github.com/jeffdaily/fast-hadamard-transform.git fast-hadamard-transform \
+        && pushd /tmp/fast-hadamard-transform \
+        && git checkout 46efb7d776d38638fc39f3c803eaee3dd7016bd1
+    uv pip install --verbose \
+        /tmp/fast-hadamard-transform
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+## Entrypoint
+
+ENV HIP_FORCE_DEV_KERNARG=1 \
+    HSA_NO_SCRATCH_RECLAIM=1 \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_INT4_WEIGHT=0 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_ROCM_DISABLE_LINEARQUANT=0 \
+    SGLANG_ROCM_FUSED_DECODE_MLA=1 \
+    SGLANG_SET_CPU_AFFINITY=1\
+    SGLANG_USE_AITER=1 \
+    SGLANG_USE_ROCM700A=1 \
+    NCCL_MIN_NCHANNELS=112 \
+    VLLM_FP8_PADDING=1 \
+    VLLM_FP8_ACT_PADDING=1 \
+    VLLM_FP8_WEIGHT_PADDING=1 \
+    VLLM_FP8_REDUCE_CONV=1 \
+    TORCHINDUCTOR_MAX_AUTOTUNE=1 \
+    TORCHINDUCTOR_MAX_AUTOTUNE_POINTWISE=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

@@ -838,10 +838,10 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
-## Install Protobuf
+## Install Tools
 
 RUN <<EOF
-    # Protobuf
+    # Tools
 
     # Install
     apt-get update -y && apt-get install -y --no-install-recommends \
