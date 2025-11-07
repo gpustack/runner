@@ -70,7 +70,7 @@ ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_TRITON_VERSION=3.5.0
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_AITER_VERSION=0.1.6.post1
+ARG VLLM_AITER_VERSION=0.1.6.post2
 ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.4.post3
@@ -611,7 +611,7 @@ RUN <<EOF
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export GPU_ARCHS="${AT_ROCM_ARCHS}"
-    export LD_LIBRARY_PATH="${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="/opt/rocm/lib:/usr/local/lib:${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
     export BUILD_TARGET="rocm"
     export PREBUILD_KERNELS=1
     echo "Building AITER with the following environment variables:"
@@ -1150,6 +1150,19 @@ RUN <<EOF
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
     export TORCH_DONT_CHECK_COMPILER_ABI=1
+
+    # Install vLLM
+    EXTRA_INDEX_URL="https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR}"
+    if [[ "${TARGETARCH}" == "arm64" ]]; then
+        EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
+    fi
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/ROCm/vllm.git vllm \
+        && pushd /tmp/vllm \
+        && git checkout 9f6b92db47c3444b7a7d67451ba0c3a2d6af4c2c
+    VLLM_TARGET_DEVICE="rocm" \
+        uv pip install --no-build-isolation --verbose --extra-index-url ${EXTRA_INDEX_URL} \
+        /tmp/vllm
 
     # Download SGLang
     git -C /tmp clone --recursive --shallow-submodules \
