@@ -44,12 +44,8 @@
 #   If not specified, it will be set as ROCM_VERSION.
 # - VLLM_BUILD_BASE_IMAGE: Base image for vLLM build,
 #   which is used to build wheels.
-# - VLLM_TRITON_REPOSITORY: Repository URL of Triton to use,
-#   which is used to build the Triton wheel.
 # - VLLM_TRITON_VERSION: Version of Triton to use,
 #   which is used to build the Triton wheel.
-# - VLLM_FLASHATTENTION_REPOSITORY: Repository URL of FlashAttention to use,
-#   which is used to build the FlashAttention wheel.
 # - VLLM_FLASHATTENTION_VERSION: Version of FlashAttention to use,
 #   which is used to build the FlashAttention wheel.
 # - VLLM_AITER_REPOSITORY: Repository URL of AITER to use,
@@ -72,16 +68,13 @@ ARG VLLM_TORCH_SOURCE=radeon
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_TRITON_REPOSITORY=https://github.com/triton-lang/triton.git
 ARG VLLM_TRITON_VERSION=3.5.0
-ARG VLLM_FLASHATTENTION_REPOSITORY=https://github.com/Dao-AILab/flash-attention.git
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_AITER_REPOSITORY=https://github.com/ROCm/aiter.git
-ARG VLLM_AITER_VERSION=0.1.5.post4
+ARG VLLM_AITER_VERSION=0.1.6.post1
 ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.4.post3
-ARG SGLANG_AITER_VERSION=0.1.6.post1
+ARG SGLANG_AITER_VERSION=${VLLM_AITER_VERSION}
 ARG SGLANG_MOONCAKE_VERSION=0.3.7.post2
 
 # Stage Bake Runtime
@@ -423,11 +416,9 @@ ARG TARGETARCH
 ## Build Triton
 
 ARG CMAKE_MAX_JOBS
-ARG VLLM_TRITON_REPOSITORY
 ARG VLLM_TRITON_VERSION
 
-ENV VLLM_TRITON_REPOSITORY=${VLLM_TRITON_REPOSITORY} \
-    VLLM_TRITON_VERSION=${VLLM_TRITON_VERSION}
+ENV VLLM_TRITON_VERSION=${VLLM_TRITON_VERSION}
 
 RUN <<EOF
     # Triton
@@ -452,7 +443,7 @@ EOT
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_TRITON_VERSION} --single-branch \
-        ${VLLM_TRITON_REPOSITORY} triton
+        https://github.com/triton-lang/triton.git triton
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -509,11 +500,9 @@ ARG TARGETARCH
 ## Build FlashAttention
 
 ARG CMAKE_MAX_JOBS
-ARG VLLM_FLASHATTENTION_REPOSITORY
 ARG VLLM_FLASHATTENTION_VERSION
 
-ENV VLLM_FLASHATTENTION_REPOSITORY=${VLLM_FLASHATTENTION_REPOSITORY} \
-    VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
+ENV VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
 
 RUN <<EOF
     # FlashAttention
@@ -531,7 +520,7 @@ RUN <<EOF
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_FLASHATTENTION_VERSION} --single-branch \
-        ${VLLM_FLASHATTENTION_REPOSITORY} flashattention
+        https://github.com/Dao-AILab/flash-attention.git flashattention
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -582,11 +571,9 @@ ARG TARGETARCH
 ## Build AITER
 
 ARG CMAKE_MAX_JOBS
-ARG VLLM_AITER_REPOSITORY
 ARG VLLM_AITER_VERSION
 
-ENV VLLM_AITER_REPOSITORY=${VLLM_AITER_REPOSITORY} \
-    VLLM_AITER_VERSION=${VLLM_AITER_VERSION}
+ENV VLLM_AITER_VERSION=${VLLM_AITER_VERSION}
 
 RUN <<EOF
     # AITER
@@ -608,7 +595,7 @@ RUN <<EOF
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_AITER_VERSION} --single-branch \
-        ${VLLM_AITER_REPOSITORY} aiter
+        https://github.com/ROCm/aiter.git aiter
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -739,7 +726,7 @@ RUN <<EOF
         elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
             VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         else
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -848,7 +835,7 @@ RUN <<EOF
         elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
             LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         else
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -957,7 +944,9 @@ RUN <<EOF
         openssh-server \
         openmpi-bin \
         openmpi-common \
-        libopenmpi-dev
+        libopenmpi-dev \
+        zip \
+        unzip
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -988,7 +977,7 @@ ENV SGLANG_AITER_VERSION=${SGLANG_AITER_VERSION}
 RUN <<EOF
     # AITER
 
-    if [[ "${SGLANG_AITER_VERSION}" == "${VLLM_AITER_VERSION}" ]]; then
+    if [[ "${SGLANG_AITER_VERSION}" == "$(pip show aiter | grep Version | cut -d' ' -f 2)" ]]; then
         echo "Skipping AITER building as it is already built in vLLM..."
         exit 0
     fi
@@ -1010,7 +999,7 @@ RUN <<EOF
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_AITER_VERSION} --single-branch \
-        ${VLLM_AITER_REPOSITORY} aiter
+        https://github.com/ROCm/aiter.git aiter
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -1060,7 +1049,7 @@ ARG TARGETARCH
 RUN <<EOF
     # Go
 
-    curl --retry 3 --retry-connrefused https://go.dev/dl/go1.22.2.linux-${TARGETARCH}.tar.gz | tar -xz -C /usr/local
+    curl --retry 3 --retry-connrefused -fL https://go.dev/dl/go1.22.2.linux-${TARGETARCH}.tar.gz | tar -xz -C /usr/local
 
     # FIX: Hide Python3.10 to avoid issues with Python version mismatch.
     PYTHON3_10_BIN=$(which python3.10 || true)
@@ -1098,7 +1087,7 @@ RUN <<EOF
     env
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_MOONCAKE_VERSION} --single-branch \
-        https://github.com/kvcache-ai/Mooncake.git mooncake \
+        https://github.com/kvcache-ai/Mooncake.git mooncake
     pushd /tmp/mooncake \
         && ./dependencies.sh -y \
         && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DBUILD_EXAMPLES=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DWITH_EP=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
@@ -1155,48 +1144,33 @@ RUN <<EOF
         elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
             SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
         else
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export COMPILE_CUSTOM_KERNELS=1
     export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
-    export AMDGPU_TARGET="${SG_ROCM_ARCHS}"
-
-    # Install vLLM
-    EXTRA_INDEX_URL="https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR}"
-    if [[ "${TARGETARCH}" == "arm64" ]]; then
-        EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
-    fi
-    git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/ROCm/vllm.git vllm \
-        && pushd /tmp/vllm \
-        && git checkout 9f6b92db47c3444b7a7d67451ba0c3a2d6af4c2c
-    VLLM_TARGET_DEVICE="rocm" \
-        uv pip install --no-build-isolation --verbose --extra-index-url ${EXTRA_INDEX_URL} \
-        /tmp/vllm
+    export TORCH_DONT_CHECK_COMPILER_ABI=1
 
     # Download SGLang
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
 
+    # Install SGLang
     # Copy config files to support MI300X in virtualized environments (MI300X_VF).
     # Symlinks will not be created in image build.
     # See https://github.com/sgl-project/sglang/blob/09938e1f82334a98c124ae3352d893480963775f/docker/rocm.Dockerfile#L197C2-L200.
     find /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/quantization/configs/ \
          /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
          -type f -name '*MI300X*' | xargs -I {} sh -c 'vf_config=$(echo "$1" | sed "s/MI300X/MI300X_VF/"); cp "$1" "$vf_config"' -- {}
-
-    # Install SGLang
     pushd /tmp/sglang-${SGLANG_VERSION}/python \
         && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
-        && uv pip install --verbose .[all_hip]
+        && uv pip install --verbose --no-deps .[all_hip]
 
     # Install SGLang Kernel
     pushd /tmp/sglang-${SGLANG_VERSION}/sgl-kernel \
         && if [[ -f pyproject_rocm.toml ]]; then mv pyproject_rocm.toml pyproject.toml; fi \
-        && python setup_rocm.py install
+        && AMDGPU_TARGET="gfx950" python setup_rocm.py install
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1294,6 +1268,23 @@ RUN <<EOF
     rm -rf /var/tmp/* \
         && rm -rf /tmp/* \
         && ccache --clear --clean
+EOF
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sglang-router \
+        --package sgl-kernel \
+        --package flashinfer-python \
+        --package triton \
+        --package vllm \
+        --package torch \
+        --package deep-ep
 EOF
 
 ## Entrypoint

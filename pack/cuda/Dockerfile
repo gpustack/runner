@@ -74,8 +74,6 @@
 #   which is used to build the DeepEP wheel.
 # - VLLM_DEEPGEMM_VERSION: Version of DeepGEMM to use,
 #   which is used to build the DeepGEMM wheel.
-# - VLLM_FLASHINFER_REPOSITORY: Repository URL of FlashInfer to use,
-#   which is used to build the FlashInfer wheel.
 # - VLLM_FLASHINFER_VERSION: Version of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
@@ -102,7 +100,6 @@ ARG VLLM_AWS_EFA_VERSION=1.43.3
 ARG VLLM_PPLX_KERNEL_COMMIT=c336faf
 ARG VLLM_DEEPEP_VERSION=1.2.1
 ARG VLLM_DEEPGEMM_VERSION=2.1.1.post3
-ARG VLLM_FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 ARG VLLM_FLASHINFER_VERSION=0.3.1
 ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
@@ -557,11 +554,9 @@ ARG TARGETARCH
 ## Build FlashInfer
 
 ARG CMAKE_MAX_JOBS
-ARG VLLM_FLASHINFER_REPOSITORY
 ARG VLLM_FLASHINFER_VERSION
 
-ENV VLLM_FLASHINFER_REPOSITORY=${VLLM_FLASHINFER_REPOSITORY} \
-    VLLM_FLASHINFER_VERSION=${VLLM_FLASHINFER_VERSION}
+ENV VLLM_FLASHINFER_VERSION=${VLLM_FLASHINFER_VERSION}
 
 RUN <<EOF
     # FlashInfer
@@ -587,7 +582,7 @@ EOT
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_FLASHINFER_VERSION} --single-branch \
-        ${VLLM_FLASHINFER_REPOSITORY} flashinfer
+        https://github.com/flashinfer-ai/flashinfer.git flashinfer
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
