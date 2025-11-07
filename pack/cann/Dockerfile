@@ -56,7 +56,7 @@ ARG VLLM_VERSION=0.11.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.7.1
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.1
+ARG SGLANG_VERSION=0.5.1.post3
 ARG SGLANG_VLLM_VERSION=0.8.5
 ARG SGLANG_TORCH_VERSION=2.6.0
 ARG SGLANG_KERNEL_VERSION=20251106
@@ -951,7 +951,8 @@ EOT
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Install SGLang Router
@@ -981,9 +982,10 @@ RUN <<EOF
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/* \
-        && rm -rf /root/.cache \
         && rm -rf /root/.cargo \
-        && rm -rf /root/.rustup
+        && rm -rf /root/.rustup \
+        && sed -i '$d' /root/.profile \
+        && ccache --clear --clean
 EOF
 
 ## Install SGLANG Kernel

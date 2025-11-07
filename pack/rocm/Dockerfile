@@ -9,10 +9,10 @@
 # 2.1. vllm-build target.
 #    - Install Torch.
 #    - Install Dependencies.
-# 2.2. vllm-build-triton target.
-# 2.3. vllm-build-flashattention target.
-# 2.4. vllm-build-aiter target.
-# 2.5. vllm target.
+#    - Build Triton if allowed.
+#    - Build FashAttention if allowed.
+#    - Build AITER if allowed.
+# 2.2. vllm target.
 #    - Install Torch.
 #    - Install vLLM from source.
 #    - Install Triton if existed.
@@ -744,7 +744,8 @@ RUN <<EOF
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Instal Triton
@@ -852,7 +853,8 @@ RUN <<EOF
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Enhance Ray

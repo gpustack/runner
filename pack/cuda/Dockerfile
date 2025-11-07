@@ -32,6 +32,12 @@
 #    - Install LMCache.
 #    - Install dependencies.
 #    - Postprocess, review installation.
+# 4.1. sglang target.
+#    - Install Torch.
+#    - Install SGLang from source.
+#    - Install SGLang Router/Kernel.
+#    - Install dependencies.
+#    - Postprocess, review installation.
 
 # Argument usage:
 # - PYTHON_VERSION: Version of Python to use.
@@ -1160,7 +1166,8 @@ RUN <<EOF
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Install FlashInfer
@@ -1304,7 +1311,8 @@ RUN <<EOF
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Enhance Ray
@@ -1533,7 +1541,8 @@ RUN <<EOF
         && rm -rf /tmp/* \
         && rm -rf /root/.cargo \
         && rm -rf /root/.rustup \
-        && sed -i '$d' /root/.profile
+        && sed -i '$d' /root/.profile \
+        && ccache --clear --clean
 EOF
 
 ## Install SGLANG Kernel
