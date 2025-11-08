@@ -56,6 +56,7 @@ class ListImagesSubCommand(SubCommand):
     service: str
     service_version: str
     service_version_prefix: str
+    repository: str
     platform: str
     format: str
 
@@ -111,6 +112,12 @@ class ListImagesSubCommand(SubCommand):
         )
 
         list_parser.add_argument(
+            "--repository",
+            type=str,
+            help="Filter images by repository name",
+        )
+
+        list_parser.add_argument(
             "--platform",
             type=str,
             help="Filter images by platform",
@@ -135,6 +142,7 @@ class ListImagesSubCommand(SubCommand):
         self.service = args.service
         self.service_version = args.service_version
         self.service_version_prefix = args.service_version_prefix
+        self.repository = args.repository
         self.platform = args.platform
         self.format = args.format or "text"
 
@@ -147,6 +155,7 @@ class ListImagesSubCommand(SubCommand):
             service=self.service,
             service_version=self.service_version,
             service_version_prefix=self.service_version_prefix,
+            repository=self.repository,
             platform=self.platform,
         )
         if not images:
@@ -173,6 +182,7 @@ class SaveImagesSubCommand(SubCommand):
     service: str
     service_version: str
     service_version_prefix: str
+    repository: str
     platform: str
     max_workers: int
     max_retries: int
@@ -232,6 +242,12 @@ class SaveImagesSubCommand(SubCommand):
             "--service-version-prefix",
             type=str,
             help="Filter gpustack/runner images by service version prefix",
+        )
+
+        save_parser.add_argument(
+            "--repository",
+            type=str,
+            help="Filter images by repository name",
         )
 
         save_parser.add_argument(
@@ -305,6 +321,7 @@ class SaveImagesSubCommand(SubCommand):
         self.service = args.service
         self.service_version = args.service_version
         self.service_version_prefix = args.service_version_prefix
+        self.repository = args.repository
         self.platform = args.platform or _get_current_platform()
         self.max_workers = args.max_workers
         self.max_retries = args.max_retries
@@ -332,6 +349,7 @@ class SaveImagesSubCommand(SubCommand):
             service=self.service,
             service_version=self.service_version,
             service_version_prefix=self.service_version_prefix,
+            repository=self.repository,
             platform=self.platform,
         )
         if not images:
@@ -471,6 +489,7 @@ class CopyImagesSubCommand(SubCommand):
     service: str
     service_version: str
     service_version_prefix: str
+    repository: str
     platform: str
     max_workers: int
     max_retries: int
@@ -533,6 +552,12 @@ class CopyImagesSubCommand(SubCommand):
             "--service-version-prefix",
             type=str,
             help="Filter gpustack/runner images by service version prefix",
+        )
+
+        copy_parser.add_argument(
+            "--repository",
+            type=str,
+            help="Filter images by repository name",
         )
 
         copy_parser.add_argument(
@@ -632,6 +657,7 @@ class CopyImagesSubCommand(SubCommand):
         self.service = args.service
         self.service_version = args.service_version
         self.service_version_prefix = args.service_version_prefix
+        self.repository = args.repository
         self.platform = args.platform
         self.max_workers = args.max_workers
         self.max_retries = args.max_retries
@@ -657,6 +683,7 @@ class CopyImagesSubCommand(SubCommand):
             service=self.service,
             service_version=self.service_version,
             service_version_prefix=self.service_version_prefix,
+            repository=self.repository,
             platform=self.platform,
         )
         if not images:
@@ -833,6 +860,7 @@ def list_images(**kwargs) -> list[PlatformedImage]:
 
     """
     platform = kwargs.pop("platform", None)
+    repository = kwargs.pop("repository", None)
 
     backend_runners: BackendRunners = list_backend_runners(**kwargs)
     if not backend_runners:
@@ -883,6 +911,8 @@ def list_images(**kwargs) -> list[PlatformedImage]:
         images = [
             img for img in images if img.platforms is None or platform in img.platforms
         ]
+    if repository:
+        images = [img for img in images if img.name.__contains__(f"/{repository}:")]
 
     return images
 
