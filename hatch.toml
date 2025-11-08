@@ -3,7 +3,7 @@ source = "vcs"
 fallback-version = "0.0.1"
 
 [version.raw-options]
-version_scheme = "no-guess-dev"
+version_scheme = "guess-next-dev"
 local_scheme = "no-local-version"
 
 [build.targets.sdist]
