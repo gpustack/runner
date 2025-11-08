@@ -920,7 +920,7 @@ def _ensure_required_tools():
 
     """
     if not shutil.which("skopeo"):
-        msg = "Skopeo is not found. Please follow https://github.com/containers/skopeo/blob/v1.20.0/install.md to install."
+        msg = "Skopeo is not found. Please follow https://github.com/containers/skopeo/blob/v1.4.1/install.md to install."
         raise RuntimeError(msg)
 
 
