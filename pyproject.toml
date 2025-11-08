@@ -18,9 +18,13 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
+    "argcomplete>=3.6.3",
     "dataclasses-json>=0.6.7",
 ]
 dynamic = ["version"]
+
+[project.scripts]
+gpustack-runner = "gpustack_runner.__main__:main"
 
 [project.urls]
 "Homepage" = "https://github.com/gpustack/runner"
