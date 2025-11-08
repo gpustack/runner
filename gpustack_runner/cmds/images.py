@@ -408,8 +408,6 @@ class SaveImagesSubCommand(SubCommand):
                     override_arch,
                     "copy",
                     "--src-tls-verify",
-                    "--retry-delay",
-                    "3s",
                     "--retry-times",
                     str(self.max_retries),
                 ]
@@ -723,8 +721,6 @@ class CopyImagesSubCommand(SubCommand):
                     "--src-tls-verify",
                     "--dest-tls-verify",
                     "--all",
-                    "--retry-delay",
-                    "3s",
                     "--retry-times",
                     str(self.max_retries),
                 ]
