@@ -432,10 +432,8 @@ class SaveImagesSubCommand(SubCommand):
                 if self.source_username and self.source_password:
                     command.extend(
                         [
-                            "--src-username",
-                            self.source_username,
-                            "--src-password",
-                            self.source_password,
+                            "--src-creds",
+                            f"{self.source_username}:{self.source_password}",
                         ],
                     )
                 command.extend(
@@ -754,19 +752,15 @@ class CopyImagesSubCommand(SubCommand):
                 if self.source_username and self.source_password:
                     command.extend(
                         [
-                            "--src-username",
-                            self.source_username,
-                            "--src-password",
-                            self.source_password,
+                            "--src-creds",
+                            f"{self.source_username}:{self.source_password}",
                         ],
                     )
                 if self.destination_username and self.destination_password:
                     command.extend(
                         [
-                            "--dest-username",
-                            self.destination_username,
-                            "--dest-password",
-                            self.destination_password,
+                            "--dest-creds",
+                            f"{self.destination_username}:{self.destination_password}",
                         ],
                     )
                 dest_img_name = img.name
