@@ -64,7 +64,7 @@ class ListImagesSubCommand(SubCommand):
     def register(parser: _SubParsersAction):
         list_parser = parser.add_parser(
             "list-images",
-            help="list images",
+            help="List images",
         )
 
         list_parser.add_argument(
@@ -196,8 +196,8 @@ class SaveImagesSubCommand(SubCommand):
     def register(parser: _SubParsersAction):
         save_parser = parser.add_parser(
             "save-images",
-            help="save images as Docker Archive to local path, "
-            "power by https://github.com/containers/skopeo",
+            help="Save images as Docker Archive to local path, "
+            "powered by https://github.com/containers/skopeo",
         )
 
         save_parser.add_argument(
@@ -462,8 +462,8 @@ class SaveImagesSubCommand(SubCommand):
                 raise
 
             # Review
+            print()
             if failures:
-                print()
                 print(f"⚠️ Error downloading {len(failures)} images:")
                 for name, err in failures:
                     print(f"  - {name}:")
@@ -504,8 +504,8 @@ class CopyImagesSubCommand(SubCommand):
     def register(parser: _SubParsersAction):
         copy_parser = parser.add_parser(
             "copy-images",
-            help="copy images to other registry, "
-            "power by https://github.com/containers/skopeo",
+            help="Copy images to other registry, "
+            "powered by https://github.com/containers/skopeo",
         )
 
         copy_parser.add_argument(
@@ -797,8 +797,8 @@ class CopyImagesSubCommand(SubCommand):
                 raise
 
             # Review
+            print()
             if failures:
-                print()
                 print(f"⚠️ Error syncing {len(failures)} images:")
                 for name, err in failures:
                     print(f"  - {name}:")
