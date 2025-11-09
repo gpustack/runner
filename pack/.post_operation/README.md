@@ -18,4 +18,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-11-03: Refresh MindIE entrypoint for CANN released images.
 - [x] 2025-11-05: Polish NVIDIA HPC-X configuration for CUDA released images.
 - [x] 2025-11-06: Install EP kernel for CUDA released images.
-- [ ] 2025-11-07: Reinstall `lmcache` package for vLLM 0.11.0 CUDA/ROCm released images.
+- [x] 2025-11-07: Reinstall `lmcache` package for vLLM 0.11.0 CUDA/ROCm released images.
