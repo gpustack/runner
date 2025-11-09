@@ -38,6 +38,8 @@
 #   for example, https://github.com/pytorch/pytorch/blob/134179474539648ba7dee1317959529fbd0e7f89/.ci/docker/libtorch/build.sh#L42.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
+# - VLLM_TORCH_SOURCE: Source of Torch for vLLM to use,
+#   can be either "pytorch" or "radeon".
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
 # - VLLM_TORCH_ROCM_VERSION: Version of ROCM to use for Torch,
 #   which is used to build the components that depend on Torch.
@@ -45,7 +47,7 @@
 # - VLLM_BUILD_BASE_IMAGE: Base image for vLLM build,
 #   which is used to build wheels.
 # - VLLM_TRITON_VERSION: Version of Triton to use,
-#   which is used to build the Triton wheel.
+#   which is used to build the Triton wheel. (Deprecated, remove later)
 # - VLLM_FLASHATTENTION_VERSION: Version of FlashAttention to use,
 #   which is used to build the FlashAttention wheel.
 # - VLLM_AITER_REPOSITORY: Repository URL of AITER to use,
@@ -74,7 +76,6 @@ ARG VLLM_AITER_VERSION=0.1.6.post2
 ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.4.post3
-ARG SGLANG_AITER_VERSION=${VLLM_AITER_VERSION}
 ARG SGLANG_MOONCAKE_VERSION=0.3.7.post2
 
 # Stage Bake Runtime
@@ -400,90 +401,6 @@ EOT
         && rm -rf /tmp/*
 EOF
 
-# Stage vLLM Build Triton
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-vllm-build-triton-linux-amd64 --target=vllm-build-triton pack/rocm
-#
-
-FROM vllm-build AS vllm-build-triton
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build Triton
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_TRITON_VERSION
-
-ENV VLLM_TRITON_VERSION=${VLLM_TRITON_VERSION}
-
-RUN <<EOF
-    # Triton
-
-    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
-    IFS="." read -r TT_MAJOR TT_MINOR TT_PATCH <<< "${VLLM_TRITON_VERSION}"
-
-    # Support ARM64 only
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping Triton building for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Dependencies
-    cat <<EOT >/tmp/requirements.txt
-ninja>=1.11.1
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Download
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_TRITON_VERSION} --single-branch \
-        https://github.com/triton-lang/triton.git triton
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    TT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${TT_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
-        elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
-        else
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export PYTORCH_ROCM_ARCH="${TT_ROCM_ARCHS}"
-    echo "Building Triton with the following environment variables:"
-    env
-
-    pushd /tmp/triton \
-      && python -v -m build --no-isolation --wheel \
-      && tree -hs /tmp/triton/dist \
-      && mv /tmp/triton/dist /workspace
-    if [[ -d /tmp/triton/python/triton_kernels ]]; then
-        pushd /tmp/triton/python/triton_kernels \
-          && python -v -m build --no-isolation --wheel \
-          && tree -hs /tmp/triton/python/triton_kernels/dist \
-          && cp /tmp/triton/python/triton_kernels/dist/*.whl /workspace
-    fi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 # Stage vLLM Build FlashAttention
 #
 # Example build command:
@@ -751,25 +668,6 @@ RUN <<EOF
         && ccache --clear --clean
 EOF
 
-## Instal Triton
-
-RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw <<EOF
-    # Triton
-
-    if [[ ! -d /triton/workspace ]]; then
-        echo "Skipping Triton installation for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Install
-    uv pip install --no-build-isolation --no-deps \
-        /triton/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install FlashAttention
 
 RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
@@ -965,83 +863,6 @@ RUN <<EOF
         && rm -rf /var/cache/apt
 EOF
 
-# Stage SGLang Prepare AITER
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-prepare-aiter-linux-amd64 --target=sglang-prepare-aiter pack/rocm
-#
-
-FROM sglang-prepare AS sglang-prepare-aiter
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Prepare AITER
-
-ARG CMAKE_MAX_JOBS
-ARG SGLANG_AITER_VERSION
-
-ENV SGLANG_AITER_VERSION=${SGLANG_AITER_VERSION}
-
-RUN <<EOF
-    # AITER
-
-    if [[ "${SGLANG_AITER_VERSION}" == "$(pip show aiter | grep Version | cut -d' ' -f 2)" ]]; then
-        echo "Skipping AITER building as it is already built in vLLM..."
-        exit 0
-    fi
-
-    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${SGLANG_TORCH_VERSION}"
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
-    IFS="." read -r AT_MAJOR AT_MINOR AT_PATCH <<< "${SGLANG_AITER_VERSION}"
-
-    # Support ARM64 only
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping AITER building for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Prepare
-    TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
-    echo "${TORCH_LIB_PREFIX}/torch/lib" >> /etc/ld.so.conf.d/python3.conf
-
-    # Download
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_AITER_VERSION} --single-branch \
-        https://github.com/ROCm/aiter.git aiter
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    AT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${AT_ROCM_ARCHS}" ]]; then
-        AT_ROCM_ARCHS="gfx942;gfx950"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export GPU_ARCHS="${AT_ROCM_ARCHS}"
-    export LD_LIBRARY_PATH="${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
-    export BUILD_TARGET="rocm"
-    export PREBUILD_KERNELS=1
-    echo "Building AITER with the following environment variables:"
-    env
-    pushd /tmp/aiter \
-      && python setup.py bdist_wheel --dist-dir=dist \
-      && tree -hs /tmp/aiter/dist \
-      && mv /tmp/aiter/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-
 # Stage SGLang Prepare MoonCake
 #
 # Example build command:
@@ -1055,31 +876,13 @@ ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-## Install Go
-
-RUN <<EOF
-    # Go
-
-    curl --retry 3 --retry-connrefused -fL https://go.dev/dl/go1.22.2.linux-${TARGETARCH}.tar.gz | tar -xz -C /usr/local
-
-    # FIX: Hide Python3.10 to avoid issues with Python version mismatch.
-    PYTHON3_10_BIN=$(which python3.10 || true)
-    if [[ -n "${PYTHON3_10_BIN}" ]]; then
-        mv "${PYTHON3_10_BIN}" /tmp/python3.10
-    fi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-ENV PATH="/usr/local/go/bin:${PATH}"
-
 ## Prepare MoonCake
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_MOONCAKE_VERSION
 
-ENV SGLANG_MOONCAKE_VERSION=${SGLANG_MOONCAKE_VERSION}
+ENV SGLANG_MOONCAKE_VERSION=${SGLANG_MOONCAKE_VERSION} \
+    PATH="/usr/local/go/bin:${PATH}"
 
 RUN <<EOF
     # MoonCake
@@ -1093,16 +896,15 @@ RUN <<EOF
         CMAKE_MAX_JOBS="8"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export BUILD_WITH_EP=1
     echo "Building MoonCake with the following environment variables:"
     env
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_MOONCAKE_VERSION} --single-branch \
         https://github.com/kvcache-ai/Mooncake.git mooncake
     pushd /tmp/mooncake \
-        && ./dependencies.sh -y \
-        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DBUILD_EXAMPLES=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DWITH_EP=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build -j${MAX_JOBS} \
+        && bash dependencies.sh -y \
+        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build --target install -j${MAX_JOBS} \
         && ./scripts/build_wheel.sh \
         && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
         && mv /tmp/mooncake/mooncake-wheel/dist /workspace
@@ -1160,20 +962,9 @@ RUN <<EOF
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
-    export TORCH_DONT_CHECK_COMPILER_ABI=1
-
-    # Install vLLM
-    EXTRA_INDEX_URL="https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR}"
-    if [[ "${TARGETARCH}" == "arm64" ]]; then
-        EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
-    fi
-    git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/ROCm/vllm.git vllm \
-        && pushd /tmp/vllm \
-        && git checkout 9f6b92db47c3444b7a7d67451ba0c3a2d6af4c2c
-    VLLM_TARGET_DEVICE="rocm" \
-        uv pip install --no-build-isolation --verbose --extra-index-url ${EXTRA_INDEX_URL} \
-        /tmp/vllm
+    export AMDGPU_TARGET="gfx950"
+    echo "Building SGLang with the following environment variables:"
+    env
 
     # Download SGLang
     git -C /tmp clone --recursive --shallow-submodules \
@@ -1194,7 +985,7 @@ RUN <<EOF
     # Install SGLang Kernel
     pushd /tmp/sglang-${SGLANG_VERSION}/sgl-kernel \
         && if [[ -f pyproject_rocm.toml ]]; then mv pyproject_rocm.toml pyproject.toml; fi \
-        && AMDGPU_TARGET="gfx950" python setup_rocm.py install
+        && python setup_rocm.py install
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1236,25 +1027,6 @@ RUN <<EOF
         && ccache --clear --clean
 EOF
 
-## Install AITER
-
-RUN --mount=type=bind,from=sglang-prepare-aiter,source=/,target=/aiter,rw <<EOF
-    # AITER
-
-    if [[ ! -d /aiter/workspace ]]; then
-        echo "Skipping AITER building as it is already built in vLLM..."
-        exit 0
-    fi
-
-    # Install
-    uv pip install --no-build-isolation \
-        /aiter/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install MoonCake
 
 RUN --mount=type=bind,from=sglang-prepare-mooncake,source=/,target=/mooncake,rw <<EOF
@@ -1274,19 +1046,32 @@ RUN --mount=type=bind,from=sglang-prepare-mooncake,source=/,target=/mooncake,rw 
         && rm -rf /tmp/*
 EOF
 
-## Reinstall Fast-Hadamard-Transform
+## Install Fast-Hadamard-Transform
 
 RUN <<EOF
     # Fast-Hadamard-Transform
 
-    # Reinstall Fast-Hadamard-Transform
+    uv pip install \
+        wheel==0.45.1
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export FAST_HADAMARD_TRANSFORM_SKIP_CUDA_BUILD="TRUE"
+    echo "Building Fast-Hadamard-Transform with the following environment variables:"
+    env
+
+    # Install Fast-Hadamard-Transform
     git -C /tmp clone --recursive --shallow-submodules \
         --branch rocm --single-branch \
-        https://github.com/jeffdaily/fast-hadamard-transform.git fast-hadamard-transform \
-        && pushd /tmp/fast-hadamard-transform \
-        && git checkout 46efb7d776d38638fc39f3c803eaee3dd7016bd1
-    uv pip install --verbose \
-        /tmp/fast-hadamard-transform
+        https://github.com/jeffdaily/fast-hadamard-transform.git fast-hadamard-transform
+    pushd /tmp/fast-hadamard-transform \
+        && python setup.py install
 
     # Cleanup
     rm -rf /var/tmp/* \
