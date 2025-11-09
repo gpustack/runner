@@ -844,6 +844,17 @@ RUN <<EOF
     export CXX=hipcc
     export BUILD_WITH_HIP=1
 
+    cat <<EOT >/tmp/requirements.txt
+aiofile==3.9.0
+aiofiles==25.1.0
+awscrt==0.28.2
+cufile-python==0.2.0
+nvtx==0.2.13
+sortedcontainers==2.4.0
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
     # Install LMCache
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
@@ -851,7 +862,7 @@ RUN <<EOF
     if [[ "${TARGETARCH}" == "arm64" ]]; then
         sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
     fi
-    uv pip install --no-build-isolation --verbose \
+    uv pip install --no-build-isolation --no-deps --verbose \
         /tmp/lmcache
 
     # Cleanup
