@@ -80,6 +80,7 @@
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
+# - SGLANG_FLASHATTN_VERSION: Version of FlashAttention to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=12.8.1
@@ -105,6 +106,7 @@ ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.5
 ARG SGLANG_KERNEL_VERSION=0.3.16.post5
+ARG SGLANG_FLASHATTN_VERSION=2.8.3
 
 #
 # Stage Bake Runtime
@@ -1373,9 +1375,11 @@ ENV UV_SYSTEM_PYTHON=1 \
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
 ARG SGLANG_KERNEL_VERSION
+ARG SGLANG_FLASHATTN_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION} \
+    SGLANG_FLASHATTN_VERSION=${SGLANG_FLASHATTN_VERSION}
 
 RUN <<EOF
     # SGLang
@@ -1418,8 +1422,15 @@ RUN <<EOF
 
     # Install SGLang Diffusion Extension
     if [[ "${TARGETARCH}" == "amd64" ]]; then
+        # Diffusion Extension
         pushd /tmp/sglang-${SGLANG_VERSION}/python \
             && uv pip install --verbose .[diffusion]
+
+        # FlashAttention
+        IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        uv pip install --verbose \
+            https://github.com/Dao-AILab/flash-attention/releases/download/v${SGLANG_FLASHATTN_VERSION}/flash_attn-${SGLANG_FLASHATTN_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp${PYTHON_MAJOR}${PYTHON_MINOR}-cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl
     fi
 
     # Install pre-complied SGLang Kernel
