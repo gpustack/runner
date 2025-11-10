@@ -1398,7 +1398,8 @@ RUN <<EOF
         libgrpc++-dev \
         libprotobuf-dev \
         protobuf-compiler \
-        protobuf-compiler-grpc
+        protobuf-compiler-grpc \
+        ffmpeg
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1453,6 +1454,12 @@ RUN <<EOF
     export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
     export FLASHINFER_LOGGING_LEVEL=warning
     python -m flashinfer --download-cubin
+
+    # Install SGLang Diffusion Extension
+    if [[ "${TARGETARCH}" == "amd64" ]]; then
+        pushd /tmp/sglang-${SGLANG_VERSION}/python \
+            && uv pip install --verbose .[diffusion]
+    fi
 
     # Install pre-complied SGLang Kernel
     if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.7" | bc -l) )); then
@@ -1547,7 +1554,9 @@ RUN <<EOF
         --package triton \
         --package vllm \
         --package torch \
-        --package deep-ep
+        --package deep-ep \
+        --package diffusers \
+        --package opencv-python
 EOF
 
 ## Entrypoint
