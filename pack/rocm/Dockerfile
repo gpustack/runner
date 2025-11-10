@@ -111,6 +111,7 @@ RUN <<EOF
         unzip xz-utils \
         tzdata locales \
         iproute2 iputils-ping ifstat net-tools dnsutils pciutils ipmitool \
+        rdma-core rdmacm-utils infiniband-diags \
         procps sysstat htop \
         tini vim jq bc tree
 
@@ -184,7 +185,15 @@ RUN <<EOF
         libncurses5-dev libreadline6-dev libsqlite3-dev \
         liblzma-dev lzma lzma-dev tk-dev uuid-dev libmpdec-dev \
         ffmpeg libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
-        libnuma-dev libjemalloc-dev
+        libnuma1 libnuma-dev libjemalloc-dev \
+        libgrpc-dev libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
+        libnl-route-3-200 libnl-3-200 libnl-3-dev  libnl-route-3-dev \
+        libibverbs1 libibverbs-dev \
+        librdmacm1 librdmacm-dev \
+        libibumad3 libibumad-dev \
+        libtool \
+        ibverbs-utils ibverbs-providers libibverbs-dev \
+        openmpi-bin openmpi-common libopenmpi-dev
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -207,9 +216,7 @@ RUN <<EOF
             PYTHON_LIB_PREFIX=$(python3 -c "import sys; print(sys.base_prefix);")
             echo "${PYTHON_LIB_PREFIX}/lib" >> /etc/ld.so.conf.d/python3.conf
             echo "${PYTHON_LIB_PREFIX}/lib64" >> /etc/ld.so.conf.d/python3.conf
-            EXPORT_PYTHON_LIB="export LD_LIBRARY_PATH=${PYTHON_LIB_PREFIX}/lib:${PYTHON_LIB_PREFIX}/lib64:\${LD_LIBRARY_PATH}"
-            echo "${EXPORT_PYTHON_LIB}" >> /etc/profile
-            echo "${EXPORT_PYTHON_LIB}" >> ~/.bashrc
+            ldconfig -v
         fi
         exit 0
     fi
@@ -227,8 +234,11 @@ RUN <<EOF
         python${PYTHON_VERSION}-venv \
         python${PYTHON_VERSION}-lib2to3 \
         python${PYTHON_VERSION}-gdbm \
-        python${PYTHON_VERSION}-tk \
-        libibverbs-dev
+        python${PYTHON_VERSION}-tk
+    if (( $(echo "${PYTHON_VERSION} <= 3.11" | bc -l) )); then
+        apt-get install -y --no-install-recommends \
+            python${PYTHON_VERSION}-distutils
+    fi
 
     # Update alternatives
     if [[ -f /etc/alternatives/python3 ]]; then update-alternatives --remove-all python3; fi; update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
@@ -266,7 +276,7 @@ ninja<1.11
 setuptools<80
 setuptools-scm
 packaging<25
-wheel
+wheel==0.45.1
 pybind11<3
 Cython
 psutil
@@ -777,39 +787,6 @@ ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
-
-## Install Tools
-
-RUN <<EOF
-    # Tools
-
-    # Install
-    apt-get update -y && apt-get install -y --no-install-recommends \
-        libgrpc-dev \
-        libgrpc++-dev \
-        libprotobuf-dev \
-        protobuf-compiler \
-        protobuf-compiler-grpc \
-        libtool \
-        autoconf \
-        librdmacm-dev \
-        rdma-core \
-        rdmacm-utils \
-        infiniband-diags \
-        ibverbs-utils \
-        libibverbs-dev \
-        openssh-server \
-        openmpi-bin \
-        openmpi-common \
-        libopenmpi-dev \
-        zip \
-        unzip
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /var/cache/apt
-EOF
 
 # Stage SGLang Prepare MoonCake
 #
