@@ -1398,8 +1398,7 @@ RUN <<EOF
         libgrpc++-dev \
         libprotobuf-dev \
         protobuf-compiler \
-        protobuf-compiler-grpc \
-        ffmpeg
+        protobuf-compiler-grpc
 
     # Cleanup
     rm -rf /var/tmp/* \
