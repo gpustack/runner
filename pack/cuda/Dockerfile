@@ -760,18 +760,9 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    FA_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${FA_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            FA_CUDA_ARCHS="7.5 8.0 8.9"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            FA_CUDA_ARCHS="7.5 8.0 8.9 9.0a"
-        else
-            FA_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 12.0"
-        fi
-    fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export BUILD_TARGET="cuda"
+    export NVCC_THREADS=1
     echo "Building FlashAttention with the following environment variables:"
     env
     pushd /tmp/flashattention \
