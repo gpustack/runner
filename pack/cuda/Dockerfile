@@ -757,12 +757,12 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 2" | bc -l) )); then
+        CMAKE_MAX_JOBS="2"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export BUILD_TARGET="cuda"
-    export NVCC_THREADS=1
+    export NVCC_THREADS=2
     echo "Building FlashAttention with the following environment variables:"
     env
     pushd /tmp/flashattention \
