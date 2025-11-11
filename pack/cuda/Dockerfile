@@ -102,11 +102,11 @@ ARG VLLM_PPLX_KERNEL_COMMIT=c336faf
 ARG VLLM_DEEPEP_VERSION=1.2.1
 ARG VLLM_DEEPGEMM_VERSION=2.1.1.post3
 ARG VLLM_FLASHINFER_VERSION=0.3.1
+ARG VLLM_FLASHATTENTION_VERSION=2.8.2
 ARG VLLM_LMCACHE_VERSION=0.3.9post1
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.5
 ARG SGLANG_KERNEL_VERSION=0.3.16.post5
-ARG SGLANG_FLASHATTN_VERSION=2.8.3
 
 #
 # Stage Bake Runtime
@@ -704,6 +704,86 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
+# Stage vLLM Build FlashAttention
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-flashattention-linux-amd64 --target=vllm-build-flashattention pack/cuda
+#
+
+FROM vllm-build AS vllm-build-flashattention
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build FlashAttention
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_FLASHATTENTION_VERSION
+
+ENV VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
+
+RUN <<EOF
+    # FlashAttention
+
+    IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+    IFS="." read -r FA_MAJOR FA_MINOR FA_PATCH <<< "${VLLM_FLASHATTENTION_VERSION}"
+
+    # Support ARM64 only
+    if [[ "${TARGETARCH}" != "amd64" ]]; then
+        echo "Skipping FlashAttention building for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp${PYTHON_MAJOR}${PYTHON_MINOR}-cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+    if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
+        echo "Downloading prebuilt FlashAttention wheel from ${PREBUILD_URL}..."
+        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o /tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}.whl
+        mkdir -p /workspace \
+            && mv /tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}.whl /workspace
+        exit 0
+    fi
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_FLASHATTENTION_VERSION} --single-branch \
+        https://github.com/Dao-AILab/flash-attention.git flashattention
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    FA_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${FA_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
+            FA_CUDA_ARCHS="7.5 8.0 8.9"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+            FA_CUDA_ARCHS="7.5 8.0 8.9 9.0a"
+        else
+            FA_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 12.0"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export BUILD_TARGET="cuda"
+    echo "Building FlashAttention with the following environment variables:"
+    env
+    pushd /tmp/flashattention \
+      && python -v -m build --no-isolation --wheel \
+      && tree -hs /tmp/flashattention/dist \
+      && mv /tmp/flashattention/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 # Stage vLLM Prepare
 #
 # Example build command:
@@ -1233,6 +1313,25 @@ RUN --mount=type=bind,from=vllm-prepare-deepep,source=/,target=/deepep,rw <<EOF
         && rm -rf /tmp/*
 EOF
 
+## Install FlashAttention
+
+RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
+    # FlashAttention
+
+    if [[ ! -d /flashattention/workspace ]]; then
+        echo "Skipping FlashAttention installation for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /flashattention/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Install LMCache
 
 ARG VLLM_LMCACHE_VERSION
@@ -1339,6 +1438,7 @@ RUN <<EOF
     uv pip tree \
         --package vllm \
         --package flashinfer-python \
+        --package flash-attn \
         --package torch \
         --package triton \
         --package pplx-kernels \
@@ -1375,11 +1475,9 @@ ENV UV_SYSTEM_PYTHON=1 \
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
 ARG SGLANG_KERNEL_VERSION
-ARG SGLANG_FLASHATTN_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION} \
-    SGLANG_FLASHATTN_VERSION=${SGLANG_FLASHATTN_VERSION}
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
     # SGLang
@@ -1425,12 +1523,6 @@ RUN <<EOF
         # Diffusion Extension
         pushd /tmp/sglang-${SGLANG_VERSION}/python \
             && uv pip install --verbose .[diffusion]
-
-        # FlashAttention
-        IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
-        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        uv pip install --verbose \
-            https://github.com/Dao-AILab/flash-attention/releases/download/v${SGLANG_FLASHATTN_VERSION}/flash_attn-${SGLANG_FLASHATTN_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp${PYTHON_MAJOR}${PYTHON_MINOR}-cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl
     fi
 
     # Install pre-complied SGLang Kernel
@@ -1523,6 +1615,7 @@ RUN <<EOF
         --package sglang-router \
         --package sgl-kernel \
         --package flashinfer-python \
+        --package flash-attn \
         --package triton \
         --package vllm \
         --package torch \
