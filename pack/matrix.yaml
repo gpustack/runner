@@ -112,7 +112,7 @@ rules:
   # Hygon DTK
   #
 
-  ## Hygon DTK 25.04.1
+  ## Hygon DTK 25.04.2
   ##
   - backend: "dtk"
     services:
@@ -120,13 +120,13 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "DTK_VERSION=25.04.1"
+      - "DTK_VERSION=25.04.2"
 
   #
   # MateX MACA
   #
 
-  ## MateX MACA 3.0.0
+  ## MateX MACA 3.2.1
   ##
   - backend: "maca"
     services:
@@ -134,7 +134,7 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "MACA_VERSION=3.0.0"
+      - "MACA_VERSION=3.2.1"
 
   #
   # AMD ROCm
