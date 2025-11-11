@@ -20,4 +20,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-11-06: Install EP kernel for CUDA released images.
 - [x] 2025-11-07: Reinstall `lmcache` package for vLLM 0.11.0 CUDA released images.
 - [x] 2025-11-10: Install diffusion extension package for SGLang 0.5.5 CUDA released images.
-- [ ] 2025-11-12: Install FlashAttention package for SGLang 0.5.5 CUDA released images.
+- [x] 2025-11-12: Install FlashAttention package for SGLang 0.5.5 CUDA released images.
