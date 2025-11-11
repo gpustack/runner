@@ -12,7 +12,7 @@
 # - PYTHON_VERSION: Version of Python to use.
 # - CMAKE_MAX_JOBS: (PLACEHOLDER) Maximum number of jobs to use for CMake, default is empty,
 #   which means it will use the number of available CPU cores.
-# - MACA_VERSION: Version of Hygon MACA runtime environment to use.
+# - MACA_VERSION: Version of MetaX MACA runtime environment to use.
 # - MACA_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
