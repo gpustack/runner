@@ -284,6 +284,8 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
+## Nothing to do, as the vLLM has installed in global.
+
 ## Postprocess
 
 RUN <<EOF

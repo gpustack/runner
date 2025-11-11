@@ -24,6 +24,7 @@ ARG DTK_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:dtk${DTK_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.8.5
 ARG VLLM_TORCH_VERSION=2.4.1
+ARG VLLM_LMCACHE_VERSION=0.3.5
 
 # Stage Bake Runtime
 #
@@ -282,7 +283,7 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
-## Postprocess
+## Nothing to do, as the vLLM has installed in global.
 
 RUN <<EOF
     # Postprocess
