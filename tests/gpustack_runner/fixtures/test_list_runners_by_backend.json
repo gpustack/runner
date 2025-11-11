@@ -1040,6 +1040,17 @@
     [
       {
         "backend": "maca",
+        "backend_version": "3.2",
+        "original_backend_version": "3.2.1",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.10.2",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:maca3.2-vllm0.10.2",
+        "deprecated": false
+      },
+      {
+        "backend": "maca",
         "backend_version": "3.0",
         "original_backend_version": "3.0.0",
         "backend_variant": "",
