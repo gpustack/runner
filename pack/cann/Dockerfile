@@ -527,7 +527,7 @@ thefuzz==0.22.1
 tiktoken==0.7.0
 tornado==6.4.2
 tqdm==4.67.1
-transformers==4.46.3
+transformers==4.51.3
 safetensors==0.5.3
 tritonclient==2.49.0
 typing_extensions==4.13.2
@@ -595,9 +595,14 @@ ASDOPS_LOG_LEVEL=\${ASDOPS_LOG_LEVEL:-ERROR}
 OCK_LOG_LEVEL=\${OCK_LOG_LEVEL:-ERROR}
 LOG_LEVEL=\${LOG_LEVEL:-ERROR}
 TORCH_AIE_LOG_LEVEL=\${TORCH_AIE_LOG_LEVEL:-3}
+PYPI_PACKAGES_INSTALL=\${PYPI_PACKAGES_INSTALL:-}
 
 # Prepare
 #
+if [[ -n "\${PYPI_PACKAGES_INSTALL}" ]]; then
+    echo "Installing extra PyPi packages: \${PYPI_PACKAGES_INSTALL} ..."
+    uv pip install \${PYPI_PACKAGES_INSTALL}
+fi
 export LD_LIBRARY_PATH=${PYTHON_LIB_PREFIX}/lib:${PYTHON_LIB_PREFIX}/lib64:\${LD_LIBRARY_PATH}
 source \${CANN_HOME}/ascend-toolkit/set_env.sh
 source \${CANN_HOME}/nnal/atb/set_env.sh
