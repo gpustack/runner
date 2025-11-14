@@ -160,7 +160,7 @@ class ListImagesSubCommand(SubCommand):
         )
         if not images:
             print("No matching images found.")
-            sys.exit(1)
+            return
 
         if self.format == "json":
             print(json.dumps([img.to_dict() for img in images], indent=2))
@@ -354,7 +354,7 @@ class SaveImagesSubCommand(SubCommand):
         )
         if not images:
             print("No matching images found.")
-            sys.exit(1)
+            return
 
         if self.source_namespace:
             # The original name of image doesn't include registry,
@@ -686,7 +686,7 @@ class CopyImagesSubCommand(SubCommand):
         )
         if not images:
             print("No matching images found.")
-            sys.exit(1)
+            return
 
         if self.source_namespace:
             # The original name of image doesn't include registry,
@@ -856,14 +856,11 @@ def list_images(**kwargs) -> list[PlatformedImage]:
     platform = kwargs.pop("platform", None)
     repository = kwargs.pop("repository", None)
 
-    backend_runners: BackendRunners = list_backend_runners(**kwargs)
-    if not backend_runners:
-        return _EXTRA_IMAGES
-
     image_names_index: dict[str, int] = {}
     images: list[PlatformedImage] = []
 
-    for runner in backend_runners:
+    backend_runners: BackendRunners = list_backend_runners(**kwargs)
+    for runner in backend_runners or []:
         for b_version in runner.versions:
             for b_variant in b_version.variants:
                 for service in b_variant.services:
