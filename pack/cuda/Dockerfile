@@ -12,23 +12,27 @@
 # 3.1. vllm-build target.
 #    - Install Torch.
 #    - Install dependencies.
-#    - Build GDRCopy if allowed.
-#    - Build FlashInfer if allowed.
-#    - Build DeepGEMM if allowed.
+#    - Build GDRCopy.
+#    - Build FlashInfer.
+#    - Build FlashAttention if allowed.
+#    - Build DeepGEMM.
+#    - Build vLLM.
+#    - Build LMCache.
 # 3.2. vllm-prepare target.
-#    - Install InfiniBand buildkit.
-#    - Install GDRCopy if existed.
+#    - Install GDRCopy.
 #    - Install NVIDIA HPC-X.
 #    - Install AWS EFA.
 #    - Install NVIDIA NVSHMEM.
 #    - Install Torch.
-#    - Build PPLX kernels if allowed.
-#    - Build DeepEP if allowed.
+#    - Build PPLX kernels.
+#    - Build DeepEP.
 # 3.3. vllm target.
-#    - Install FlashInfer if existed.
-#    - Install PPLX kernels if existed.
-#    - Install DeepEP if existed.
-#    - Install DeepGEMM if existed.
+#    - Install FlashInfer.
+#    - Install FlashAttention if exists.
+#    - Install PPLX kernels.
+#    - Install DeepEP.
+#    - Install DeepGEMM.
+#    - Install vLLM.
 #    - Install LMCache.
 #    - Install dependencies.
 #    - Postprocess, review installation.
@@ -78,9 +82,10 @@
 #   which is used to build the FlashInfer wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
+# - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
+#   which is used to build the SGLang from source.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
-# - SGLANG_FLASHATTN_VERSION: Version of FlashAttention to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=12.9.1
@@ -90,23 +95,24 @@ ARG VOXBOX_VERSION=0.0.20
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.0
-ARG VLLM_TORCH_VERSION=2.8.0
+ARG VLLM_VERSION=0.11.1rc7
+ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_NVIDIA_GDRCOPY_VERSION=2.5.1
-ARG VLLM_NVIDIA_HPCX_VERSION=2.24.1
+ARG VLLM_NVIDIA_HPCX_VERSION=2.24.1_cuda12
 ARG VLLM_NVIDIA_NVSHMEM_VERSION=3.4.5
 ARG VLLM_AWS_EFA_VERSION=1.44.0
 ARG VLLM_PPLX_KERNEL_COMMIT=c336faf
 ARG VLLM_DEEPEP_VERSION=1.2.1
 ARG VLLM_DEEPGEMM_VERSION=2.1.1.post3
-ARG VLLM_FLASHINFER_VERSION=0.3.1
+ARG VLLM_FLASHINFER_VERSION=0.5.2
 ARG VLLM_FLASHATTENTION_VERSION=2.8.2
-ARG VLLM_LMCACHE_VERSION=0.3.9post1
+ARG VLLM_LMCACHE_VERSION=0.3.9post2
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.5
-ARG SGLANG_KERNEL_VERSION=0.3.16.post5
+ARG SGLANG_BUILD_BASE_IMAGE=${SGLANG_BASE_IMAGE}
+ARG SGLANG_VERSION=0.5.5.post3
+ARG SGLANG_KERNEL_VERSION=0.3.17.post1
 
 #
 # Stage Bake Runtime
@@ -369,13 +375,8 @@ torchvision
 torchaudio
 EOT
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VOXBOX_TORCH_CUDA_VERSION}"
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} > 12.7" | bc -l) )) || [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
+    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
+        -r /tmp/requirements.txt
     uv pip install \
         numpy scipy
 
@@ -461,13 +462,8 @@ torchvision
 torchaudio
 EOT
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
+    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
+        -r /tmp/requirements.txt
     uv pip install \
         numpy scipy
 
@@ -487,9 +483,9 @@ RUN <<EOF
     cat <<EOT >/tmp/requirements.txt
 requests
 pyyaml
-pynvml
-cuda-python
 einops
+cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
+pynvml==${CUDA_MAJOR}
 nvidia-nvshmem-cu${CUDA_MAJOR}
 EOT
     uv pip install \
@@ -574,21 +570,17 @@ RUN <<EOF
 
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    IFS="." read -r FI_MAJOR FI_MINOR FI_PATCH <<< "${VLLM_FLASHINFER_VERSION}"
 
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping FlashInfer building for ${TARGETARCH}..."
+    PREBUILD_URL="https://github.com/flashinfer-ai/flashinfer/releases/download/v${VLLM_FLASHINFER_VERSION}/flashinfer_jit_cache-${VLLM_FLASHINFER_VERSION}+cu128-cp39-abi3-manylinux_2_28_$(uname -m).whl"
+    if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
+        echo "Downloading prebuilt FlashInfer wheel from ${PREBUILD_URL}..."
+        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flashinfer_jit_cache-${VLLM_FLASHINFER_VERSION}+cu128-cp39-abi3-manylinux_2_28_$(uname -m).whl"
+        curl --retry 3 --retry-connrefused -fL "https://github.com/flashinfer-ai/flashinfer/releases/download/v${VLLM_FLASHINFER_VERSION}/flashinfer_python-${VLLM_FLASHINFER_VERSION}-py3-none-any.whl" -o "/tmp/flashinfer_python-${VLLM_FLASHINFER_VERSION}-py3-none-any.whl"
+        mkdir -p /workspace \
+            && mv /tmp/*.whl /workspace \
+            && tree -hs /workspace
         exit 0
     fi
-
-    # Install Dependencies
-    cat <<EOT >/tmp/requirements.txt
-cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
-pynvml==${CUDA_MAJOR}
-nvidia-nvshmem-cu${CUDA_MAJOR}
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
@@ -600,17 +592,15 @@ EOT
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
     fi
     FI_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${FI_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            FI_CUDA_ARCHS="7.5 8.0 8.9"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a"
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 12.0a"
         else
-            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 12.0"
+            FI_CUDA_ARCHS="7.5 8.0 8.9 9.0a 10.0a 10.3a 12.0a"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -656,17 +646,7 @@ ENV VLLM_DEEPGEMM_VERSION=${VLLM_DEEPGEMM_VERSION}
 RUN <<EOF
     # DeepGEMM
 
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping DeepGEMM building for ${TARGETARCH}..."
-        exit 0
-    fi
-
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-        echo "Skipping DeepGEMM building for CUDA ${CUDA_MAJOR}.${CUDA_MINOR}..."
-        exit 0
-    fi
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
@@ -678,8 +658,8 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
     fi
     DP_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${DP_CUDA_ARCHS}" ]]; then
@@ -727,10 +707,8 @@ ENV VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
 RUN <<EOF
     # FlashAttention
 
-    IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    IFS="." read -r FA_MAJOR FA_MINOR FA_PATCH <<< "${VLLM_FLASHATTENTION_VERSION}"
 
     # Support ARM64 only
     if [[ "${TARGETARCH}" != "amd64" ]]; then
@@ -738,12 +716,13 @@ RUN <<EOF
         exit 0
     fi
 
-    PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp${PYTHON_MAJOR}${PYTHON_MINOR}-cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+    PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
     if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
         echo "Downloading prebuilt FlashAttention wheel from ${PREBUILD_URL}..."
-        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o /tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}.whl
+        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
         mkdir -p /workspace \
-            && mv /tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}.whl /workspace
+            && mv /tmp/*.whl /workspace \
+            && tree -hs /workspace
         exit 0
     fi
 
@@ -775,6 +754,128 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
+# Stage vLLM Build vLLM
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-vllm-linux-amd64 --target=vllm-build-vllm pack/cuda
+#
+
+FROM vllm-build AS vllm-build-vllm
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build vLLM
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_VERSION
+
+ENV VLLM_VERSION=${VLLM_VERSION}
+
+RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw \
+    --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
+    # vLLM
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    VL_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${VL_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        else
+            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${VL_CUDA_ARCHS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export NVCC_THREADS=1
+
+    # Install
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_VERSION} --single-branch \
+        https://github.com/vllm-project/vllm.git vllm
+    pushd /tmp/vllm \
+        && VLLM_TARGET_DEVICE="cuda" python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/vllm/dist \
+        && mv /tmp/vllm/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage vLLM Build LMCache
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-lmcache-linux-amd64 --target=vllm-build-lmcache pack/cuda
+#
+
+FROM vllm-build AS vllm-build-lmcache
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build LMCache
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+    # LMCache
+    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L67-L129.
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    # Install LMCache
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    LC_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${LC_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        else
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
+    export NVCC_THREADS=1
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    sed -i "s/\"torch==2\.8\.0\"/\"torch\"/g" /tmp/lmcache/pyproject.toml
+    sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
+    pushd /tmp/lmcache \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/lmcache/dist \
+        && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
 # Stage vLLM Prepare
 #
 # Example build command:
@@ -796,11 +897,6 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 RUN --mount=type=bind,from=vllm-build-gdrcopy,source=/,target=/gdrcopy,rw <<EOF
     # GDRCopy
-
-    if [[ ! -d /gdrcopy/workspace ]]; then
-        echo "Skipping GDRCopy installation for ${TARGETARCH}..."
-        exit 0
-    fi
 
     # Install
     dpkg -i /gdrcopy/workspace/libgdrapi_*.deb && \
@@ -930,17 +1026,15 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
     fi
     NS_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${NS_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            NS_CUDA_ARCHS="7.5 8.0 8.9"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            NS_CUDA_ARCHS="7.5 8.0 8.9 9.0"
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            NS_CUDA_ARCHS="7.5 8.0 8.9 9.0 10.0 12.0"
         else
-            NS_CUDA_ARCHS="7.5 8.0 8.9 9.0 10.0 10.3 12.0"
+            NS_CUDA_ARCHS="7.5 8.0 8.9 9.0 10.0 10.3 12.0 12.1"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -997,15 +1091,34 @@ torchvision
 torchaudio
 EOT
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-            -r /tmp/requirements.txt
-    else
-        uv pip install --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            -r /tmp/requirements.txt
-    fi
+    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
+        -r /tmp/requirements.txt
     uv pip install \
         numpy scipy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+einops
+cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
+pynvml==${CUDA_MAJOR}
+nvidia-nvshmem-cu${CUDA_MAJOR}
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1035,16 +1148,11 @@ ENV VLLM_PPLX_KERNEL_COMMIT=${VLLM_PPLX_KERNEL_COMMIT}
 RUN <<EOF
     # PPLX Kernels
 
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping PPLX Kernels building for ${TARGETARCH}..."
-        exit 0
-    fi
-
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/ppl-ai/pplx-kernels pplx-kernels \
+        https://github.com/ppl-ai/pplx-kernels.git pplx-kernels \
         && pushd /tmp/pplx-kernels \
         && git checkout ${VLLM_PPLX_KERNEL_COMMIT}
 
@@ -1053,15 +1161,15 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
     fi
     PP_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${PP_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
             PP_CUDA_ARCHS="9.0a+PTX"
         else
-            PP_CUDA_ARCHS="9.0a 10.0a 12.0a+PTX"
+            PP_CUDA_ARCHS="9.0a 10.0a+PTX"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -1102,37 +1210,27 @@ ENV VLLM_DEEPEP_VERSION=${VLLM_DEEPEP_VERSION}
 RUN <<EOF
     # DeepEP
 
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping DeepEP building for ${TARGETARCH}..."
-        exit 0
-    fi
-
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-        echo "Skipping DeepEP building for CUDA ${CUDA_MAJOR}.${CUDA_MINOR}..."
-        exit 0
-    fi
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_DEEPEP_VERSION} --single-branch \
-        https://github.com/deepseek-ai/DeepEP deep_ep
+        https://github.com/deepseek-ai/DeepEP.git deep_ep
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
     fi
     DP_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${DP_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
             DP_CUDA_ARCHS="9.0a+PTX"
         else
-            DP_CUDA_ARCHS="9.0a 10.0a 12.0a+PTX"
+            DP_CUDA_ARCHS="9.0a 10.0a+PTX"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -1174,92 +1272,12 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     # vLLM
 
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    VL_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${VL_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0"
-        else
-            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export TORCH_CUDA_ARCH_LIST="${VL_CUDA_ARCHS}"
-    export COMPILE_CUSTOM_KERNELS=1
-    export NVCC_THREADS=1
-
     # Install
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-            vllm==${VLLM_VERSION}
-    else
-        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
-            vllm==${VLLM_VERSION}
-    fi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
-EOF
-
-## Install FlashInfer
-
-RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw <<EOF
-    # FlashInfer
-
-    if [[ ! -d /flashinfer/workspace ]]; then
-        echo "Skipping FlashInfer installation for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Install
-    uv pip install --no-build-isolation \
-        /flashinfer/workspace/*.whl
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-
-    # Download pre-compiled cubins
-    export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
-    export FLASHINFER_LOGGING_LEVEL=warning
-    python -m flashinfer --download-cubin
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install DeepGEMM
-
-RUN --mount=type=bind,from=vllm-build-deepgemm,source=/,target=/deepgemm,rw <<EOF
-    # DeepGEMM
-
-    if [[ ! -d /deepgemm/workspace ]]; then
-        echo "Skipping DeepGEMM installation for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Install
-    uv pip install --no-build-isolation \
-        /deepgemm/workspace/*.whl
+    uv pip install \
+        /vllm/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1270,11 +1288,6 @@ EOF
 
 RUN --mount=type=bind,from=vllm-prepare-pplx-kernels,source=/,target=/pplx-kernels,rw <<EOF
     # PPLX Kernels
-
-    if [[ ! -d /pplx-kernels/workspace ]]; then
-        echo "Skipping PPLX Kernels installation for ${TARGETARCH}..."
-        exit 0
-    fi
 
     # Install
     uv pip install --no-build-isolation \
@@ -1290,14 +1303,23 @@ EOF
 RUN --mount=type=bind,from=vllm-prepare-deepep,source=/,target=/deepep,rw <<EOF
     # DeepEP
 
-    if [[ ! -d /deepep/workspace ]]; then
-        echo "Skipping DeepEP installation for ${TARGETARCH}..."
-        exit 0
-    fi
-
     # Install
     uv pip install --no-build-isolation \
         /deepep/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install DeepGEMM
+
+RUN --mount=type=bind,from=vllm-build-deepgemm,source=/,target=/deepgemm,rw <<EOF
+    # DeepGEMM
+
+    # Install
+    uv pip install --no-build-isolation \
+        /deepgemm/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1323,25 +1345,15 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         && rm -rf /tmp/*
 EOF
 
-## Install LMCache
+## Install FlashInfer
 
-ARG VLLM_LMCACHE_VERSION
+RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw <<EOF
+    # FlashInfer
 
-ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+    # Install
+    uv pip install --no-build-isolation \
+        /flashinfer/workspace/*.whl
 
-RUN <<EOF
-    # LMCache
-
-    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L67-L129.
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping LMCache building for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Install LMCache
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
@@ -1349,30 +1361,29 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    LC_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${LC_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0"
-        else
-            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
-    export NVCC_THREADS=1
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
-        https://github.com/LMCache/LMCache.git lmcache
-    sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
-    uv pip install --no-build-isolation --verbose \
-        /tmp/lmcache
+
+    # Download pre-compiled cubins
+    FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}" \
+    FLASHINFER_LOGGING_LEVEL=warning \
+        python -m flashinfer --download-cubin
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
+        && rm -rf /tmp/*
+EOF
+
+## Install LMCache
+
+RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
+    # LMCache
+
+    # Install
+    uv pip install --no-build-isolation \
+        /lmcache/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
 EOF
 
 ## Enhance Ray
@@ -1411,6 +1422,7 @@ modelscope
 bitsandbytes>=${BITSANDBYTES_VERSION}
 timm>=1.0.17
 boto3
+nixl>=0.6.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -1445,6 +1457,139 @@ ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
 
+# Stage SGLang Build SGLang
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang-build-sglang-linux-amd64 --target=sglang-build-sglang pack/cuda
+#
+
+FROM ${SGLANG_BUILD_BASE_IMAGE} AS sglang-build-sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build SGLang
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+ARG SGLANG_KERNEL_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
+
+RUN <<EOF
+    # SGLang
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    SG_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${SG_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        else
+            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${SG_CUDA_ARCHS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export NVCC_THREADS=1
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+
+    # Install SGLang
+    pushd /tmp/sglang/python \
+        && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/sglang/python/dist \
+        && mv /tmp/sglang/python/dist /workspace
+
+    # Install pre-complied SGLang Kernel
+
+    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} <= 12.9" | bc -l) )); then
+        curl --retry 3 --retry-connrefused -fL \
+            "https://github.com/sgl-project/whl/releases/download/${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_$(uname -m).whl" \
+            -o "/workspace/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_$(uname -m).whl"
+    else
+        curl --retry 3 --retry-connrefused -fL \
+            "https://github.com/sgl-project/whl/releases/download/${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl" \
+            -o "/workspace/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl"
+    fi
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage SGLang Build SGLang Router
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang-build-sglangrouter-linux-amd64 --target=sglang-build-sglangrouter pack/cuda
+#
+
+FROM ${SGLANG_BUILD_BASE_IMAGE} AS sglang-build-sglangrouter
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build SGLang Router
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+ARG SGLANG_KERNEL_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
+
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
+    # SGlang Router
+
+    # Install Rust
+    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    export PATH="/root/.cargo/bin:${PATH}" \
+        && rustc --version \
+        && cargo --version
+
+    # Install build tools
+    uv pip install \
+        setuptools-rust maturin
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+
+    # Install SGLang Router
+    pushd /tmp/sglang/sgl-router \
+        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
+        && tree -hs /tmp/sglang/sgl-router/dist \
+        && mv /tmp/sglang/sgl-router/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /root/.cargo \
+        && rm -rf /root/.rustup \
+        && sed -i '$d' /root/.profile \
+        && sed -i '$d' /root/.bashrc \
+        && ccache --clear --clean
+EOF
+
 # Stage SGLang
 #
 # Example build command:
@@ -1470,108 +1615,50 @@ ARG SGLANG_KERNEL_VERSION
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
     SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
-RUN <<EOF
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
     # SGLang
 
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    SG_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${SG_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR} < 12" | bc -l) )); then
-            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0"
-        else
-            SG_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export TORCH_CUDA_ARCH_LIST="${SG_CUDA_ARCHS}"
-    export COMPILE_CUSTOM_KERNELS=1
-    export NVCC_THREADS=1
-
-    # Install SGLang
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
-        https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
-    pushd /tmp/sglang-${SGLANG_VERSION}/python \
-        && uv pip install --verbose .[all]
-
-    # Download FlashInfer pre-compiled cubins
-    export FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}"
-    export FLASHINFER_LOGGING_LEVEL=warning
-    python -m flashinfer --download-cubin
+    # Install
+    uv pip install \
+        /sglang/workspace/*.whl
 
     # Install SGLang Diffusion Extension
     if [[ "${TARGETARCH}" == "amd64" ]]; then
-        # Diffusion Extension
-        pushd /tmp/sglang-${SGLANG_VERSION}/python \
-            && uv pip install --verbose .[diffusion]
-    fi
-
-    # Install pre-complied SGLang Kernel
-    if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.7" | bc -l) )); then
-        IFS="." read -r KERNEL_MAJOR KERNEL_MINOR KERNEL_PATCH KERNEL_POST <<< "${SGLANG_KERNEL_VERSION}"
-        if [[ "${TARGETARCH}" == "arm64" ]] && [[ "${KERNEL_MAJOR}.${KERNEL_MINOR}" == "0.3" ]] && (( $(echo "${KERNEL_PATCH} < 15" | bc -l) )); then
-            uv pip install --force-reinstall --no-deps \
-                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_aarch64.whl
-        else
-            uv pip install --force-reinstall --no-deps \
-                https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu124-cp310-abi3-manylinux2014_$(uname -m).whl
-        fi
-    elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} <= 12.9" | bc -l) )); then
+            cat <<EOT >/tmp/requirements.txt
+diffusers==0.35.2
+yunchang==0.6.3.post1
+opencv-python==4.10.0.84
+imageio==2.36.0
+imageio-ffmpeg==0.5.1
+PyYAML==6.0.1
+moviepy>=2.0.0
+cloudpickle
+remote-pdb
+torchcodec==0.5.0
+st_attn ==0.0.7
+vsa==0.0.4
+EOT
         uv pip install \
-            sgl-kernel==${SGLANG_KERNEL_VERSION}
-    else
-        uv pip install --force-reinstall --no-deps \
-            https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl
+            -r /tmp/requirements.txt
     fi
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
+        && rm -rf /tmp/*
 EOF
 
 ## Install SGLang Router
 
-RUN <<EOF
+RUN --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
     # SGlang Router
 
-    # Install Rust
-    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    export PATH="/root/.cargo/bin:${PATH}" \
-        && rustc --version \
-        && cargo --version
-
-    # Install build tools
-    uv pip install \
-        setuptools-rust maturin
-
-    # Install SGLang Router
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
-        https://github.com/sgl-project/sglang.git sglang
-    pushd /tmp/sglang/sgl-router \
-        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/dist \
-        && uv pip install --force-reinstall /tmp/sglang/sgl-router/dist/*.whl
+    # Install
+    uv pip install --force-reinstall \
+        /sglangrouter/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /root/.cargo \
-        && rm -rf /root/.rustup \
-        && sed -i '$d' /root/.profile \
-        && sed -i '$d' /root/.bashrc \
-        && ccache --clear --clean
+        && rm -rf /tmp/*
 EOF
 
 ## Install Dependencies

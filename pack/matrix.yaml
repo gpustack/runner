@@ -97,8 +97,8 @@ rules:
       - "VOXBOX_TORCH_VERSION=2.7.1"
       - "VOXBOX_TORCH_CUDA_VERSION=12.8.1"
       - "VLLM_TORCH_CUDA_VERSION=12.8.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.6-vllm0.11.0"
-      - "SGLANG_KERNEL_VERSION=0.3.12"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.6-vllm0.11.1rc7"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.1rc7"
   ## NVIDIA CUDA 12.8.1, using PyTorch +cu128 in both linux/amd64 and linux/arm64.
   ##
   - backend: "cuda"
@@ -108,7 +108,7 @@ rules:
       - "sglang"
     args:
       - "CUDA_VERSION=12.8.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.6-vllm0.11.0"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.1rc7"
   ## NVIDIA CUDA 12.9.1, using PyTorch +cu129 in both linux/amd64 and linux/arm64.
   ##
   - backend: "cuda"
@@ -118,7 +118,7 @@ rules:
       - "sglang"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.0"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.1rc7"
 
   #
   # Hygon DTK
