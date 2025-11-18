@@ -6,10 +6,60 @@ backends.
 
 ## Agenda
 
+- [Onboard Services](#onboard-services)
 - [Directory Structure](#directory-structure)
 - [Dockerfile Convention](#dockerfile-convention)
 - [Docker Image Naming Convention](#docker-image-naming-convention)
 - [Integration Process](#integration-process)
+
+## Onboard Services
+
+The following table lists the supported accelerated backends and their corresponding inference services with versions.
+
+### Ascend CANN
+
+| CANN Version (Variant) | Inference Service (Version List)                                                                                                         |
+|------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| 8.3 (A3/910C)          | vLLM: `0.11.0`                                                                                                                           |
+| 8.2 (910B)             | vLLM: `0.11.0`                                                                                                                           |
+| 8.2 (A3/910C)          | MindIE: `2.1.rc2` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`  <br/> SGLang:  `0.5.2`, `0.5.1.post3`                                      |
+| 8.2 (910B)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`, `0.9.1` <br/> SGLang: `0.5.2`, `0.5.1.post3` |
+| 8.2 (310P)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`                                                         |
+
+### Iluvatar CoreX
+
+| CoreX Version (Variant) | Inference Service (Version List) |
+|-------------------------|----------------------------------|
+| 4.2                     | vLLM: `0.8.3`                    |
+
+### NVIDIA CUDA
+
+| CUDA Version (Variant) | Inference Service (Version List)                                                                           |
+|------------------------|------------------------------------------------------------------------------------------------------------|
+| 12.8                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5`, `0.5.4.post3` <br/> VoxBox: `0.0.20` |
+| 12.6                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                      |
+| 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                      |
+
+### Hygon DTK
+
+| DTK Version (Variant) | Inference Service (Version List) |
+|-----------------------|----------------------------------|
+| 25.04                 | vLLM: `0.9.2`, `0.8.5`           |
+
+### MetaX MACA
+
+| MACA Version (Variant) | Inference Service (Version List) |
+|------------------------|----------------------------------|
+| 3.2                    | vLLM: `0.10.2`                   |
+| 3.0                    | vLLM: `0.9.1`                    |
+
+### AMD ROCm
+
+| ROCm Version (Variant) | Inference Service (Version List) |
+|------------------------|----------------------------------|
+| 7.0                    | vLLM: `0.11.0`                   |
+| 6.4                    | vLLM: `0.10.2`                   |
+| 6.3                    | vLLM: `0.10.1.1`, `0.10.0`       |
 
 ## Directory Structure
 
