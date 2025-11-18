@@ -4,6 +4,7 @@ set -eo pipefail
 
 INPUT_BACKEND="${INPUT_BACKEND:-""}"
 INPUT_BACKEND_VERSION="${INPUT_BACKEND_VERSION:-""}"
+INPUT_BACKEND_VARIANT="${INPUT_BACKEND_VARIANT:-""}"
 INPUT_SERVICE=${INPUT_SERVICE:-""}
 INPUT_SERVICE_VERSION="${INPUT_SERVICE_VERSION:-""}"
 INPUT_WORKSPACE="${INPUT_WORKSPACE:-"$(dirname "${BASH_SOURCE[0]}")"}"
@@ -24,6 +25,9 @@ fi
 if [[ -z "${INPUT_BACKEND}" ]]; then
     INPUT_BACKEND_VERSION=""
 fi
+if [[ -z "${INPUT_BACKEND_VARIANT}" ]]; then
+    INPUT_BACKEND_VARIANT=""
+fi
 if [[ -z "${INPUT_SERVICE}" ]]; then
     INPUT_SERVICE_VERSION=""
 fi
@@ -43,11 +47,12 @@ fi
 DISCARDED_RUNNERS="$(jq -cr \
     --arg backend "${INPUT_BACKEND}" \
     --arg backend_version "${INPUT_BACKEND_VERSION}" \
+    --arg backend_variant "${INPUT_BACKEND_VARIANT}" \
     --arg service "${INPUT_SERVICE}" \
     --arg service_version "${INPUT_SERVICE_VERSION}" \
     'map(if
-        ($backend != "" and $service != "" and (.backend == $backend and ($backend_version == "" or .backend_version == $backend_version)) and (.service == $service and ($service_version == "" or .service_version == $service_version))) or
-        ($backend != "" and $service == "" and (.backend == $backend and ($backend_version == "" or .backend_version == $backend_version))) or
+        ($backend != "" and $service != "" and (.backend == $backend and ($backend_variant == "" or .backend_variant == $backend_variant) and ($backend_version == "" or .backend_version == $backend_version)) and (.service == $service and ($service_version == "" or .service_version == $service_version))) or
+        ($backend != "" and $service == "" and (.backend == $backend and ($backend_variant == "" or .backend_variant == $backend_variant) and ($backend_version == "" or .backend_version == $backend_version))) or
         ($backend == "" and $service != "" and (.service == $service and ($service_version == "" or .service_version == $service_version))) then
         . + { deprecated: true }
         else
@@ -58,3 +63,5 @@ DISCARDED_RUNNERS="$(jq -cr \
 # Review the discarded runners.
 echo "[INFO] Discarded Runners:"
 jq -r '.' <<<"${DISCARDED_RUNNERS}" | tee "${INPUT_FILE}" || true
+
+"${INPUT_WORKSPACE}"/merge_runner.sh

@@ -24,6 +24,10 @@ on:
         description: 'Backend version, which version of the backend to discard'
         required: false
         type: string
+      backend_variant:
+        description: 'Backend variant, which variant of the backend to discard'
+        required: false
+        type: string
       # Control how to choice the service to discard.
       service:
         description: 'Service, which service to discard'
@@ -48,6 +52,7 @@ jobs:
           env:
             INPUT_BACKEND: ${{ github.event.inputs.backend }}
             INPUT_BACKEND_VERSION: ${{ github.event.inputs.backend_version }}
+            INPUT_BACKEND_VARIANT: ${{ github.event.inputs.backend_variant }}
             INPUT_SERVICE: ${{ github.event.inputs.service }}
             INPUT_SERVICE_VERSION: ${{ github.event.inputs.service_version }}
             INPUT_WORKSPACE: ${{ github.workspace }}/pack
