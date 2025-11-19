@@ -10,21 +10,29 @@
 #    - Install Torch.
 #    - Install dependencies.
 #    - Build Triton if allowed.
-#    - Build FashAttention if allowed.
-#    - Build AITER if allowed.
+#    - Build FashAttention.
+#    - Build AITER.
+#    - Build vLLM.
+#    - Build LMCache.
 # 2.2. vllm target.
 #    - Install Torch.
-#    - Install vLLM from source.
 #    - Install Triton if existed.
-#    - Install FlashAttention if existed.
-#    - Install AITER if existed.
+#    - Install FlashAttention.
+#    - Install AITER.
+#    - Install vLLM.
+#    - Install LMCache.
 #    - Install dependencies.
 #    - Postprocess, review installation.
-# 3.1. sglang-build target, reuse vllm target.
-#    - Build AITER if needed.
+# 3.1. sglang-build target.
+#    - Install Torch.
+#    - Build SGLang.
+#    - Build SGLang Router.
+#    - Build MoonCake.
 # 3.2. sglang target.
-#    - Install SGLang/Kernel from source.
+#    - Install Torch.
+#    - Install SGLang.
 #    - Install SGLang Router.
+#    - Install MoonCake.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 
@@ -42,8 +50,11 @@
 # - VLLM_TORCH_ROCM_VERSION: Version of ROCM to use for Torch,
 #   which is used to build the components that depend on Torch.
 #   If not specified, it will be set as ROCM_VERSION.
+# - VLLM_TORCH_SOURCE: Source of Torch to use for vLLM,
+#   which is used to build the components that depend on Torch.
 # - VLLM_BUILD_BASE_IMAGE: Base image for vLLM build,
 #   which is used to build wheels.
+# - VLLM_TRITON_COMMIT: Commit of Triton to use for vLLM.
 # - VLLM_FLASHATTENTION_VERSION: Version of FlashAttention to use,
 #   which is used to build the FlashAttention wheel.
 # - VLLM_AITER_REPOSITORY: Repository URL of AITER to use,
@@ -53,23 +64,32 @@
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
-# - SGLANG_AITER_VERSION: Version of AITER to use,
-#   which is used to build the AITER wheel.
+# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
+# - SGLANG_TORCH_ROCM_VERSION: Version of ROCM to use for Torch,
+#   which is used to build the components that depend on Torch.
+# - SGLANG_TORCH_SOURCE: Source of Torch to use for SGLang,
+#   which is used to build the components that depend on Torch.
 # - SGLANG_MOONCAKE_VERSION: Version of MoonCake to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.0
-ARG VLLM_TORCH_VERSION=2.8.0
+ARG VLLM_VERSION=0.11.1rc7
+ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
+ARG VLLM_TORCH_SOURCE=pytorch
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
+ARG VLLM_TRITON_COMMIT=57c693b6
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_AITER_VERSION=0.1.6.post2
-ARG VLLM_LMCACHE_VERSION=0.3.9post1
+ARG VLLM_AITER_VERSION=0.1.7.post1
+ARG VLLM_LMCACHE_VERSION=0.3.9post2
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.5
+ARG SGLANG_VERSION=0.5.5.post3
+ARG SGLANG_TORCH_VERSION=2.8.0
+ARG SGLANG_TORCH_ROCM_VERSION=${ROCM_VERSION}
+ARG SGLANG_TORCH_SOURCE=pytorch
+ARG SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm${SGLANG_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
 ARG SGLANG_MOONCAKE_VERSION=0.3.7.post2
 
 # Stage Bake Runtime
@@ -331,31 +351,47 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ARG VLLM_TORCH_VERSION
 ARG VLLM_TORCH_ROCM_VERSION
+ARG VLLM_TORCH_SOURCE
 
 ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
-    VLLM_TORCH_ROCM_VERSION=${VLLM_TORCH_ROCM_VERSION}
+    VLLM_TORCH_ROCM_VERSION=${VLLM_TORCH_ROCM_VERSION} \
+    VLLM_TORCH_SOURCE=${VLLM_TORCH_SOURCE}
 
 RUN <<EOF
     # Torch
 
     # Install
-    IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-    WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-    TRITON_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "triton" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    TORCH_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    TORCHVISION_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    TORCHAUDIO_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-        echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
-        exit 1
+    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
+        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
+            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
+            exit 1
+        fi
+        [[ -n "${TRITON_URL}" ]] && uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
+        uv pip install \
+            numpy scipy
+        exit 0
     fi
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TRITON_URL}"
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCH_URL}"
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHVISION_URL}"
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHAUDIO_URL}"
+
+    cat <<EOT >/tmp/requirements.txt
+torch==${VLLM_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+        -r /tmp/requirements.txt
     uv pip install \
         numpy scipy
-    exit 0
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -376,6 +412,88 @@ pandas
 EOT
     uv pip install \
         -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+# Stage vLLM Build Triton
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-vllm-build-triton-linux-amd64 --target=vllm-build-triton pack/rocm
+#
+
+FROM vllm-build AS vllm-build-triton
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build Triton
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_TRITON_COMMIT
+
+ENV VLLM_TRITON_COMMIT=${VLLM_TRITON_COMMIT}
+
+RUN <<EOF
+    # Triton
+
+    if pip show triton >/dev/null 2>&1; then
+        echo "Skipping Triton building as installed..."
+        exit 0
+    fi
+
+    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+    IFS="." read -r TT_MAJOR TT_MINOR TT_PATCH <<< "${VLLM_TRITON_VERSION}"
+
+    # Dependencies
+    cat <<EOT >/tmp/requirements.txt
+ninja>=1.11.1
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/ROCm/triton.git triton \
+        && pushd /tmp/triton \
+        && git checkout ${VLLM_TRITON_COMMIT}
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    TT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${TT_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        else
+            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="${TT_ROCM_ARCHS}"
+    echo "Building Triton with the following environment variables:"
+    env
+
+    pushd /tmp/triton \
+      && python -v -m build --no-isolation --wheel \
+      && tree -hs /tmp/triton/dist \
+      && mv /tmp/triton/dist /workspace
+    if [[ -d /tmp/triton/python/triton_kernels ]]; then
+        pushd /tmp/triton/python/triton_kernels \
+          && python -v -m build --no-isolation --wheel \
+          && tree -hs /tmp/triton/python/triton_kernels/dist \
+          && mv /tmp/triton/python/triton_kernels/dist/*.whl /workspace
+    fi
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -408,12 +526,6 @@ RUN <<EOF
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
     IFS="." read -r FA_MAJOR FA_MINOR FA_PATCH <<< "${VLLM_FLASHATTENTION_VERSION}"
-
-    # Support ARM64 only
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping FlashAttention building for ${TARGETARCH}..."
-        exit 0
-    fi
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
@@ -473,18 +585,12 @@ ARG VLLM_AITER_VERSION
 
 ENV VLLM_AITER_VERSION=${VLLM_AITER_VERSION}
 
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
     # AITER
 
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
     IFS="." read -r AT_MAJOR AT_MINOR AT_PATCH <<< "${VLLM_AITER_VERSION}"
-
-    # Support ARM64 only
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping AITER building for ${TARGETARCH}..."
-        exit 0
-    fi
 
     # Prepare
     TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
@@ -505,13 +611,18 @@ RUN <<EOF
     fi
     AT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
     if [[ -z "${AT_ROCM_ARCHS}" ]]; then
-        AT_ROCM_ARCHS="gfx942;gfx950"
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            AT_ROCM_ARCHS="gfx942"
+        else
+            AT_ROCM_ARCHS="gfx942;gfx950"
+        fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export GPU_ARCHS="${AT_ROCM_ARCHS}"
     export LD_LIBRARY_PATH="/opt/rocm/lib:/usr/local/lib:${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
     export BUILD_TARGET="rocm"
     export PREBUILD_KERNELS=1
+    export AITER_MXFP4_MOE_SF="$(echo "${AT_ROCM_ARCHS}" | grep -w "gfx950" >/dev/null 2>&1 && echo 1 || echo 0)"
     echo "Building AITER with the following environment variables:"
     env
     pushd /tmp/aiter \
@@ -522,6 +633,131 @@ RUN <<EOF
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/*
+EOF
+
+# Stage vLLM Build vLLM
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-vllm-build-vllm-linux-amd64 --target=vllm-build-vllm pack/rocm
+#
+
+FROM vllm-build AS vllm-build-vllm
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build vLLM
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_VERSION
+
+ENV VLLM_VERSION=${VLLM_VERSION}
+
+RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
+    --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw \
+    --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
+    # vLLM
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    VL_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${VL_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        else
+            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
+
+    # Install
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_VERSION} --single-branch \
+        https://github.com/vllm-project/vllm.git vllm
+    pushd /tmp/vllm \
+        && VLLM_TARGET_DEVICE="cuda" python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/vllm/dist \
+        && mv /tmp/vllm/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage vLLM Build LMCache
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-vllm-build-lmcache-linux-amd64 --target=vllm-build-lmcache pack/rocm
+#
+
+FROM vllm-build AS vllm-build-lmcache
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build LMCache
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+    # LMCache
+    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    LC_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${LC_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        else
+            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="${LC_ROCM_ARCHS}"
+    export TORCH_DONT_CHECK_COMPILER_ABI=1
+    export CXX=hipcc
+    export BUILD_WITH_HIP=1
+
+    # Install LMCache
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    sed -i "s/\"torch==2\.8\.0\"/\"torch\"/g" /tmp/lmcache/pyproject.toml
+    sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
+    pushd /tmp/lmcache \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/lmcache/dist \
+        && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 # Stage vLLM
@@ -544,31 +780,67 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ARG VLLM_TORCH_VERSION
 ARG VLLM_TORCH_ROCM_VERSION
+ARG VLLM_TORCH_SOURCE
 
 ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
-    VLLM_TORCH_ROCM_VERSION=${VLLM_TORCH_ROCM_VERSION}
+    VLLM_TORCH_ROCM_VERSION=${VLLM_TORCH_ROCM_VERSION} \
+    VLLM_TORCH_SOURCE=${VLLM_TORCH_SOURCE}
 
 RUN <<EOF
     # Torch
 
     # Install
-    IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-    WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-    TRITON_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "triton" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    TORCH_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    TORCHVISION_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    TORCHAUDIO_URL="$(curl -sf "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-    if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-        echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
-        exit 1
+    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
+        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
+            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
+            exit 1
+        fi
+        [[ -n "${TRITON_URL}" ]] && uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
+        uv pip install \
+            numpy scipy
+        exit 0
     fi
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TRITON_URL}"
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCH_URL}"
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHVISION_URL}"
-    uv pip install "https://repo.radeon.com/rocm/manylinux/rocm-rel-${ROCM_VERSION}/${TORCHAUDIO_URL}"
+
+    cat <<EOT >/tmp/requirements.txt
+torch==${VLLM_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+        -r /tmp/requirements.txt
     uv pip install \
         numpy scipy
-        exit 0
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+einops
+pandas
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -582,59 +854,41 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     # vLLM
 
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    VL_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${VL_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
-        elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
-        else
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1151"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export COMPILE_CUSTOM_KERNELS=1
-    export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
-
     # Install
-    EXTRA_INDEX_URL="https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR}"
-    if [[ "${TARGETARCH}" == "arm64" ]]; then
-        EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu/"
-    fi
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_VERSION} --single-branch \
-        https://github.com/vllm-project/vllm.git vllm-${VLLM_VERSION}
-    VLLM_TARGET_DEVICE="rocm" \
-        uv pip install --no-build-isolation --verbose --extra-index-url ${EXTRA_INDEX_URL} \
-        /tmp/vllm-${VLLM_VERSION}
+    uv pip install \
+        /vllm/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
+        && rm -rf /tmp/*
+EOF
+
+## Install Triton
+
+RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw <<EOF
+    # Triton
+
+    if pip show triton >/dev/null 2>&1; then
+        echo "Skipping Triton building as installed..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation --no-deps \
+        /triton/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
 EOF
 
 ## Install FlashAttention
 
 RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
     # FlashAttention
-
-    if [[ ! -d /flashattention/workspace ]]; then
-        echo "Skipping FlashAttention installation for ${TARGETARCH}..."
-        exit 0
-    fi
 
     # Install
     uv pip install --no-build-isolation --no-deps \
@@ -650,11 +904,6 @@ EOF
 RUN --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # AITER
 
-    if [[ ! -d /aiter/workspace ]]; then
-        echo "Skipping AITER installation for ${TARGETARCH}..."
-        exit 0
-    fi
-
     # Install
     uv pip install --no-build-isolation \
         /aiter/workspace/*.whl
@@ -666,65 +915,16 @@ EOF
 
 ## Install LMCache
 
-ARG VLLM_LMCACHE_VERSION
-
-ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
-
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
     # LMCache
 
-    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
-
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    LC_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${LC_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
-        elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
-        else
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1151"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export PYTORCH_ROCM_ARCH="${LC_ROCM_ARCHS}"
-    export TORCH_DONT_CHECK_COMPILER_ABI=1
-    export CXX=hipcc
-    export BUILD_WITH_HIP=1
-
-    cat <<EOT >/tmp/requirements.txt
-aiofile==3.9.0
-aiofiles==25.1.0
-awscrt==0.28.2
-cufile-python==0.2.0
-nvtx==0.2.13
-sortedcontainers==2.4.0
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Install LMCache
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
-        https://github.com/LMCache/LMCache.git lmcache
-    if [[ "${TARGETARCH}" == "arm64" ]]; then
-        sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
-    fi
-    uv pip install --no-build-isolation --no-deps --verbose \
-        /tmp/lmcache
+    # Install
+    uv pip install --no-build-isolation \
+        /lmcache/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
+        && rm -rf /tmp/*
 EOF
 
 ## Enhance Ray
@@ -737,6 +937,28 @@ RUN <<EOF
     cat <<EOT >/tmp/requirements.txt
 ray[client]==${RAY_VERSION}
 ray[default]==${RAY_VERSION}
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+aiofile==3.9.0
+aiofiles==25.1.0
+awscrt==0.28.2
+cufile-python==0.2.0
+nvtx==0.2.13
+sortedcontainers==2.4.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -767,18 +989,19 @@ ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
     RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES=1 \
     TOKENIZERS_PARALLELISM=false \
     SAFETENSORS_FAST_GPU=1 \
-    HIP_FORCE_DEV_KERNARG=1
+    HIP_FORCE_DEV_KERNARG=1 \
+    HSA_NO_SCRATCH_RECLAIM=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
 
-# Stage SGLang Prepare
+# Stage SGLang Build
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm{ROCM_VERSION%.*}-sglang-prepare-linux-amd64 --target=sglang-build pack/rocm
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm{ROCM_VERSION%.*}-sglang-build-linux-amd64 --target=sglang-build pack/rocm
 #
 
-FROM ${SGLANG_BASE_IMAGE} AS sglang-prepare
+FROM ${SGLANG_BUILD_BASE_IMAGE} AS sglang-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -788,20 +1011,231 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
-# Stage SGLang Prepare MoonCake
+## Install Torch
+
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_ROCM_VERSION
+ARG SGLANG_TORCH_SOURCE
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION} \
+    SGLANG_TORCH_SOURCE=${SGLANG_TORCH_SOURCE}
+
+RUN <<EOF
+    # Torch
+
+    # Validate
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
+        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
+        exit 0
+    fi
+
+    # Install
+    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
+        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
+            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
+            exit 1
+        fi
+        uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
+        uv pip install \
+            numpy scipy
+        exit 0
+    fi
+
+    cat <<EOT >/tmp/requirements.txt
+torch==${SGLANG_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+        -r /tmp/requirements.txt
+    uv pip install \
+        numpy scipy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+einops
+pandas
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+# Stage SGLang Build SGLang
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-prepare-mooncake-linux-amd64 --target=sglang-prepare-mooncake pack/rocm
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-sglang-linux-amd64 --target=sglang-build-sglang pack/rocm
 #
 
-FROM sglang-prepare AS sglang-prepare-mooncake
+FROM sglang-build AS sglang-build-sglang
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-## Prepare MoonCake
+## Build SGLang
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_TORCH_ROCM_VERSION
+ARG SGLANG_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION}
+
+RUN <<EOF
+    # SGLang
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    SG_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${SG_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+        else
+            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
+    export AMDGPU_TARGET="gfx950"
+    echo "Building SGLang with the following environment variables:"
+    env
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+
+    # Build SGLang
+    # Copy config files to support MI300X in virtualized environments (MI300X_VF).
+    # Symlinks will not be created in image build.
+    # See https://github.com/sgl-project/sglang/blob/09938e1f82334a98c124ae3352d893480963775f/docker/rocm.Dockerfile#L197C2-L200.
+    find /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/quantization/configs/ \
+         /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
+         -type f -name '*MI300X*' | xargs -I {} sh -c 'vf_config=$(echo "$1" | sed "s/MI300X/MI300X_VF/"); cp "$1" "$vf_config"' -- {}
+    pushd /tmp/sglang/python \
+        && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
+        && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/sglang/python/dist \
+        && mv /tmp/sglang/python/dist /workspace
+
+    # Build SGLang Kernel
+    pushd /tmp/sglang/sgl-kernel \
+        && if [[ -f pyproject_rocm.toml ]]; then mv pyproject_rocm.toml pyproject.toml; fi \
+        && python setup_rocm.py bdist_wheel --dist-dir=dist \
+        && tree -hs /tmp/sglang/sgl-kernel/dist \
+        && mv /tmp/sglang/sgl-kernel/dist/*.whl /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage SGLang Build SGLang Router
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-sglangrouter-linux-amd64 --target=sglang-build-sglangrouter pack/rocm
+#
+
+FROM sglang-build AS sglang-build-sglangrouter
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build SGLang Router
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
+    # SGlang Router
+
+    # Install Rust
+    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    export PATH="/root/.cargo/bin:${PATH}" \
+        && rustc --version \
+        && cargo --version
+
+    # Install build tools
+    uv pip install \
+        setuptools-rust maturin
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
+        https://github.com/sgl-project/sglang.git sglang
+
+    # Build
+    pushd /tmp/sglang/sgl-router \
+        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
+        && tree -hs /tmp/sglang/sgl-router/dist \
+        && mv /tmp/sglang/sgl-router/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /root/.cargo \
+        && rm -rf /root/.rustup \
+        && sed -i '$d' /root/.profile \
+        && sed -i '$d' /root/.bashrc \
+        && ccache --clear --clean
+EOF
+
+# Stage SGLang Build MoonCake
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-mooncake-linux-amd64 --target=sglang-build-mooncake pack/rocm
+#
+
+FROM sglang-build AS sglang-build-mooncake
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build MoonCake
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_MOONCAKE_VERSION
@@ -809,7 +1243,7 @@ ARG SGLANG_MOONCAKE_VERSION
 ENV SGLANG_MOONCAKE_VERSION=${SGLANG_MOONCAKE_VERSION} \
     PATH="/usr/local/go/bin:${PATH}"
 
-RUN <<EOF
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
     # MoonCake
 
     # Build MoonCake
@@ -840,144 +1274,25 @@ RUN <<EOF
         && ccache --clear --clean
 EOF
 
-# Stage SGLang
+# Stage SGLang Build Fast-Hadamard-Transform
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-linux-amd64 --target=sglang pack/rocm
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-fast-hadamard-transform-linux-amd64 --target=sglang-build-fast-hadamard-transform pack/rocm
 #
 
-FROM sglang-prepare AS sglang
+FROM sglang-build AS sglang-build-fast-hadamard-transform
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
-
-## Install SGLang
+## Build Fast-Hadamard-Transform
 
 ARG CMAKE_MAX_JOBS
-ARG SGLANG_VERSION
 
-ENV SGLANG_VERSION=${SGLANG_VERSION}
-
-RUN <<EOF
-    # SGLang
-
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    SG_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
-    if [[ -z "${SG_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} <= 6.2" | bc -l) )); then
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx941;gfx942;gfx1030;gfx1100;gfx1101"
-        elif (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
-        else
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1151"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
-    export AMDGPU_TARGET="gfx950"
-    echo "Building SGLang with the following environment variables:"
-    env
-
-    # Download SGLang
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
-        https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
-
-    # Install SGLang
-    # Copy config files to support MI300X in virtualized environments (MI300X_VF).
-    # Symlinks will not be created in image build.
-    # See https://github.com/sgl-project/sglang/blob/09938e1f82334a98c124ae3352d893480963775f/docker/rocm.Dockerfile#L197C2-L200.
-    find /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/quantization/configs/ \
-         /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
-         -type f -name '*MI300X*' | xargs -I {} sh -c 'vf_config=$(echo "$1" | sed "s/MI300X/MI300X_VF/"); cp "$1" "$vf_config"' -- {}
-    pushd /tmp/sglang-${SGLANG_VERSION}/python \
-        && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
-        && uv pip install --verbose --no-deps .[all_hip]
-
-    # Install SGLang Kernel
-    pushd /tmp/sglang-${SGLANG_VERSION}/sgl-kernel \
-        && if [[ -f pyproject_rocm.toml ]]; then mv pyproject_rocm.toml pyproject.toml; fi \
-        && python setup_rocm.py install
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
-EOF
-
-## Install SGLang Router
-
-RUN <<EOF
-    # SGlang Router
-
-    # Install Rust
-    curl --retry 3 --retry-connrefused --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    export PATH="/root/.cargo/bin:${PATH}" \
-        && rustc --version \
-        && cargo --version
-
-    # Install build tools
-    uv pip install \
-        setuptools-rust maturin
-
-    # Install SGLang Router
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
-        https://github.com/sgl-project/sglang.git sglang
-    pushd /tmp/sglang/sgl-router \
-        && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/dist \
-        && uv pip install --force-reinstall /tmp/sglang/sgl-router/dist/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /root/.cargo \
-        && rm -rf /root/.rustup \
-        && sed -i '$d' /root/.profile \
-        && sed -i '$d' /root/.bashrc \
-        && ccache --clear --clean
-EOF
-
-## Install MoonCake
-
-RUN --mount=type=bind,from=sglang-prepare-mooncake,source=/,target=/mooncake,rw <<EOF
-    # MoonCake
-
-    if [[ ! -d /mooncake/workspace ]]; then
-        echo "Skipping MoonCake installation for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    # Install
-    uv pip install --no-build-isolation \
-        /mooncake/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install Fast-Hadamard-Transform
-
-RUN <<EOF
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
     # Fast-Hadamard-Transform
-
-    uv pip install \
-        wheel==0.45.1
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -996,12 +1311,171 @@ RUN <<EOF
         --branch rocm --single-branch \
         https://github.com/jeffdaily/fast-hadamard-transform.git fast-hadamard-transform
     pushd /tmp/fast-hadamard-transform \
-        && python setup.py install
+        && python setup.py bdist_wheel --dist-dir=dist \
+        && tree -hs /tmp/fast-hadamard-transform/dist \
+        && mv /tmp/fast-hadamard-transform/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/* \
         && ccache --clear --clean
+EOF
+
+
+# Stage SGLang
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-linux-amd64 --target=sglang pack/rocm
+#
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install Torch
+
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_ROCM_VERSION
+ARG SGLANG_TORCH_SOURCE
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION} \
+    SGLANG_TORCH_SOURCE=${SGLANG_TORCH_SOURCE}
+
+RUN <<EOF
+    # Torch
+
+    # Validate
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
+        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
+        exit 0
+    fi
+
+    # Install
+    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
+        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
+        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
+            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
+            exit 1
+        fi
+        uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
+        uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
+        uv pip install \
+            numpy scipy
+        exit 0
+    fi
+
+    cat <<EOT >/tmp/requirements.txt
+torch==${SGLANG_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+        -r /tmp/requirements.txt
+    uv pip install \
+        numpy scipy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+einops
+pandas
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install SGLang
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
+    # SGLang
+
+    # Install
+    uv pip install \
+        "$(ls /sglang/workspace/sglang-*.whl)[all_hip]"
+    uv pip install \
+        "$(ls /sglang/workspace/sgl_kernel-*.whl)"
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install SGLang Router
+
+RUN --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
+    # SGlang Router
+
+    # Install
+    uv pip install --no-build-isolation \
+        /sglangrouter/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install MoonCake
+
+RUN --mount=type=bind,from=sglang-build-mooncake,source=/,target=/mooncake,rw <<EOF
+    # MoonCake
+
+    # Install
+    uv pip install --no-build-isolation \
+        /mooncake/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Fast-Hadamard-Transform
+
+RUN --mount=type=bind,from=sglang-build-fast-hadamard-transform,source=/,target=/fast-hadamard-transform,rw <<EOF
+    # Fast-Hadamard-Transform
+
+    # Install
+    uv pip install --no-build-isolation \
+        /fast-hadamard-transform/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
 EOF
 
 ## Postprocess
@@ -1018,28 +1492,11 @@ RUN <<EOF
         --package triton \
         --package vllm \
         --package torch \
-        --package deep-ep
+        --package deep-ep \
+        --package IPython
 EOF
 
 ## Entrypoint
-
-ENV HIP_FORCE_DEV_KERNARG=1 \
-    HSA_NO_SCRATCH_RECLAIM=1 \
-    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
-    SGLANG_INT4_WEIGHT=0 \
-    SGLANG_MOE_PADDING=1 \
-    SGLANG_ROCM_DISABLE_LINEARQUANT=0 \
-    SGLANG_ROCM_FUSED_DECODE_MLA=1 \
-    SGLANG_SET_CPU_AFFINITY=1\
-    SGLANG_USE_AITER=1 \
-    SGLANG_USE_ROCM700A=1 \
-    NCCL_MIN_NCHANNELS=112 \
-    VLLM_FP8_PADDING=1 \
-    VLLM_FP8_ACT_PADDING=1 \
-    VLLM_FP8_WEIGHT_PADDING=1 \
-    VLLM_FP8_REDUCE_CONV=1 \
-    TORCHINDUCTOR_MAX_AUTOTUNE=1 \
-    TORCHINDUCTOR_MAX_AUTOTUNE_POINTWISE=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

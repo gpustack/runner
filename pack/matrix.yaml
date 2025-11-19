@@ -15,6 +15,7 @@ rules:
   #
   # Ascend CANN
   #
+
   ## Ascend CANN 8.3.rc1, using CANN Kernel for A3.
   ##
   - backend: "cann"
@@ -84,41 +85,61 @@ rules:
   # NVIDIA CUDA
   #
 
-  ## NVIDIA CUDA 12.6.3, using PyTorch +cu128 in linux/amd64.
+  ## NVIDIA CUDA 12.6.3, using PyTorch +cu128.
   ##
   - backend: "cuda"
     services:
       - "voxbox"
       - "vllm"
-      - "sglang"
     args:
       - "CUDA_VERSION=12.6.3"
-      - "VOXBOX_VERSION=0.0.20"
-      - "VOXBOX_TORCH_VERSION=2.7.1"
       - "VOXBOX_TORCH_CUDA_VERSION=12.8.1"
       - "VLLM_TORCH_CUDA_VERSION=12.8.1"
+  - backend: "cuda"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "CUDA_VERSION=12.6.3"
+      - "SGLANG_TORCH_CUDA_VERSION=12.8.1"
       - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.6-vllm0.11.1rc7"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.1rc7"
-  ## NVIDIA CUDA 12.8.1, using PyTorch +cu128 in both linux/amd64 and linux/arm64.
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.0"
+  ## NVIDIA CUDA 12.8.1, using PyTorch +cu128.
   ##
   - backend: "cuda"
     services:
       - "voxbox"
       - "vllm"
+    args:
+      - "CUDA_VERSION=12.8.1"
+  - backend: "cuda"
+    services:
       - "sglang"
+    platforms:
+      - "linux/amd64"
     args:
       - "CUDA_VERSION=12.8.1"
       - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.1rc7"
-  ## NVIDIA CUDA 12.9.1, using PyTorch +cu129 in both linux/amd64 and linux/arm64.
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.0"
+  ## NVIDIA CUDA 12.9.1, using PyTorch +cu129.
   ##
   - backend: "cuda"
     services:
       - "voxbox"
       - "vllm"
-      - "sglang"
     args:
       - "CUDA_VERSION=12.9.1"
       - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.1rc7"
+  - backend: "cuda"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "CUDA_VERSION=12.9.1"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.1rc7"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.1rc7"
 
   #
   # Hygon DTK
@@ -152,7 +173,8 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.0.2, using PyTorch +rocm7.0 in linux/amd64.
+  ## AMD ROCm 7.0.2, using PyTorch +rocm6.4,
+  ## see https://www.amd.com/en/developer/resources/technical-articles/2025/pytorch-2-9-wheel-variant-support-expands-to-rocm.html.
   ##
   - backend: "rocm"
     services:
@@ -162,4 +184,20 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.0.2"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.11.0"
+      - "VLLM_TORCH_ROCM_VERSION=6.4.4"
+      - "SGLANG_TORCH_VERSION=2.8.0"
+      - "SGLANG_TORCH_SOURCE=radeon"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.11.1rc7"
+  ## AMD ROCm 6.4.4, using PyTorch +rocm6.4.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4.4"
+      - "VLLM_TORCH_SOURCE=radeon"
+      - "SGLANG_TORCH_SOURCE=radeon"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.11.1rc7"

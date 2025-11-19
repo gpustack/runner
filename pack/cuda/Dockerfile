@@ -36,9 +36,14 @@
 #    - Install LMCache.
 #    - Install dependencies.
 #    - Postprocess, review installation.
-# 4.1. sglang target, reuse vllm target.
-#    - Install SGLang from source.
-#    - Install SGLang Router from source.
+# 4.1. sglang-build target.
+#    - Install Torch.
+#    - Build SGLang.
+#    - Build SGLang Router.
+# 4.2. sglang target.
+#    - Install Torch.
+#    - Install SGLang.
+#    - Install SGLang Router.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 
@@ -82,9 +87,12 @@
 #   which is used to build the FlashInfer wheel.
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
+# - SGLANG_VERSION: Version of SGLang to use.
+# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
+# - SGLANG_TORCH_CUDA_VERSION: Version of CUDA to use for Torch,
+#   which is used to build the components that depend on Torch for SGLang.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
 #   which is used to build the SGLang from source.
-# - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
@@ -110,8 +118,10 @@ ARG VLLM_FLASHINFER_VERSION=0.5.2
 ARG VLLM_FLASHATTENTION_VERSION=2.8.2
 ARG VLLM_LMCACHE_VERSION=0.3.9post2
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_BUILD_BASE_IMAGE=${SGLANG_BASE_IMAGE}
 ARG SGLANG_VERSION=0.5.5.post3
+ARG SGLANG_TORCH_VERSION=2.8.0
+ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
+ARG SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda${SGLANG_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
 ARG SGLANG_KERNEL_VERSION=0.3.17.post1
 
 #
@@ -1457,13 +1467,87 @@ ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
 
+# Stage SGLang Build
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang-build-linux-amd64 --target=sglang-build pack/cuda
+#
+
+FROM ${SGLANG_BUILD_BASE_IMAGE} AS sglang-build
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+## Install Torch
+
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_CUDA_VERSION
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
+
+RUN <<EOF
+    # Torch
+
+    # Validate
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_CUDA_VERSION}" == "${VLLM_TORCH_CUDA_VERSION}" ]]; then
+        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
+        exit 0
+    fi
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+torch==${SGLANG_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
+        -r /tmp/requirements.txt
+    uv pip install \
+        numpy scipy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+einops
+cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
+pynvml==${CUDA_MAJOR}
+nvidia-nvshmem-cu${CUDA_MAJOR}
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 # Stage SGLang Build SGLang
 #
 # Example build command:
 #   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang-build-sglang-linux-amd64 --target=sglang-build-sglang pack/cuda
 #
 
-FROM ${SGLANG_BUILD_BASE_IMAGE} AS sglang-build-sglang
+FROM sglang-build AS sglang-build-sglang
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -1474,15 +1558,17 @@ ARG TARGETARCH
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
+ARG SGLANG_TORCH_ROCM_VERSION
 ARG SGLANG_KERNEL_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION} \
     SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
     # SGLang
 
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -1503,21 +1589,22 @@ RUN <<EOF
     export TORCH_CUDA_ARCH_LIST="${SG_CUDA_ARCHS}"
     export COMPILE_CUSTOM_KERNELS=1
     export NVCC_THREADS=1
+    echo "Building SGLang with the following environment variables:"
+    env
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang
 
-    # Install SGLang
+    # Build SGLang
     pushd /tmp/sglang/python \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/sglang/python/dist \
         && mv /tmp/sglang/python/dist /workspace
 
-    # Install pre-complied SGLang Kernel
-
+    # Download pre-complied SGLang Kernel
     if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} <= 12.9" | bc -l) )); then
         curl --retry 3 --retry-connrefused -fL \
             "https://github.com/sgl-project/whl/releases/download/${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_$(uname -m).whl" \
@@ -1540,7 +1627,7 @@ EOF
 #   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-sglang-build-sglangrouter-linux-amd64 --target=sglang-build-sglangrouter pack/cuda
 #
 
-FROM ${SGLANG_BUILD_BASE_IMAGE} AS sglang-build-sglangrouter
+FROM sglang-build AS sglang-build-sglangrouter
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -1574,7 +1661,7 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang
 
-    # Install SGLang Router
+    # Build
     pushd /tmp/sglang/sgl-router \
         && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
         && tree -hs /tmp/sglang/sgl-router/dist \
@@ -1606,6 +1693,64 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
+## Install Torch
+
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_CUDA_VERSION
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
+
+RUN <<EOF
+    # Torch
+
+    # Validate
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_CUDA_VERSION}" == "${VLLM_TORCH_CUDA_VERSION}" ]]; then
+        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
+        exit 0
+    fi
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+torch==${SGLANG_TORCH_VERSION}
+torchvision
+torchaudio
+EOT
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
+        -r /tmp/requirements.txt
+    uv pip install \
+        numpy scipy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+requests
+pyyaml
+einops
+cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
+pynvml==${CUDA_MAJOR}
+nvidia-nvshmem-cu${CUDA_MAJOR}
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Install SGLang
 
 ARG CMAKE_MAX_JOBS
@@ -1620,27 +1765,14 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
 
     # Install
     uv pip install \
-        /sglang/workspace/*.whl
-
-    # Install SGLang Diffusion Extension
+        "$(ls /sglang/workspace/sglang-*.whl)"
     if [[ "${TARGETARCH}" == "amd64" ]]; then
-            cat <<EOT >/tmp/requirements.txt
-diffusers==0.35.2
-yunchang==0.6.3.post1
-opencv-python==4.10.0.84
-imageio==2.36.0
-imageio-ffmpeg==0.5.1
-PyYAML==6.0.1
-moviepy>=2.0.0
-cloudpickle
-remote-pdb
-torchcodec==0.5.0
-st_attn ==0.0.7
-vsa==0.0.4
-EOT
+        # Install SGLang Diffusion Extension
         uv pip install \
-            -r /tmp/requirements.txt
+            "$(ls /sglang/workspace/sglang-*.whl)[diffusion]"
     fi
+    uv pip install \
+        "$(ls /sglang/workspace/sgl_kernel-*.whl)"
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1699,7 +1831,8 @@ RUN <<EOF
         --package torch \
         --package deep-ep \
         --package diffusers \
-        --package opencv-python
+        --package opencv-python \
+        --package IPython
 EOF
 
 ## Entrypoint
