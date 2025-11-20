@@ -24,7 +24,7 @@ The following table lists the supported accelerated backends and their correspon
 | 8.2 (910B)             | vLLM: `0.11.0`                                                                                                                           |
 | 8.2 (A3/910C)          | MindIE: `2.1.rc2` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`  <br/> SGLang:  `0.5.2`, `0.5.1.post3`                                      |
 | 8.2 (910B)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`, `0.9.1` <br/> SGLang: `0.5.2`, `0.5.1.post3` |
-| 8.2 (310P)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`                                                         |
+| 8.2 (310P)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.10.0`, `0.9.2`                                                                               |
 
 ### Iluvatar CoreX
 
