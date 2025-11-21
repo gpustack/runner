@@ -496,6 +496,17 @@
   },
   {
     "backend": "cuda",
+    "backend_version": "12.9",
+    "original_backend_version": "12.9.1",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.5.post3",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.9-sglang0.5.5.post3",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
     "backend_version": "12.8",
     "original_backend_version": "12.8.1",
     "backend_variant": "",
