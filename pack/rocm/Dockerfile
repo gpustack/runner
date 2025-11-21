@@ -75,7 +75,7 @@ ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.1rc7
+ARG VLLM_VERSION=0.11.2
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
@@ -373,23 +373,23 @@ RUN <<EOF
             echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
         fi
-        [[ -n "${TRITON_URL}" ]] && uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        if [[ -n "${TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
-        uv pip install \
-            numpy scipy
-        exit 0
-    fi
-
-    cat <<EOT >/tmp/requirements.txt
+    else
+        cat <<EOT >/tmp/requirements.txt
 torch==${VLLM_TORCH_VERSION}
 torchvision
 torchaudio
 EOT
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
-    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-        -r /tmp/requirements.txt
+        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+            -r /tmp/requirements.txt
+    fi
+
     uv pip install \
         numpy scipy
 
@@ -660,6 +660,13 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # vLLM
 
+    # TODO(thxCode): move this to base image later
+    cat <<EOT >/tmp/requirements.txt
+setuptools>=77.0.3,<80.0.0
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -686,7 +693,7 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
     pushd /tmp/vllm \
-        && VLLM_TARGET_DEVICE="cuda" python -v -m build --no-isolation --wheel \
+        && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
 
@@ -719,6 +726,13 @@ ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
 RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     # LMCache
     # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
+
+    # TODO(thxCode): move this to base image later
+    cat <<EOT >/tmp/requirements.txt
+setuptools>=77.0.3,<80.0.0
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
 
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
 
@@ -802,23 +816,23 @@ RUN <<EOF
             echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
         fi
-        [[ -n "${TRITON_URL}" ]] && uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        if [[ -n "${TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
-        uv pip install \
-            numpy scipy
-        exit 0
-    fi
-
-    cat <<EOT >/tmp/requirements.txt
+    else
+        cat <<EOT >/tmp/requirements.txt
 torch==${VLLM_TORCH_VERSION}
 torchvision
 torchaudio
 EOT
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
-    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-        -r /tmp/requirements.txt
+        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+            -r /tmp/requirements.txt
+    fi
+
     uv pip install \
         numpy scipy
 
@@ -1024,42 +1038,36 @@ ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
 RUN <<EOF
     # Torch
 
-    # Validate
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
-        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
-        exit 0
-    fi
-
     # Install
-    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
+    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
         TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
+            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
         fi
-        uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        if [[ -n "${TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
-        uv pip install \
-            numpy scipy
-        exit 0
-    fi
-
-    cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
+    else
+        cat <<EOT >/tmp/requirements.txt
+torch==${VLLM_TORCH_VERSION}
 torchvision
 torchaudio
 EOT
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
-    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-        -r /tmp/requirements.txt
+        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+            -r /tmp/requirements.txt
+    fi
+
     uv pip install \
         numpy scipy
 
@@ -1351,42 +1359,36 @@ ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
 RUN <<EOF
     # Torch
 
-    # Validate
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
-        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
-        exit 0
-    fi
-
     # Install
-    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
+    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
         TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
+            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
         fi
-        uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        if [[ -n "${TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
-        uv pip install \
-            numpy scipy
-        exit 0
-    fi
-
-    cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
+    else
+        cat <<EOT >/tmp/requirements.txt
+torch==${VLLM_TORCH_VERSION}
 torchvision
 torchaudio
 EOT
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
-    uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-        -r /tmp/requirements.txt
+        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
+            -r /tmp/requirements.txt
+    fi
+
     uv pip install \
         numpy scipy
 
