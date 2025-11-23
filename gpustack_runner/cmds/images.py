@@ -425,7 +425,7 @@ class SaveImagesSubCommand(SubCommand):
                     "--override-arch",
                     override_arch,
                     "copy",
-                    "--src-tls-verify",
+                    "--src-tls-verify=false",
                     "--retry-times",
                     str(self.max_retries),
                 ]
@@ -743,8 +743,8 @@ class CopyImagesSubCommand(SubCommand):
                 command = [
                     "skopeo",
                     "copy",
-                    "--src-tls-verify",
-                    "--dest-tls-verify",
+                    "--src-tls-verify=false",
+                    "--dest-tls-verify=false",
                     "--all",
                     "--retry-times",
                     str(self.max_retries),
