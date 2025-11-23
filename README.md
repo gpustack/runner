@@ -21,7 +21,7 @@ The following table lists the supported accelerated backends and their correspon
 | CANN Version (Variant) | Inference Service (Version List)                                                                                                         |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
 | 8.3 (A3/910C)          | vLLM: `0.11.0`                                                                                                                           |
-| 8.2 (910B)             | vLLM: `0.11.0`                                                                                                                           |
+| 8.3 (910B)             | vLLM: `0.11.0`                                                                                                                           |
 | 8.2 (A3/910C)          | MindIE: `2.1.rc2` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`  <br/> SGLang:  `0.5.2`, `0.5.1.post3`                                      |
 | 8.2 (910B)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`, `0.9.1` <br/> SGLang: `0.5.2`, `0.5.1.post3` |
 | 8.2 (310P)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.10.0`, `0.9.2`                                                                               |
@@ -39,6 +39,10 @@ The following table lists the supported accelerated backends and their correspon
 | 12.8                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5`, `0.5.4.post3` <br/> VoxBox: `0.0.20` |
 | 12.6                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                      |
 | 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                      |
+
+> [!NOTE]
+> - CUDA 12.8 supports Compute Capabilities: `7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX`.
+> - CUDA 12.6/12.4 supports Compute Capabilities: `7.5 8.0+PTX 8.9 9.0+PTX`.
 
 ### Hygon DTK
 
@@ -60,6 +64,10 @@ The following table lists the supported accelerated backends and their correspon
 | 7.0                    | vLLM: `0.11.0`                   |
 | 6.4                    | vLLM: `0.10.2`                   |
 | 6.3                    | vLLM: `0.10.1.1`, `0.10.0`       |
+
+> [!NOTE]
+> - ROCm 7.0 supports LLVM Targets: `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
+> - ROCm 6.4/6.3 supports LLVM Targets: `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
 
 ## Directory Structure
 
