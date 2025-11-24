@@ -58,6 +58,7 @@ class ListImagesSubCommand(SubCommand):
     service_version_prefix: str
     repository: str
     platform: str
+    deprecated: bool
     format: str
 
     @staticmethod
@@ -125,6 +126,12 @@ class ListImagesSubCommand(SubCommand):
         )
 
         list_parser.add_argument(
+            "--deprecated",
+            action="store_true",
+            help="Include deprecated images in the listing",
+        )
+
+        list_parser.add_argument(
             "--format",
             type=str,
             help="Output format (default: text)",
@@ -144,6 +151,7 @@ class ListImagesSubCommand(SubCommand):
         self.service_version_prefix = args.service_version_prefix
         self.repository = args.repository
         self.platform = args.platform
+        self.deprecated = args.deprecated or False
         self.format = args.format or "text"
 
     def run(self):
@@ -157,6 +165,7 @@ class ListImagesSubCommand(SubCommand):
             service_version_prefix=self.service_version_prefix,
             repository=self.repository,
             platform=self.platform,
+            with_deprecated=self.deprecated,
         )
         if not images:
             print("No matching images found.")
@@ -184,6 +193,7 @@ class SaveImagesSubCommand(SubCommand):
     service_version_prefix: str
     repository: str
     platform: str
+    deprecated: bool
     max_workers: int
     max_retries: int
     source: str
@@ -258,6 +268,12 @@ class SaveImagesSubCommand(SubCommand):
         )
 
         save_parser.add_argument(
+            "--deprecated",
+            action="store_true",
+            help="Include deprecated images in the listing",
+        )
+
+        save_parser.add_argument(
             "--max-workers",
             type=int,
             default=1,
@@ -323,6 +339,7 @@ class SaveImagesSubCommand(SubCommand):
         self.service_version_prefix = args.service_version_prefix
         self.repository = args.repository
         self.platform = args.platform or _get_current_platform()
+        self.deprecated = args.deprecated or False
         self.max_workers = args.max_workers
         self.max_retries = args.max_retries
         self.source = args.source
@@ -351,6 +368,7 @@ class SaveImagesSubCommand(SubCommand):
             service_version_prefix=self.service_version_prefix,
             repository=self.repository,
             platform=self.platform,
+            with_deprecated=self.deprecated,
         )
         if not images:
             print("No matching images found.")
@@ -489,6 +507,7 @@ class CopyImagesSubCommand(SubCommand):
     service_version_prefix: str
     repository: str
     platform: str
+    deprecated: bool
     max_workers: int
     max_retries: int
     source: str
@@ -563,6 +582,12 @@ class CopyImagesSubCommand(SubCommand):
             type=str,
             help="Filter images by platform",
             choices=_AVAILABLE_PLATFORMS,
+        )
+
+        copy_parser.add_argument(
+            "--deprecated",
+            action="store_true",
+            help="Include deprecated images in the listing",
         )
 
         copy_parser.add_argument(
@@ -657,6 +682,7 @@ class CopyImagesSubCommand(SubCommand):
         self.service_version_prefix = args.service_version_prefix
         self.repository = args.repository
         self.platform = args.platform
+        self.deprecated = args.deprecated or False
         self.max_workers = args.max_workers
         self.max_retries = args.max_retries
         self.source = args.source
@@ -683,6 +709,7 @@ class CopyImagesSubCommand(SubCommand):
             service_version_prefix=self.service_version_prefix,
             repository=self.repository,
             platform=self.platform,
+            with_deprecated=self.deprecated,
         )
         if not images:
             print("No matching images found.")

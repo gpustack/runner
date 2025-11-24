@@ -220,6 +220,7 @@ def list_runners(**kwargs) -> Runners | list[dict]:
             - `service_version`
             - `service_version_prefix`
             - `platform`
+            - `with_deprecated`: Whether to include deprecated runners, default is True.
 
             Also accepts `todict` to return a list of dictionaries instead of Runner objects.
 
@@ -245,11 +246,16 @@ def list_runners(**kwargs) -> Runners | list[dict]:
         "service_version",
         "service_version_prefix",
         "platform",
+        "with_deprecated",
     }
     given_keys = set(kwargs.keys())
     if not given_keys.issubset(allowed_keys):
         errmsg = f"Invalid keys in kwargs: {given_keys - allowed_keys}."
         raise ValueError(errmsg)
+
+    with_deprecated = kwargs.pop("with_deprecated", True)
+    if with_deprecated is None:
+        with_deprecated = True
 
     results: Runners = []
     for item in runners:
@@ -273,6 +279,8 @@ def list_runners(**kwargs) -> Runners | list[dict]:
                 match = False
                 break
         if match:
+            if not with_deprecated and item.deprecated:
+                continue
             results.append(item)
 
     return convert_runners_to_dict(results) if todict else results
@@ -612,6 +620,7 @@ def list_backend_runners(**kwargs) -> BackendRunners | list[dict]:
             - `service_version`
             - `service_version_prefix`
             - `platform`
+            - `with_deprecated`: Whether to include deprecated runners, default is True.
 
             Also accepts `todict` to return a list of dictionaries instead of BackendRunner objects.
 
@@ -785,6 +794,7 @@ def list_service_runners(**kwargs) -> ServiceRunners | list[dict]:
             - `service_version`
             - `service_version_prefix`
             - `platform`
+            - `with_deprecated`: Whether to include deprecated runners, default is True.
 
             Also accepts `todict` to return a list of dictionaries instead of ServiceRunner objects.
 
