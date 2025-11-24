@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .images import (
+    CompareImagesSubCommand,
     CopyImagesSubCommand,
     ListImagesSubCommand,
     PlatformedImage,
@@ -10,6 +11,7 @@ from .images import (
 )
 
 __all__ = [
+    "CompareImagesSubCommand",
     "CopyImagesSubCommand",
     "ListImagesSubCommand",
     "PlatformedImage",

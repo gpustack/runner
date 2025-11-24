@@ -15,10 +15,10 @@ backends.
 ## Onboard Services
 
 > [!TIP]
-> - The list below shows the accelerated backends and inference services available in the latest release.
->   For support of backends or services not shown here, please refer to previous release tags.
-> - Deprecated inference service versions in the latest release are marked with strikethrough formatting.
->   They may still be available in previous releases, and not recommended for new deployments.
+> - The list below shows the accelerated backends and inference services available in the latest release. For support of
+    backends or services not shown here, please refer to previous release tags.
+> - Deprecated inference service versions in the latest release are marked with strikethrough formatting. They may still
+    be available in previous releases, and not recommended for new deployments.
 
 The following table lists the supported accelerated backends and their corresponding inference services with versions.
 
@@ -26,8 +26,9 @@ The following table lists the supported accelerated backends and their correspon
 
 | CANN Version (Variant) | Inference Service (Version List)                                                                                                         |
 |------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| 8.3 (A3/910C)          | vLLM: `0.11.0`                                                                                                                           |
-| 8.3 (910B)             | vLLM: `0.11.0`                                                                                                                           |
+| 8.3 (A3/910C)          | MindIE: `2.2.rc1` <br/> vLLM: `0.11.0`                                                                                                   |
+| 8.3 (910B)             | MindIE: `2.2.rc1` <br/> vLLM: `0.11.0`                                                                                                   |
+| 8.3 (310P)             | MindIE: `2.2.rc1`                                                                                                                        |
 | 8.2 (A3/910C)          | MindIE: `2.1.rc2` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`  <br/> SGLang:  `0.5.2`, `0.5.1.post3`                                      |
 | 8.2 (910B)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`, `0.9.1` <br/> SGLang: `0.5.2`, `0.5.1.post3` |
 | 8.2 (310P)             | MindIE: `2.1.rc2`, `2.1.rc1` <br/> vLLM: `0.10.0`, `0.9.2`                                                                               |
@@ -40,11 +41,12 @@ The following table lists the supported accelerated backends and their correspon
 
 ### NVIDIA CUDA
 
-| CUDA Version (Variant) | Inference Service (Version List)                                                                           |
-|------------------------|------------------------------------------------------------------------------------------------------------|
-| 12.8                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5`, `0.5.4.post3` <br/> VoxBox: `0.0.20` |
-| 12.6                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                      |
-| 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                      |
+| CUDA Version (Variant) | Inference Service (Version List)                                                                                                    |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
+| 12.9                   | vLLM: `0.11.2` <br/> SGLang: `0.5.5.post3`                                                                                          |
+| 12.8                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5.post3`, `0.5.5`, `0.5.4.post3` <br/> VoxBox: `0.0.20` |
+| 12.6                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5.post3` <br/> VoxBox: `0.0.20`                         |
+| 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                                               |
 
 > [!NOTE]
 > - CUDA 12.8 supports Compute Capabilities: `7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX`.
@@ -65,15 +67,18 @@ The following table lists the supported accelerated backends and their correspon
 
 ### AMD ROCm
 
-| ROCm Version (Variant) | Inference Service (Version List) |
-|------------------------|----------------------------------|
-| 7.0                    | vLLM: `0.11.0`                   |
-| 6.4                    | vLLM: `0.10.2`                   |
-| 6.3                    | vLLM: `0.10.1.1`, `0.10.0`       |
+| ROCm Version (Variant) | Inference Service (Version List)                     |
+|------------------------|------------------------------------------------------|
+| 7.0                    | vLLM: `0.11.2`, `0.11.0` <br/> SGLang: `0.5.5.post3` |
+| 6.4                    | vLLM: `0.11.2`, `0.10.2` <br/> SGLang: `0.5.5.post3` |
+| 6.3                    | vLLM: `0.10.1.1`, `0.10.0`                           |
 
 > [!NOTE]
-> - ROCm 7.0 supports LLVM Targets: `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
-> - ROCm 6.4/6.3 supports LLVM Targets: `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
+> - ROCm 7.0 supports LLVM Targets:
+    `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
+> - ROCm 6.4/6.3 supports LLVM Targets:
+    `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
+> - SGLang supports LLVM Targets: `gfx942`.
 
 ## Directory Structure
 

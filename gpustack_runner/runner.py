@@ -212,23 +212,27 @@ def list_runners(**kwargs) -> Runners | list[dict]:
         kwargs:
             The criteria to filter runners, possible keys are:
 
-            - `backend`
-            - `backend_version`
-            - `backend_version_prefix`
-            - `backend_variant`
-            - `service`
-            - `service_version`
-            - `service_version_prefix`
-            - `platform`
+            - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
+            - `todict`: If True, returns a list of dictionaries instead of Runner objects.
             - `with_deprecated`: Whether to include deprecated runners, default is True.
-
-            Also accepts `todict` to return a list of dictionaries instead of Runner objects.
+            - `backend`: The backend name, default is None.
+            - `backend_version`: The backend version, default is None.
+            - `backend_version_prefix`: The prefix of the backend version, default is None.
+            - `backend_variant`: The backend variant, default is None.
+            - `service`: The service name, default is None.
+            - `service_version`: The service version, default is None.
+            - `service_version_prefix`: The prefix of the service version, default is None.
+            - `platform`: The platform, default is None.
 
     Returns:
          A list of matching runner.
 
     """
     data_path = resources.files(__package__).joinpath(f"{Path(__file__).name}.json")
+    if "data_path" in kwargs:
+        _data_path: str | Path | None = kwargs.pop("data_path")
+        if _data_path:
+            data_path = Path(_data_path) if isinstance(_data_path, str) else _data_path
     with data_path.open("r", encoding="utf-8") as f:
         json_list = json.load(f)
         runners = [Runner.from_dict(item) for item in json_list]
@@ -236,6 +240,10 @@ def list_runners(**kwargs) -> Runners | list[dict]:
     todict = kwargs.pop("todict", False)
     if not kwargs:
         return convert_runners_to_dict(runners) if todict else runners
+
+    with_deprecated = kwargs.pop("with_deprecated", True)
+    if with_deprecated is None:
+        with_deprecated = True
 
     allowed_keys = {
         "backend",
@@ -246,16 +254,11 @@ def list_runners(**kwargs) -> Runners | list[dict]:
         "service_version",
         "service_version_prefix",
         "platform",
-        "with_deprecated",
     }
     given_keys = set(kwargs.keys())
     if not given_keys.issubset(allowed_keys):
         errmsg = f"Invalid keys in kwargs: {given_keys - allowed_keys}."
         raise ValueError(errmsg)
-
-    with_deprecated = kwargs.pop("with_deprecated", True)
-    if with_deprecated is None:
-        with_deprecated = True
 
     results: Runners = []
     for item in runners:
@@ -612,17 +615,17 @@ def list_backend_runners(**kwargs) -> BackendRunners | list[dict]:
         kwargs:
             The criteria to filter backend runners, possible keys are:
 
-            - `backend`
-            - `backend_version`
-            - `backend_version_prefix`
-            - `backend_variant`
-            - `service`
-            - `service_version`
-            - `service_version_prefix`
-            - `platform`
+            - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
+            - `todict`: If True, returns a list of dictionaries instead of BackendRunner objects.
             - `with_deprecated`: Whether to include deprecated runners, default is True.
-
-            Also accepts `todict` to return a list of dictionaries instead of BackendRunner objects.
+            - `backend`: The backend name, default is None.
+            - `backend_version`: The backend version, default is None.
+            - `backend_version_prefix`: The prefix of the backend version, default is None.
+            - `backend_variant`: The backend variant, default is None.
+            - `service`: The service name, default is None.
+            - `service_version`: The service version, default is None.
+            - `service_version_prefix`: The prefix of the service version, default is None.
+            - `platform`: The platform, default is None.
 
     Returns:
          A list of matching backend runner.
@@ -786,17 +789,17 @@ def list_service_runners(**kwargs) -> ServiceRunners | list[dict]:
         kwargs:
             The criteria to filter service runners, possible keys are:
 
-            - `backend`
-            - `backend_version`
-            - `backend_version_prefix`
-            - `backend_variant`
-            - `service`
-            - `service_version`
-            - `service_version_prefix`
-            - `platform`
+            - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
+            - `todict`: If True, returns a list of dictionaries instead of ServiceRunner objects.
             - `with_deprecated`: Whether to include deprecated runners, default is True.
-
-            Also accepts `todict` to return a list of dictionaries instead of ServiceRunner objects.
+            - `backend`: The backend name, default is None.
+            - `backend_version`: The backend version, default is None.
+            - `backend_version_prefix`: The prefix of the backend version, default is None.
+            - `backend_variant`: The backend variant, default is None.
+            - `service`: The service name, default is None.
+            - `service_version`: The service version, default is None.
+            - `service_version_prefix`: The prefix of the service version, default is None.
+            - `platform`: The platform, default is None.
 
     Returns:
          A list of matching service runner.

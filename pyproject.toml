@@ -20,6 +20,7 @@ classifiers = [
 dependencies = [
     "argcomplete>=3.6.3",
     "dataclasses-json>=0.6.7",
+    "requests>=2.32.3",
 ]
 dynamic = ["version"]
 

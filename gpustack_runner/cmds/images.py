@@ -6,6 +6,7 @@ import platform as os_platform
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from argparse import OPTIONAL
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import requests
 from dataclasses_json import dataclass_json
 
 from gpustack_runner import BackendRunners, list_backend_runners
@@ -837,6 +839,174 @@ class CopyImagesSubCommand(SubCommand):
                 sys.exit(1)
 
 
+class CompareImagesSubCommand(SubCommand):
+    """
+    Command to compare images.
+    """
+
+    backend: str
+    backend_variant: str
+    service: str
+    platform: str
+    target: str
+    color: bool
+    refresh: bool
+
+    @staticmethod
+    def register(parser: _SubParsersAction):
+        compare_parser = parser.add_parser(
+            "compare-images",
+            help="Compare images with another versioned GPUStack runner",
+        )
+
+        compare_parser.add_argument(
+            "--backend",
+            type=str,
+            help="Filter gpustack/runner images by backend name",
+            choices=_AVAILABLE_BACKENDS,
+        )
+
+        compare_parser.add_argument(
+            "--backend-variant",
+            type=str,
+            help="Filter gpustack/runner images by backend variant",
+        )
+
+        compare_parser.add_argument(
+            "--service",
+            type=str,
+            help="Filter gpustack/runner images by service name",
+            choices=_AVAILABLE_SERVICES,
+        )
+
+        compare_parser.add_argument(
+            "--platform",
+            type=str,
+            help="Filter images by platform",
+            choices=_AVAILABLE_PLATFORMS,
+        )
+
+        compare_parser.add_argument(
+            "--target",
+            type=str,
+            help="Target versioned gpustack/runner to compare images with",
+            required=True,
+        )
+
+        compare_parser.add_argument(
+            "--no-color",
+            action="store_true",
+            help="Disable colored output",
+        )
+
+        compare_parser.add_argument(
+            "--refresh",
+            action="store_true",
+            help="Refresh the target versioned gpustack/runner metadata, "
+            "default, it will use cached file if exists",
+        )
+
+        compare_parser.set_defaults(func=CompareImagesSubCommand)
+
+    def __init__(self, args: Namespace):
+        self.backend = args.backend
+        self.backend_variant = args.backend_variant
+        self.service = args.service
+        self.platform = args.platform
+        self.target = args.target
+        self.color = not args.no_color
+        self.refresh = args.refresh
+
+        if not self.target:
+            msg = "Target versioned gpustack/runner is required."
+            raise RuntimeError(msg)
+
+    def run(self):
+        if not self.target.startswith("v"):
+            self.target = f"v{self.target}"
+        if ".post" in self.target and self.target != "v0.1.15.post1":
+            self.target = self.target.replace(".post", "post")
+
+        target_py_json_path = (
+            Path(tempfile.gettempdir()) / f"runner_{self.target}.py.json"
+        )
+        if not target_py_json_path.exists() or self.refresh:
+            target_py_json_uri = (
+                f"https://raw.githubusercontent.com/gpustack/runner/refs/tags/"
+                f"{self.target}/gpustack_runner/runner.py.json"
+            )
+            with requests.get(
+                target_py_json_uri,
+                stream=True,
+                timeout=600,
+                allow_redirects=True,
+            ) as response:
+                if response.ok:
+                    with target_py_json_path.open("wb") as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                else:
+                    msg = (
+                        f"Failed to fetch target versioned gpustack/runner from '{target_py_json_uri}', "
+                        f"status code: {response.status_code}"
+                    )
+                    raise RuntimeError(
+                        msg,
+                    )
+
+        current_images = list_images(
+            backend=self.backend,
+            backend_variant=self.backend_variant,
+            service=self.service,
+            platform=self.platform,
+        )
+
+        target_images = list_images(
+            data_path=str(target_py_json_path),
+            backend=self.backend,
+            backend_variant=self.backend_variant,
+            service=self.service,
+            platform=self.platform,
+        )
+
+        current_images_mapping = {img.name: img.deprecated for img in current_images}
+        target_images_mapping = {img.name: img.deprecated for img in target_images}
+
+        # Added images
+        added_image_names = [
+            img_name
+            for img_name in current_images_mapping
+            if img_name not in target_images_mapping
+        ]
+        # Deprecated images
+        deprecated_image_names = [
+            img_name
+            for img_name, depr in current_images_mapping.items()
+            if (
+                img_name not in added_image_names
+                and depr
+                and not target_images_mapping[img_name]
+            )
+        ]
+        # Removed images
+        removed_image_names = [
+            img_name
+            for img_name in target_images_mapping
+            if img_name not in current_images_mapping
+        ]
+
+        green, yellow, red, reset = "\033[32m", "\033[33m", "\033[31m", "\033[0m"
+        if not self.color:
+            green, yellow, red, reset = "", "", "", ""
+        for img_name in added_image_names:
+            print(f"{green}+ {img_name}{reset}")
+        for img_name in deprecated_image_names:
+            print(f"{yellow}~ {img_name}{reset}")
+        for img_name in removed_image_names:
+            print(f"{red}- {img_name}{reset}")
+
+
 @dataclass_json
 @dataclass
 class PlatformedImage:
@@ -848,6 +1018,10 @@ class PlatformedImage:
     """
     The platforms supported by the image.
     None means do not care the platform.
+    """
+    deprecated: bool = False
+    """
+    Whether the image is deprecated.
     """
 
 
@@ -892,6 +1066,7 @@ def list_images(**kwargs) -> list[PlatformedImage]:
             for b_variant in b_version.variants:
                 for service in b_variant.services:
                     for s_version in service.versions:
+                        depr = s_version.deprecated
                         for sr in s_version.platforms:
                             name, plat = sr.docker_image, sr.platform
                             if not name:
@@ -902,6 +1077,7 @@ def list_images(**kwargs) -> list[PlatformedImage]:
                                     PlatformedImage(
                                         name=name,
                                         platforms=[plat],
+                                        deprecated=depr,
                                     ),
                                 )
                             else:
