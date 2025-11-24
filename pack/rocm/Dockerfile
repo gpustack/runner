@@ -86,7 +86,7 @@ ARG VLLM_AITER_VERSION=0.1.7.post1
 ARG VLLM_LMCACHE_VERSION=0.3.9post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.5.post3
-ARG SGLANG_TORCH_VERSION=2.8.0
+ARG SGLANG_TORCH_VERSION=2.9.0
 ARG SGLANG_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG SGLANG_TORCH_SOURCE=pytorch
 ARG SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm${SGLANG_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
@@ -293,7 +293,7 @@ RUN <<EOF
 build
 cmake<4
 ninja<1.11
-setuptools<80
+setuptools<80.0.0
 setuptools-scm
 packaging<25
 wheel==0.45.1
@@ -365,16 +365,20 @@ RUN <<EOF
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
         WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
             echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
         fi
         if [[ -n "${TRITON_URL}" ]]; then
             uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
+        if [[ -n "${TORCH_TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TORCH_TRITON_URL}"
         fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
@@ -405,6 +409,7 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
+setuptools>=77.0.3,<80.0.0
 requests
 pyyaml
 einops
@@ -660,13 +665,6 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # vLLM
 
-    # TODO(thxCode): move this to base image later
-    cat <<EOT >/tmp/requirements.txt
-setuptools>=77.0.3,<80.0.0
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -726,13 +724,6 @@ ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
 RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     # LMCache
     # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
-
-    # TODO(thxCode): move this to base image later
-    cat <<EOT >/tmp/requirements.txt
-setuptools>=77.0.3,<80.0.0
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
 
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
 
@@ -809,6 +800,7 @@ RUN <<EOF
         WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
         TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
         TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
@@ -818,6 +810,9 @@ RUN <<EOF
         fi
         if [[ -n "${TRITON_URL}" ]]; then
             uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
+        if [[ -n "${TORCH_TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TORCH_TRITON_URL}"
         fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
@@ -848,6 +843,7 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
+setuptools>=77.0.3,<80.0.0
 requests
 pyyaml
 einops
@@ -1038,32 +1034,42 @@ ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
 RUN <<EOF
     # Torch
 
+    # Validate
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
+        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
+        exit 0
+    fi
+
     # Install
-    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
+    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
+            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
             exit 1
         fi
         if [[ -n "${TRITON_URL}" ]]; then
             uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
+        if [[ -n "${TORCH_TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TORCH_TRITON_URL}"
         fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
     else
         cat <<EOT >/tmp/requirements.txt
-torch==${VLLM_TORCH_VERSION}
+torch==${SGLANG_TORCH_VERSION}
 torchvision
 torchaudio
 EOT
-        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
         uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
             -r /tmp/requirements.txt
     fi
@@ -1083,6 +1089,7 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
+setuptools>=77.0.3,<80.0.0
 requests
 pyyaml
 einops
@@ -1138,9 +1145,13 @@ RUN <<EOF
             SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
+    SK_ROCM_ARCHS="gfx950"
+    if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+        SK_ROCM_ARCHS="gfx942"
+    fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
-    export AMDGPU_TARGET="gfx950"
+    export AMDGPU_TARGET="${SK_ROCM_ARCHS}"
     echo "Building SGLang with the following environment variables:"
     env
 
@@ -1153,8 +1164,8 @@ RUN <<EOF
     # Copy config files to support MI300X in virtualized environments (MI300X_VF).
     # Symlinks will not be created in image build.
     # See https://github.com/sgl-project/sglang/blob/09938e1f82334a98c124ae3352d893480963775f/docker/rocm.Dockerfile#L197C2-L200.
-    find /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/quantization/configs/ \
-         /tmp/sglang-${SGLANG_VERSION}/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
+    find /tmp/sglang/python/sglang/srt/layers/quantization/configs/ \
+         /tmp/sglang/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
          -type f -name '*MI300X*' | xargs -I {} sh -c 'vf_config=$(echo "$1" | sed "s/MI300X/MI300X_VF/"); cp "$1" "$vf_config"' -- {}
     pushd /tmp/sglang/python \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
@@ -1282,54 +1293,6 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         && ccache --clear --clean
 EOF
 
-# Stage SGLang Build Fast-Hadamard-Transform
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-fast-hadamard-transform-linux-amd64 --target=sglang-build-fast-hadamard-transform pack/rocm
-#
-
-FROM sglang-build AS sglang-build-fast-hadamard-transform
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build Fast-Hadamard-Transform
-
-ARG CMAKE_MAX_JOBS
-
-RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
-    # Fast-Hadamard-Transform
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export FAST_HADAMARD_TRANSFORM_SKIP_CUDA_BUILD="TRUE"
-    echo "Building Fast-Hadamard-Transform with the following environment variables:"
-    env
-
-    # Install Fast-Hadamard-Transform
-    git -C /tmp clone --recursive --shallow-submodules \
-        --branch rocm --single-branch \
-        https://github.com/jeffdaily/fast-hadamard-transform.git fast-hadamard-transform
-    pushd /tmp/fast-hadamard-transform \
-        && python setup.py bdist_wheel --dist-dir=dist \
-        && tree -hs /tmp/fast-hadamard-transform/dist \
-        && mv /tmp/fast-hadamard-transform/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
-EOF
-
-
 # Stage SGLang
 #
 # Example build command:
@@ -1359,32 +1322,42 @@ ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
 RUN <<EOF
     # Torch
 
+    # Validate
+    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
+        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
+        exit 0
+    fi
+
     # Install
-    if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
+    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
+        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-            echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
+            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
             exit 1
         fi
         if [[ -n "${TRITON_URL}" ]]; then
             uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
+        fi
+        if [[ -n "${TORCH_TRITON_URL}" ]]; then
+            uv pip install "${WHEEL_PREFIX}/${TORCH_TRITON_URL}"
         fi
         uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
         uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
     else
         cat <<EOT >/tmp/requirements.txt
-torch==${VLLM_TORCH_VERSION}
+torch==${SGLANG_TORCH_VERSION}
 torchvision
 torchaudio
 EOT
-        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
         uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
             -r /tmp/requirements.txt
     fi
@@ -1404,6 +1377,7 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
+setuptools>=77.0.3,<80.0.0
 requests
 pyyaml
 einops
@@ -1468,16 +1442,32 @@ EOF
 
 ## Install Fast-Hadamard-Transform
 
-RUN --mount=type=bind,from=sglang-build-fast-hadamard-transform,source=/,target=/fast-hadamard-transform,rw <<EOF
+RUN <<EOF
     # Fast-Hadamard-Transform
 
-    # Install
-    uv pip install --no-build-isolation \
-        /fast-hadamard-transform/workspace/*.whl
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export FAST_HADAMARD_TRANSFORM_SKIP_CUDA_BUILD="TRUE"
+    echo "Building Fast-Hadamard-Transform with the following environment variables:"
+    env
+
+    # Install Fast-Hadamard-Transform
+    git -C /tmp clone --recursive --shallow-submodules \
+        --branch rocm --single-branch \
+        https://github.com/jeffdaily/fast-hadamard-transform.git fast-hadamard-transform
+    pushd /tmp/fast-hadamard-transform \
+        && python setup.py install
 
     # Cleanup
     rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
 EOF
 
 ## Postprocess
