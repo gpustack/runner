@@ -14,6 +14,12 @@ backends.
 
 ## Onboard Services
 
+> [!TIP]
+> - The list below shows the accelerated backends and inference services available in the latest release.
+>   For support of backends or services not shown here, please refer to previous release tags.
+> - Deprecated inference service versions in the latest release are marked with strikethrough formatting.
+>   They may still be available in previous releases, and not recommended for new deployments.
+
 The following table lists the supported accelerated backends and their corresponding inference services with versions.
 
 ### Ascend CANN
