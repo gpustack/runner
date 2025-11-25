@@ -517,6 +517,7 @@ pyarrow==19.0.1
 pydantic_core==2.23.4
 pydantic==2.9.2
 python-rapidjson==1.20
+posix_ipc==1.2.0
 requests==2.32.3
 rouge-score==0.1.2
 rouge==1.0.1
