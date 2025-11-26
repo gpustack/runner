@@ -1558,17 +1558,17 @@ ARG TARGETARCH
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
-ARG SGLANG_TORCH_ROCM_VERSION
+ARG SGLANG_TORCH_CUDA_VERSION
 ARG SGLANG_KERNEL_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION} \
+    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION} \
     SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
     # SGLang
 
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -1801,7 +1801,7 @@ RUN <<EOF
     # Install Dependencies,
     # see https://github.com/sgl-project/sglang/blob/41c10e67fcae6ac50dfe283655bdf545d224cba9/docker/Dockerfile#L181-L209.
     cat <<EOT >/tmp/requirements.txt
-nvidia-cutlass-dsl==4.3.0.dev0
+nvidia-cutlass-dsl==4.3.0
 datamodel_code_generator
 mooncake-transfer-engine==0.3.7.post2
 nixl
@@ -1832,7 +1832,7 @@ RUN <<EOF
         --package deep-ep \
         --package diffusers \
         --package opencv-python \
-        --package IPython
+        --package ipython
 EOF
 
 ## Entrypoint

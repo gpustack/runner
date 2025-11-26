@@ -1485,7 +1485,7 @@ RUN <<EOF
         --package vllm \
         --package torch \
         --package deep-ep \
-        --package IPython
+        --package ipython
 EOF
 
 ## Entrypoint
