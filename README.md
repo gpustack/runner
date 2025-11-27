@@ -43,9 +43,9 @@ The following table lists the supported accelerated backends and their correspon
 
 | CUDA Version (Variant) | Inference Service (Version List)                                                                                                    |
 |------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| 12.9                   | vLLM: `0.11.2` <br/> SGLang: `0.5.5.post3`                                                                                          |
+| 12.9                   | vLLM: `0.11.2`                                                                                                                      |
 | 12.8                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5.post3`, `0.5.5`, `0.5.4.post3` <br/> VoxBox: `0.0.20` |
-| 12.6                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5.post3` <br/> VoxBox: `0.0.20`                         |
+| 12.6                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                                     |
 | 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                                               |
 
 > [!NOTE]
@@ -69,7 +69,7 @@ The following table lists the supported accelerated backends and their correspon
 
 | ROCm Version (Variant) | Inference Service (Version List)                     |
 |------------------------|------------------------------------------------------|
-| 7.0                    | vLLM: `0.11.2`, `0.11.0` <br/> SGLang: `0.5.5.post3` |
+| 7.0                    | vLLM: `0.11.2`, `0.11.0`                             |
 | 6.4                    | vLLM: `0.11.2`, `0.10.2` <br/> SGLang: `0.5.5.post3` |
 | 6.3                    | vLLM: `0.10.1.1`, `0.10.0`                           |
 
