@@ -88,9 +88,6 @@
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
-# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
-# - SGLANG_TORCH_CUDA_VERSION: Version of CUDA to use for Torch,
-#   which is used to build the components that depend on Torch for SGLang.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
 #   which is used to build the SGLang from source.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
@@ -119,9 +116,7 @@ ARG VLLM_FLASHATTENTION_VERSION=2.8.2
 ARG VLLM_LMCACHE_VERSION=0.3.9post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.5.post3
-ARG SGLANG_TORCH_VERSION=2.8.0
-ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
-ARG SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda${SGLANG_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
+ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
 ARG SGLANG_KERNEL_VERSION=0.3.17.post1
 
 #
@@ -1483,64 +1478,6 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
-## Install Torch
-
-ARG SGLANG_TORCH_VERSION
-ARG SGLANG_TORCH_CUDA_VERSION
-
-ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
-    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
-
-RUN <<EOF
-    # Torch
-
-    # Validate
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_CUDA_VERSION}" == "${VLLM_TORCH_CUDA_VERSION}" ]]; then
-        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
-        exit 0
-    fi
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
-    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-        -r /tmp/requirements.txt
-    uv pip install \
-        numpy scipy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install Dependencies
-
-RUN <<EOF
-    # Dependencies
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-requests
-pyyaml
-einops
-cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
-pynvml==${CUDA_MAJOR}
-nvidia-nvshmem-cu${CUDA_MAJOR}
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 # Stage SGLang Build SGLang
 #
 # Example build command:
@@ -1558,17 +1495,15 @@ ARG TARGETARCH
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
-ARG SGLANG_TORCH_CUDA_VERSION
 ARG SGLANG_KERNEL_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION} \
     SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
 RUN <<EOF
     # SGLang
 
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -1693,64 +1628,6 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
-## Install Torch
-
-ARG SGLANG_TORCH_VERSION
-ARG SGLANG_TORCH_CUDA_VERSION
-
-ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
-    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
-
-RUN <<EOF
-    # Torch
-
-    # Validate
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_CUDA_VERSION}" == "${VLLM_TORCH_CUDA_VERSION}" ]]; then
-        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
-        exit 0
-    fi
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
-    uv pip install --index-url https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR} \
-        -r /tmp/requirements.txt
-    uv pip install \
-        numpy scipy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install Dependencies
-
-RUN <<EOF
-    # Dependencies
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-requests
-pyyaml
-einops
-cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
-pynvml==${CUDA_MAJOR}
-nvidia-nvshmem-cu${CUDA_MAJOR}
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install SGLang
 
 ARG CMAKE_MAX_JOBS
@@ -1808,6 +1685,30 @@ nixl
 EOT
     uv pip install \
         -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Download FlashInfer
+## FIXME: Remove this if we can reuse vLLM's FlashInfer installation.
+
+RUN <<EOF
+    # FlashInfer
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+
+    # Download pre-compiled cubins
+    FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}" \
+    FLASHINFER_LOGGING_LEVEL=warning \
+        python -m flashinfer --download-cubin
 
     # Cleanup
     rm -rf /var/tmp/* \

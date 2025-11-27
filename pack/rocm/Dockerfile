@@ -64,11 +64,8 @@
 # - VLLM_LMCACHE_VERSION: Version of lmcache to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
-# - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
-# - SGLANG_TORCH_ROCM_VERSION: Version of ROCM to use for Torch,
-#   which is used to build the components that depend on Torch.
-# - SGLANG_TORCH_SOURCE: Source of Torch to use for SGLang,
-#   which is used to build the components that depend on Torch.
+# - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
+#   which is used to build the SGLang from source.
 # - SGLANG_MOONCAKE_VERSION: Version of MoonCake to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
@@ -86,10 +83,7 @@ ARG VLLM_AITER_VERSION=0.1.7.post1
 ARG VLLM_LMCACHE_VERSION=0.3.9post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.5.post3
-ARG SGLANG_TORCH_VERSION=2.9.0
-ARG SGLANG_TORCH_ROCM_VERSION=${ROCM_VERSION}
-ARG SGLANG_TORCH_SOURCE=pytorch
-ARG SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm${SGLANG_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
+ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
 ARG SGLANG_MOONCAKE_VERSION=0.3.7.post2
 
 # Stage Bake Runtime
@@ -293,7 +287,7 @@ RUN <<EOF
 build
 cmake<4
 ninja<1.11
-setuptools<80.0.0
+setuptools>=77.0.3,<80.0.0
 setuptools-scm
 packaging<25
 wheel==0.45.1
@@ -1021,67 +1015,6 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
-## Install Torch
-
-ARG SGLANG_TORCH_VERSION
-ARG SGLANG_TORCH_ROCM_VERSION
-ARG SGLANG_TORCH_SOURCE
-
-ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
-    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION} \
-    SGLANG_TORCH_SOURCE=${SGLANG_TORCH_SOURCE}
-
-RUN <<EOF
-    # Torch
-
-    # Validate
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
-        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
-        exit 0
-    fi
-
-    # Install
-    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
-        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
-        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
-            exit 1
-        fi
-        if [[ -n "${TRITON_URL}" ]]; then
-            uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
-        fi
-        if [[ -n "${TORCH_TRITON_URL}" ]]; then
-            uv pip install "${WHEEL_PREFIX}/${TORCH_TRITON_URL}"
-        fi
-        uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
-        uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
-        uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
-    else
-        cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
-        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-            -r /tmp/requirements.txt
-    fi
-
-    uv pip install \
-        numpy scipy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install Dependencies
 
 RUN <<EOF
@@ -1090,10 +1023,6 @@ RUN <<EOF
     # Install
     cat <<EOT >/tmp/requirements.txt
 setuptools>=77.0.3,<80.0.0
-requests
-pyyaml
-einops
-pandas
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -1119,16 +1048,14 @@ ARG TARGETARCH
 ## Build SGLang
 
 ARG CMAKE_MAX_JOBS
-ARG SGLANG_TORCH_ROCM_VERSION
 ARG SGLANG_VERSION
 
-ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION}
+ENV SGLANG_VERSION=${SGLANG_VERSION}
 
 RUN <<EOF
     # SGLang
 
-    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -1308,88 +1235,6 @@ ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
-
-## Install Torch
-
-ARG SGLANG_TORCH_VERSION
-ARG SGLANG_TORCH_ROCM_VERSION
-ARG SGLANG_TORCH_SOURCE
-
-ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
-    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION} \
-    SGLANG_TORCH_SOURCE=${SGLANG_TORCH_SOURCE}
-
-RUN <<EOF
-    # Torch
-
-    # Validate
-    if [[ "${SGLANG_TORCH_VERSION}" == "${VLLM_TORCH_VERSION}" ]] && [[ "${SGLANG_TORCH_ROCM_VERSION}" == "${VLLM_TORCH_ROCM_VERSION}" ]]; then
-        echo "Skipping Torch installation in SGLang stage as it matches vLLM stage..."
-        exit 0
-    fi
-
-    # Install
-    if [[ "${SGLANG_TORCH_SOURCE}" == "radeon" ]]; then
-        IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
-        WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${SGLANG_TORCH_ROCM_VERSION}/"
-        WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${SGLANG_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
-        if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
-            echo "Failed to get ROCM PyTorch wheels for version ${SGLANG_TORCH_VERSION} from radeon source."
-            exit 1
-        fi
-        if [[ -n "${TRITON_URL}" ]]; then
-            uv pip install "${WHEEL_PREFIX}/${TRITON_URL}"
-        fi
-        if [[ -n "${TORCH_TRITON_URL}" ]]; then
-            uv pip install "${WHEEL_PREFIX}/${TORCH_TRITON_URL}"
-        fi
-        uv pip install "${WHEEL_PREFIX}/${TORCH_URL}"
-        uv pip install "${WHEEL_PREFIX}/${TORCHVISION_URL}"
-        uv pip install "${WHEEL_PREFIX}/${TORCHAUDIO_URL}"
-    else
-        cat <<EOT >/tmp/requirements.txt
-torch==${SGLANG_TORCH_VERSION}
-torchvision
-torchaudio
-EOT
-        IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
-        uv pip install --index-url https://download.pytorch.org/whl/rocm${ROCM_MAJOR}.${ROCM_MINOR} \
-            -r /tmp/requirements.txt
-    fi
-
-    uv pip install \
-        numpy scipy
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install Dependencies
-
-RUN <<EOF
-    # Dependencies
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-setuptools>=77.0.3,<80.0.0
-requests
-pyyaml
-einops
-pandas
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
 
 ## Install SGLang
 

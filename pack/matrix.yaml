@@ -74,16 +74,6 @@ rules:
       - "CUDA_VERSION=12.6.3"
       - "VOXBOX_TORCH_CUDA_VERSION=12.8.1"
       - "VLLM_TORCH_CUDA_VERSION=12.8.1"
-  - backend: "cuda"
-    services:
-      - "sglang"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "CUDA_VERSION=12.6.3"
-      - "SGLANG_TORCH_CUDA_VERSION=12.8.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.6-vllm0.11.2"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.2"
   ## NVIDIA CUDA 12.8.1, using PyTorch +cu128.
   ##
   - backend: "cuda"
@@ -99,8 +89,8 @@ rules:
       - "linux/amd64"
     args:
       - "CUDA_VERSION=12.8.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.2"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.2"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.0"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.11.0"
   ## NVIDIA CUDA 12.9.1, using PyTorch +cu129.
   ##
   - backend: "cuda"
@@ -109,15 +99,6 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-  - backend: "cuda"
-    services:
-      - "sglang"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "CUDA_VERSION=12.9.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.2"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.11.2"
 
   #
   # Hygon DTK
@@ -157,15 +138,11 @@ rules:
   - backend: "rocm"
     services:
       - "vllm"
-      - "sglang"
     platforms:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.0.2"
       - "VLLM_TORCH_ROCM_VERSION=6.4.4"
-      - "SGLANG_TORCH_ROCM_VERSION=6.4.4"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.11.2"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.11.2"
   ## AMD ROCm 6.4.4, using PyTorch +rocm6.4.
   ##
   - backend: "rocm"
