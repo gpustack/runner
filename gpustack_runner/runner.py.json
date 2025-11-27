@@ -785,17 +785,6 @@
     "backend_version": "12.6",
     "original_backend_version": "12.6.3",
     "backend_variant": "",
-    "service": "sglang",
-    "service_version": "0.5.5.post3",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cuda12.6-sglang0.5.5.post3",
-    "deprecated": false
-  },
-  {
-    "backend": "cuda",
-    "backend_version": "12.6",
-    "original_backend_version": "12.6.3",
-    "backend_variant": "",
     "service": "vllm",
     "service_version": "0.11.2",
     "platform": "linux/amd64",
