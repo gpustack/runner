@@ -573,13 +573,8 @@ EOF
 
 ## Postprocess
 
-ADD --chown=root:root patches.tar.gz /workspace/patches/
 RUN <<EOF
     # Postprocess
-
-    # Patch
-    pushd $(pip show mindie_llm | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/*.patch
 
     # Hijack executable path
     mv ${CANN_HOME}/mindie/latest/mindie-service/bin/mindieservice_daemon ${CANN_HOME}/mindie/latest/mindie-service/bin/mindieservice_daemon_
