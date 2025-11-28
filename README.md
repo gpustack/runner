@@ -49,6 +49,7 @@ The following table lists the supported accelerated backends and their correspon
 | 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                                               |
 
 > [!NOTE]
+> - CUDA 12.9 supports Compute Capabilities: `7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX`.
 > - CUDA 12.8 supports Compute Capabilities: `7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX`.
 > - CUDA 12.6/12.4 supports Compute Capabilities: `7.5 8.0+PTX 8.9 9.0+PTX`.
 
