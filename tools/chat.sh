@@ -45,6 +45,7 @@ if command -v gdate; then
     }
 fi
 
+MODEL="${MODEL:-"qwen3-0.6b"}"
 MAX_COMPLETION_TOKENS="${MAX_COMPLETION_TOKENS:-"2048"}"
 FREQUENCY_PENALTY="${FREQUENCY_PENALTY:-"null"}"
 PRESENCE_PENALTY="${PRESENCE_PENALTY:-"null"}"
@@ -76,10 +77,12 @@ chat_completion() {
     fi
     while true; do
         DATA="$(echo -n "${DATA}" | jq -cr \
+            --arg model "${MODEL}" \
             --argjson max_completion_tokens "${MAX_COMPLETION_TOKENS}" \
             --argjson response_format "{\"type\":\"${RESPONSE_FORMAT}\"}" \
             '{
                 n: 1,
+                model: $model,
                 stream: true,
                 stream_options: {include_usage: true},
                 max_completion_tokens: $max_completion_tokens,
@@ -305,6 +308,7 @@ fi
 echo "====================================================="
 echo "LOG_FILE              : ${LOG_FILE}"
 echo "API_URL               : ${API_URL}"
+echo "MODEL                 : ${MODEL}"
 echo "MAX_COMPLETION_TOKENS : ${MAX_COMPLETION_TOKENS}"
 echo "FREQUENCY_PENALTY     : ${FREQUENCY_PENALTY}"
 echo "PRESENCE_PENALTY      : ${PRESENCE_PENALTY}"
