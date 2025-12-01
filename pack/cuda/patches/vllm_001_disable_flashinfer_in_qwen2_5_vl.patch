@@ -1,0 +1,46 @@
+diff --git a/vllm/model_executor/models/qwen2_5_vl.py b/vllm/model_executor/models/qwen2_5_vl.py
+index 897dd7ef2..b302e0202 100644
+--- a/vllm/model_executor/models/qwen2_5_vl.py
++++ b/vllm/model_executor/models/qwen2_5_vl.py
+@@ -337,13 +337,13 @@ class Qwen2_5_VisionAttention(nn.Module):
+         )
+         self.attn_backend = attn_backend
+         self.use_upstream_fa = use_upstream_fa
+-        self.attn_backend, self.flash_attn_varlen_func = (
+-            maybe_get_vit_flash_attn_backend(
+-                self.attn_backend,
+-                self.use_upstream_fa,
+-                attn_backend_override=attn_backend_override,
+-            )
+-        )
++        # self.attn_backend, self.flash_attn_varlen_func = (
++        #     maybe_get_vit_flash_attn_backend(
++        #         self.attn_backend,
++        #         self.use_upstream_fa,
++        #         attn_backend_override=attn_backend_override,
++        #     )
++        # )
+         # On ROCm with FLASH_ATTN backend, upstream flash_attn is used
+         from vllm.platforms import current_platform
+
+@@ -675,13 +675,13 @@ class Qwen2_5_VisionTransformer(nn.Module):
+             attn_backend_override=attn_backend_override,
+         )
+
+-        self.attn_backend, self.flash_attn_varlen_func = (
+-            maybe_get_vit_flash_attn_backend(
+-                self.attn_backend,
+-                use_upstream_fa,
+-                attn_backend_override=attn_backend_override,
+-            )
+-        )
++        # self.attn_backend, self.flash_attn_varlen_func = (
++        #     maybe_get_vit_flash_attn_backend(
++        #         self.attn_backend,
++        #         use_upstream_fa,
++        #         attn_backend_override=attn_backend_override,
++        #     )
++        # )
+
+         if self.attn_backend not in {
+             AttentionBackendEnum.FLASH_ATTN,
