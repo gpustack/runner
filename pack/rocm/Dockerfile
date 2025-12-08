@@ -14,6 +14,7 @@
 #    - Build AITER.
 #    - Build vLLM.
 #    - Build LMCache.
+#    - Build MoonCake.
 # 2.2. vllm target.
 #    - Install Torch.
 #    - Install Triton if existed.
@@ -21,18 +22,17 @@
 #    - Install AITER.
 #    - Install vLLM.
 #    - Install LMCache.
+#    - Install MoonCake.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 # 3.1. sglang-build target.
 #    - Install Torch.
 #    - Build SGLang.
 #    - Build SGLang Router.
-#    - Build MoonCake.
 # 3.2. sglang target.
 #    - Install Torch.
 #    - Install SGLang.
 #    - Install SGLang Router.
-#    - Install MoonCake.
 #    - Install dependencies.
 #    - Postprocess, review installation.
 
@@ -61,30 +61,30 @@
 #   which is used to build the AITER wheel.
 # - VLLM_AITER_VERSION: Version of AITER to use,
 #   which is used to build the AITER wheel.
-# - VLLM_LMCACHE_VERSION: Version of lmcache to use.
+# - VLLM_LMCACHE_VERSION: Version of LMCache to use.
+# - VLLM_MOONCAKE_VERSION: Version of MoonCake to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
 #   which is used to build the SGLang from source.
-# - SGLANG_MOONCAKE_VERSION: Version of MoonCake to use.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.2
+ARG VLLM_VERSION=0.12.0
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_TRITON_COMMIT=57c693b6
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_AITER_VERSION=0.1.7.post1
-ARG VLLM_LMCACHE_VERSION=0.3.9post2
+ARG VLLM_AITER_VERSION=0.1.7.post2
+ARG VLLM_LMCACHE_VERSION=0.3.10.post1
+ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.5.post3
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
-ARG SGLANG_MOONCAKE_VERSION=0.3.7.post2
 
 # Stage Bake Runtime
 #
@@ -621,7 +621,6 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     export LD_LIBRARY_PATH="/opt/rocm/lib:/usr/local/lib:${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
     export BUILD_TARGET="rocm"
     export PREBUILD_KERNELS=1
-    export AITER_MXFP4_MOE_SF="$(echo "${AT_ROCM_ARCHS}" | grep -w "gfx950" >/dev/null 2>&1 && echo 1 || echo 0)"
     echo "Building AITER with the following environment variables:"
     env
     pushd /tmp/aiter \
@@ -746,12 +745,65 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache
-    sed -i "s/\"torch==2\.8\.0\"/\"torch\"/g" /tmp/lmcache/pyproject.toml
-    sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
     pushd /tmp/lmcache \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
+        && cat /tmp/lmcache/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/lmcache/dist \
         && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage vLLM Build MoonCake
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-vllm-build-mooncake-linux-amd64 --target=vllm-build-mooncake pack/rocm
+#
+
+FROM vllm-build AS vllm-build-mooncake
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build MoonCake
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_MOONCAKE_VERSION
+
+ENV VLLM_MOONCAKE_VERSION=${VLLM_MOONCAKE_VERSION} \
+    PATH="/usr/local/go/bin:${PATH}"
+
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+    # MoonCake
+
+    # Build MoonCake
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    echo "Building MoonCake with the following environment variables:"
+    env
+
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_MOONCAKE_VERSION} --single-branch \
+        https://github.com/kvcache-ai/Mooncake.git mooncake
+    pushd /tmp/mooncake \
+        && bash dependencies.sh -y \
+        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build --target install -j${MAX_JOBS} \
+        && ./scripts/build_wheel.sh \
+        && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
+        && mv /tmp/mooncake/mooncake-wheel/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -931,6 +983,20 @@ RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
         && rm -rf /tmp/*
 EOF
 
+## Install MoonCake
+
+RUN --mount=type=bind,from=vllm-build-mooncake,source=/,target=/mooncake,rw <<EOF
+    # MoonCake
+
+    # Install
+    uv pip install --no-build-isolation \
+        /mooncake/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Enhance Ray
 
 RUN <<EOF
@@ -957,6 +1023,9 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
+accelerate
+hf_transfer
+modelscope
 aiofile==3.9.0
 aiofiles==25.1.0
 awscrt==0.28.2
@@ -980,11 +1049,12 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
-        --package flash_attn \
+        --package flash-attn \
         --package triton \
         --package aiter \
         --package torch \
-        --package lmcache
+        --package lmcache \
+        --package mooncake-transfer-engine
 EOF
 
 ## Entrypoint
@@ -994,7 +1064,11 @@ ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
     TOKENIZERS_PARALLELISM=false \
     SAFETENSORS_FAST_GPU=1 \
     HIP_FORCE_DEV_KERNARG=1 \
-    HSA_NO_SCRATCH_RECLAIM=1
+    HSA_NO_SCRATCH_RECLAIM=1 \
+    VLLM_FP8_PADDING=1 \
+    VLLM_FP8_ACT_PADDING=1 \
+    VLLM_FP8_WEIGHT_PADDING=1 \
+    VLLM_FP8_REDUCE_CONV=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
@@ -1097,6 +1171,9 @@ RUN <<EOF
     pushd /tmp/sglang/python \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
         && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/pyproject.toml \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/pyproject.toml \
+        && cat /tmp/sglang/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/sglang/python/dist \
         && mv /tmp/sglang/python/dist /workspace
@@ -1153,10 +1230,10 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         https://github.com/sgl-project/sglang.git sglang
 
     # Build
-    pushd /tmp/sglang/sgl-router \
+    pushd /tmp/sglang/sgl-router/bindings/python \
         && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/dist \
-        && mv /tmp/sglang/sgl-router/dist /workspace
+        && tree -hs /tmp/sglang/sgl-router/bindings/python/dist \
+        && mv /tmp/sglang/sgl-router/bindings/python/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1165,58 +1242,6 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         && rm -rf /root/.rustup \
         && sed -i '$d' /root/.profile \
         && sed -i '$d' /root/.bashrc \
-        && ccache --clear --clean
-EOF
-
-# Stage SGLang Build MoonCake
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-mooncake-linux-amd64 --target=sglang-build-mooncake pack/rocm
-#
-
-FROM sglang-build AS sglang-build-mooncake
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build MoonCake
-
-ARG CMAKE_MAX_JOBS
-ARG SGLANG_MOONCAKE_VERSION
-
-ENV SGLANG_MOONCAKE_VERSION=${SGLANG_MOONCAKE_VERSION} \
-    PATH="/usr/local/go/bin:${PATH}"
-
-RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
-    # MoonCake
-
-    # Build MoonCake
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    echo "Building MoonCake with the following environment variables:"
-    env
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_MOONCAKE_VERSION} --single-branch \
-        https://github.com/kvcache-ai/Mooncake.git mooncake
-    pushd /tmp/mooncake \
-        && bash dependencies.sh -y \
-        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build --target install -j${MAX_JOBS} \
-        && ./scripts/build_wheel.sh \
-        && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
-        && mv /tmp/mooncake/mooncake-wheel/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
         && ccache --clear --clean
 EOF
 
@@ -1243,7 +1268,8 @@ ARG SGLANG_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION}
 
-RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
+    --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
     # SGLang
 
     # Install
@@ -1251,34 +1277,8 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         "$(ls /sglang/workspace/sglang-*.whl)[all_hip]"
     uv pip install \
         "$(ls /sglang/workspace/sgl_kernel-*.whl)"
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install SGLang Router
-
-RUN --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
-    # SGlang Router
-
-    # Install
-    uv pip install --no-build-isolation \
+    uv pip install --force-reinstall \
         /sglangrouter/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install MoonCake
-
-RUN --mount=type=bind,from=sglang-build-mooncake,source=/,target=/mooncake,rw <<EOF
-    # MoonCake
-
-    # Install
-    uv pip install --no-build-isolation \
-        /mooncake/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1326,14 +1326,25 @@ RUN <<EOF
         --package sglang-router \
         --package sgl-kernel \
         --package flashinfer-python \
+        --package flash-attn \
         --package triton \
         --package vllm \
         --package torch \
         --package deep-ep \
-        --package ipython
+        --package ipython \
+        --package mooncake-transfer-engine
 EOF
 
 ## Entrypoint
+
+ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_INT4_WEIGHT=0 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_SET_CPU_AFFINITY=1 \
+    SGLANG_ROCM_DISABLE_LINEARQUANT=0 \
+    SGLANG_ROCM_FUSED_DECODE_MLA=1 \
+    SGLANG_USE_AITER=1 \
+    SGLANG_USE_ROCM700A=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

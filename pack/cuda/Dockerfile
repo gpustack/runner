@@ -16,17 +16,16 @@
 #    - Build FlashInfer.
 #    - Build FlashAttention if allowed.
 #    - Build DeepGEMM.
+#    - Build DeepEP.
+#    - Build PPLX kernels.
 #    - Build vLLM.
 #    - Build LMCache.
-# 3.2. vllm-prepare target.
+# 3.2. vllm target.
 #    - Install GDRCopy.
 #    - Install NVIDIA HPC-X.
 #    - Install AWS EFA.
 #    - Install NVIDIA NVSHMEM.
 #    - Install Torch.
-#    - Build PPLX kernels.
-#    - Build DeepEP.
-# 3.3. vllm target.
 #    - Install FlashInfer.
 #    - Install FlashAttention if exists.
 #    - Install PPLX kernels.
@@ -76,16 +75,16 @@
 #   which is used to build the GDRCopy deb.
 # - VLLM_NVIDIA_HPCX_VERSION: Version of NVIDIA HPC-X to use.
 # - VLLM_NVIDIA_NVSHMEM_VERSION: Version of NVIDIA NVSHMEM to use.
-# - VLLM_AWS_EFA_VERSION: Version of AWS EFA to use.
 # - VLLM_PPLX_KERNEL_COMMIT: Commit hash of PPLX kernel to use,
 #   which is used to build the pplx kernels wheel.
-# - VLLM_DEEPEP_VERSION: Version of DeepEP to use,
+# - VLLM_DEEPEP_COMMIT: Commit of DeepEP to use,
 #   which is used to build the DeepEP wheel.
-# - VLLM_DEEPGEMM_VERSION: Version of DeepGEMM to use,
+# - VLLM_DEEPGEMM_COMMIT: Commit of DeepGEMM to use,
 #   which is used to build the DeepGEMM wheel.
 # - VLLM_FLASHINFER_VERSION: Version of FlashInfer to use,
 #   which is used to build the FlashInfer wheel.
-# - VLLM_LMCACHE_VERSION: Version of lmcache to use.
+# - VLLM_LMCACHE_VERSION: Version of LMCache to use.
+# - VLLM_MOONCAKE_VERSION:  Version of MoonCake to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
@@ -100,7 +99,7 @@ ARG VOXBOX_VERSION=0.0.20
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.2
+ARG VLLM_VERSION=0.12.0
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
@@ -108,16 +107,17 @@ ARG VLLM_NVIDIA_GDRCOPY_VERSION=2.5.1
 ARG VLLM_NVIDIA_HPCX_VERSION=2.24.1_cuda12
 ARG VLLM_NVIDIA_NVSHMEM_VERSION=3.4.5
 ARG VLLM_AWS_EFA_VERSION=1.44.0
-ARG VLLM_PPLX_KERNEL_COMMIT=c336faf
-ARG VLLM_DEEPEP_VERSION=1.2.1
-ARG VLLM_DEEPGEMM_VERSION=2.1.1.post3
-ARG VLLM_FLASHINFER_VERSION=0.5.2
+ARG VLLM_PPLX_KERNEL_COMMIT=12cecfda
+ARG VLLM_DEEPEP_COMMIT=b57e5e21
+ARG VLLM_DEEPGEMM_COMMIT=9b680f42
+ARG VLLM_FLASHINFER_VERSION=0.5.3
 ARG VLLM_FLASHATTENTION_VERSION=2.8.2
-ARG VLLM_LMCACHE_VERSION=0.3.9post2
+ARG VLLM_LMCACHE_VERSION=0.3.10.post1
+ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.5.post3
+ARG SGLANG_VERSION=0.5.6
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
-ARG SGLANG_KERNEL_VERSION=0.3.17.post1
+ARG SGLANG_KERNEL_VERSION=0.3.18.post2
 
 #
 # Stage Bake Runtime
@@ -644,9 +644,9 @@ ARG TARGETARCH
 ## Build DeepGEMM
 
 ARG CMAKE_MAX_JOBS
-ARG VLLM_DEEPGEMM_VERSION
+ARG VLLM_DEEPGEMM_COMMIT
 
-ENV VLLM_DEEPGEMM_VERSION=${VLLM_DEEPGEMM_VERSION}
+ENV VLLM_DEEPGEMM_COMMIT=${VLLM_DEEPGEMM_COMMIT}
 
 RUN <<EOF
     # DeepGEMM
@@ -655,8 +655,10 @@ RUN <<EOF
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_DEEPGEMM_VERSION} --single-branch \
-        https://github.com/deepseek-ai/DeepGEMM deep_gemm
+        https://github.com/deepseek-ai/DeepGEMM deep_gemm \
+        && pushd /tmp/deep_gemm \
+        && git checkout ${VLLM_DEEPGEMM_COMMIT} \
+        && git submodule update --init --recursive
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -668,10 +670,12 @@ RUN <<EOF
     fi
     DP_CUDA_ARCHS="${CUDA_ARCHS}"
     if [[ -z "${DP_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
             DP_CUDA_ARCHS="9.0a+PTX"
-        else
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
             DP_CUDA_ARCHS="9.0a 10.0a+PTX"
+        else
+            DP_CUDA_ARCHS="9.0a 10.0a+PTX 10.3"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -683,6 +687,185 @@ RUN <<EOF
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/deep_gemm/dist \
         && mv /tmp/deep_gemm/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+# Stage vLLM Build EP Kernels
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-epkernels-linux-amd64 --target=vllm-build-epkernels pack/cuda
+#
+
+FROM vllm-build AS vllm-build-epkernels
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Prepare NVIDIA NVSHMEM
+
+ARG VLLM_NVIDIA_NVSHMEM_VERSION
+
+ENV VLLM_NVIDIA_NVSHMEM_VERSION=${VLLM_NVIDIA_NVSHMEM_VERSION} \
+    VLLM_NVIDIA_NVSHMEM_DIR="/usr/local/nvshmem"
+
+RUN <<EOF
+    # NVIDIA NVSHMEM
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
+
+    ARCH="x86_64"
+    if [[ "${TARGETARCH}" == "arm64" ]]; then
+        ARCH="sbsa"
+    fi
+
+    # Download
+    mkdir -p /usr/local/nvshmem
+    curl --retry 3 --retry-connrefused -fL "https://developer.download.nvidia.com/compute/nvshmem/redist/libnvshmem/linux-${ARCH}/libnvshmem-linux-${ARCH}-${VLLM_NVIDIA_NVSHMEM_VERSION}_cuda${CUDA_MAJOR}-archive.tar.xz" -o /tmp/libnvshmem.tar.xz
+    tar -xvf /tmp/libnvshmem.tar.xz --strip-components 1 -C /usr/local/nvshmem
+
+    # Prepare
+    rm -rf /usr/local/nvshmem/lib/bin /usr/local/nvshmem/lib/share
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+# Stage vLLM Build EP Kenerls: DeepEP
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-epkernels-deepep-linux-amd64 --target=vllm-build-epkernels-deepep pack/cuda
+#
+
+FROM vllm-build-epkernels AS vllm-build-epkernels-deepep
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build DeepEP
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_DEEPEP_COMMIT
+
+ENV VLLM_DEEPEP_COMMIT=${VLLM_DEEPEP_COMMIT}
+
+RUN <<EOF
+    # DeepEP
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/deepseek-ai/DeepEP.git deep_ep \
+        && pushd /tmp/deep_ep \
+        && git checkout ${VLLM_DEEPEP_COMMIT}
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    DP_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${DP_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+            DP_CUDA_ARCHS="9.0a+PTX"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            DP_CUDA_ARCHS="9.0a 10.0a+PTX"
+        else
+            DP_CUDA_ARCHS="9.0a 10.0a+PTX 10.3"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${DP_CUDA_ARCHS}"
+    export CMAKE_PREFIX_PATH="${VLLM_NVIDIA_NVSHMEM_DIR}/lib/cmake:${CMAKE_PREFIX_PATH}"
+    export NVSHMEM_DIR="${VLLM_NVIDIA_NVSHMEM_DIR}"
+    export NVCC_THREADS=2
+    echo "Building DeepEP with the following environment variables:"
+    env
+    pushd /tmp/deep_ep \
+        && sed -i 's/#define NUM_CPU_TIMEOUT_SECS 100/#define NUM_CPU_TIMEOUT_SECS 1000/' csrc/kernels/configs.cuh \
+        && if (( $(echo "${CUDA_MAJOR} > 12" | bc -l) )); then \
+            sed -i "/^    include_dirs = \['csrc\/'\]/a\    include_dirs.append('${CUDA_HOME}/include/cccl')" setup.py; \
+        fi \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/deep_ep/dist \
+        && mv /tmp/deep_ep/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+# Stage vLLM Build EP Kenerls: PPLX
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-epkernels-pplx-linux-amd64 --target=vllm-build-epkernels-pplx pack/cuda
+#
+
+FROM vllm-build-epkernels AS vllm-build-epkernels-pplx
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build PPLX Kernels
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_PPLXKERNELS_COMMIT
+
+ENV VLLM_PPLXKERNELS_COMMIT=${VLLM_PPLXKERNELS_COMMIT}
+
+RUN <<EOF
+    # PPLX Kernels
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/ppl-ai/pplx-kernels.git pplx-kernels \
+        && pushd /tmp/pplx-kernels \
+        && git checkout ${VLLM_PPLX_KERNEL_COMMIT}
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    PP_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${PP_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
+            PP_CUDA_ARCHS="9.0a+PTX"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            PP_CUDA_ARCHS="9.0a 10.0a+PTX"
+        else
+            PP_CUDA_ARCHS="9.0a 10.0a+PTX 10.3"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${PP_CUDA_ARCHS}"
+    export CMAKE_PREFIX_PATH="${VLLM_NVIDIA_NVSHMEM_DIR}/lib/cmake:${CMAKE_PREFIX_PATH}"
+    export NVSHMEM_DIR="${VLLM_NVIDIA_NVSHMEM_DIR}"
+    export NVCC_THREADS=2
+    echo "Building PPLX Kernels with the following environment variables:"
+    env
+    pushd /tmp/pplx-kernels \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/pplx-kernels/dist \
+        && mv /tmp/pplx-kernels/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -709,7 +892,7 @@ ARG VLLM_FLASHATTENTION_VERSION
 
 ENV VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
 
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw <<EOF
     # FlashAttention
 
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
@@ -868,9 +1051,9 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache
-    sed -i "s/\"torch==2\.8\.0\"/\"torch\"/g" /tmp/lmcache/pyproject.toml
-    sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
     pushd /tmp/lmcache \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
+        && cat /tmp/lmcache/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/lmcache/dist \
         && mv /tmp/lmcache/dist /workspace
@@ -881,13 +1064,13 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
         && ccache --clear --clean
 EOF
 
-# Stage vLLM Prepare
+# Stage vLLM
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-prepare-linux-amd64 --target=vllm-prepare pack/cuda
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/cuda
 #
 
-FROM ${VLLM_BASE_IMAGE} AS vllm-prepare
+FROM ${VLLM_BASE_IMAGE} AS vllm
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -1005,79 +1188,6 @@ RUN <<EOF
 EOF
 ENV PATH="${PATH}:/opt/amazon/efa/bin"
 
-## Install NVIDIA NVSHMEM
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_NVIDIA_NVSHMEM_VERSION
-
-ENV VLLM_NVIDIA_NVSHMEM_VERSION=${VLLM_NVIDIA_NVSHMEM_VERSION} \
-    VLLM_NVIDIA_NVSHMEM_DIR="/usr/local/nvshmem"
-
-RUN <<EOF
-    # NVIDIA NVSHMEM
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
-
-    # Download
-    mkdir -p /tmp/nvshmem
-    if (( $(echo "${CUDA_MAJOR} > 12" | bc -l) )); then
-        curl --retry 3 --retry-connrefused -fL "https://github.com/NVIDIA/nvshmem/releases/download/v${VLLM_NVIDIA_NVSHMEM_VERSION}-0/nvshmem_src_cuda-all-all-${VLLM_NVIDIA_NVSHMEM_VERSION}.tar.gz" | tar -zxv -C /tmp
-    else
-        curl --retry 3 --retry-connrefused -fL "https://developer.download.nvidia.com/compute/redist/nvshmem/${VLLM_NVIDIA_NVSHMEM_VERSION}/source/nvshmem_src_cuda12-all-all-${VLLM_NVIDIA_NVSHMEM_VERSION}.tar.gz" | tar -zxv -C /tmp
-    fi
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    NS_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${NS_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
-            NS_CUDA_ARCHS="7.5 8.0 8.9 9.0 10.0 12.0"
-        else
-            NS_CUDA_ARCHS="7.5 8.0 8.9 9.0 10.0 10.3 12.0 12.1"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export CUDA_ARCH="${NS_CUDA_ARCHS}"
-    export NVSHMEM_IBGDA_SUPPORT=1
-    export NVSHMEM_USE_GDRCOPY=1
-    export NVSHMEM_SHMEM_SUPPORT=0
-    export NVSHMEM_UCX_SUPPORT=0
-    export NVSHMEM_USE_NCCL=0
-    export NVSHMEM_PMIX_SUPPORT=0
-    export NVSHMEM_TIMEOUT_DEVICE_POLLING=0
-    export NVSHMEM_IBRC_SUPPORT=0
-    export NVSHMEM_BUILD_TESTS=0
-    export NVSHMEM_BUILD_EXAMPLES=0
-    export NVSHMEM_MPI_SUPPORT=0
-    export NVSHMEM_BUILD_HYDRA_LAUNCHER=0
-    export NVSHMEM_BUILD_TXZ_PACKAGE=0
-    export NVSHMEM_TIMEOUT_DEVICE_POLLING=0
-    export NVCC_THREADS=1
-    echo "Building NVSHMEM with the following environment variables:"
-    env
-    # FIX: Hide Python3.10 to avoid issues with Python version mismatch.
-    PYTHON3_10_BIN=$(which python3.10 || true)
-    if [[ -n "${PYTHON3_10_BIN}" ]]; then
-        mv "${PYTHON3_10_BIN}" /tmp/python3.10
-    fi
-    pushd /tmp/nvshmem_src \
-        && cmake -G Ninja -S . -B build -DCMAKE_INSTALL_PREFIX=${VLLM_NVIDIA_NVSHMEM_DIR} \
-        && cmake --build build --target install -j${MAX_JOBS}
-    if [[ -n "${PYTHON3_10_BIN}" ]]; then
-        mv /tmp/python3.10 "${PYTHON3_10_BIN}"
-    fi
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install Torch
 
 ARG VLLM_TORCH_VERSION
@@ -1130,146 +1240,6 @@ EOT
         && rm -rf /tmp/*
 EOF
 
-# Stage vLLM Prepare PPLX Kernels
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-prepare-pplx-kernels-linux-amd64 --target=vllm-prepare-pplx-kernels pack/cuda
-#
-
-FROM vllm-prepare AS vllm-prepare-pplx-kernels
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build PPLX Kernel
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_PPLX_KERNEL_COMMIT
-
-ENV VLLM_PPLX_KERNEL_COMMIT=${VLLM_PPLX_KERNEL_COMMIT}
-
-RUN <<EOF
-    # PPLX Kernels
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    # Download
-    git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/ppl-ai/pplx-kernels.git pplx-kernels \
-        && pushd /tmp/pplx-kernels \
-        && git checkout ${VLLM_PPLX_KERNEL_COMMIT}
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    PP_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${PP_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
-            PP_CUDA_ARCHS="9.0a+PTX"
-        else
-            PP_CUDA_ARCHS="9.0a 10.0a+PTX"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export TORCH_CUDA_ARCH_LIST="${PP_CUDA_ARCHS}"
-    export NVSHMEM_DIR="${VLLM_NVIDIA_NVSHMEM_DIR}"
-    echo "Building PPLX Kernels with the following environment variables:"
-    env
-    pushd /tmp/pplx-kernels \
-        && python -v -m build --no-isolation --wheel \
-        && tree -hs /tmp/pplx-kernels/dist \
-        && mv /tmp/pplx-kernels/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-# Stage vLLM Prepare DeepEP
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-prepare-deepep-linux-amd64 --target=vllm-prepare-deepep pack/cuda
-#
-
-FROM vllm-prepare AS vllm-prepare-deepep
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build DeepEP
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_DEEPEP_VERSION
-
-ENV VLLM_DEEPEP_VERSION=${VLLM_DEEPEP_VERSION}
-
-RUN <<EOF
-    # DeepEP
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    # Download
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_DEEPEP_VERSION} --single-branch \
-        https://github.com/deepseek-ai/DeepEP.git deep_ep
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    DP_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${DP_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
-            DP_CUDA_ARCHS="9.0a+PTX"
-        else
-            DP_CUDA_ARCHS="9.0a 10.0a+PTX"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export TORCH_CUDA_ARCH_LIST="${DP_CUDA_ARCHS}"
-    export NVSHMEM_DIR="${VLLM_NVIDIA_NVSHMEM_DIR}"
-    echo "Building DeepEP with the following environment variables:"
-    env
-    pushd /tmp/deep_ep \
-        && sed -i 's/#define NUM_CPU_TIMEOUT_SECS 100/#define NUM_CPU_TIMEOUT_SECS 1000/' csrc/kernels/configs.cuh \
-        && if (( $(echo "${CUDA_MAJOR} > 12" | bc -l) )); then \
-            sed -i "/^    include_dirs = \['csrc\/'\]/a\    include_dirs.append('${CUDA_HOME}/include/cccl')" setup.py; \
-        fi \
-        && python -v -m build --no-isolation --wheel \
-        && tree -hs /tmp/deep_ep/dist \
-        && mv /tmp/deep_ep/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-# Stage vLLM
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/cuda
-#
-
-FROM vllm-prepare AS vllm
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
 ## Install vLLM
 
 ARG CMAKE_MAX_JOBS
@@ -1289,23 +1259,23 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
         && rm -rf /tmp/*
 EOF
 
-## Install PPLX Kernels
+## Install EP Kenerls: PPLX
 
-RUN --mount=type=bind,from=vllm-prepare-pplx-kernels,source=/,target=/pplx-kernels,rw <<EOF
-    # PPLX Kernels
+RUN --mount=type=bind,from=vllm-build-epkernels-pplx,source=/,target=/pplx,rw <<EOF
+    # PPLX
 
     # Install
     uv pip install --no-build-isolation \
-        /pplx-kernels/workspace/*.whl
+        /pplx/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/*
 EOF
 
-## Install DeepEP
+## Install EP Kenerls: DeepEP
 
-RUN --mount=type=bind,from=vllm-prepare-deepep,source=/,target=/deepep,rw <<EOF
+RUN --mount=type=bind,from=vllm-build-epkernels-deepep,source=/,target=/deepep,rw <<EOF
     # DeepEP
 
     # Install
@@ -1412,6 +1382,10 @@ EOF
 
 ## Install Dependencies
 
+ARG VLLM_MOONCAKE_VERSION
+
+ENV VLLM_MOONCAKE_VERSION=${VLLM_MOONCAKE_VERSION}
+
 RUN <<EOF
     # Dependencies
 
@@ -1427,7 +1401,8 @@ modelscope
 bitsandbytes>=${BITSANDBYTES_VERSION}
 timm>=1.0.17
 boto3
-nixl>=0.6.0
+nixl>=0.7.1
+mooncake-transfer-engine==${VLLM_MOONCAKE_VERSION}
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -1452,7 +1427,9 @@ RUN <<EOF
         --package pplx-kernels \
         --package deep-gemm \
         --package deep-ep \
-        --package lmcache
+        --package lmcache \
+        --package mooncake-transfer-engine \
+        --package ray
 EOF
 
 ## Entrypoint
@@ -1535,6 +1512,9 @@ RUN <<EOF
     # Build SGLang
     pushd /tmp/sglang/python \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/pyproject.toml \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/pyproject.toml \
+        && cat /tmp/sglang/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/sglang/python/dist \
         && mv /tmp/sglang/python/dist /workspace
@@ -1597,10 +1577,10 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         https://github.com/sgl-project/sglang.git sglang
 
     # Build
-    pushd /tmp/sglang/sgl-router \
+    pushd /tmp/sglang/sgl-router/bindings/python \
         && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/dist \
-        && mv /tmp/sglang/sgl-router/dist /workspace
+        && tree -hs /tmp/sglang/sgl-router/bindings/python/dist \
+        && mv /tmp/sglang/sgl-router/bindings/python/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1637,7 +1617,8 @@ ARG SGLANG_KERNEL_VERSION
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
     SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
 
-RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
+RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
+    --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
     # SGLang
 
     # Install
@@ -1650,65 +1631,8 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
     fi
     uv pip install \
         "$(ls /sglang/workspace/sgl_kernel-*.whl)"
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install SGLang Router
-
-RUN --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
-    # SGlang Router
-
-    # Install
     uv pip install --force-reinstall \
         /sglangrouter/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install Dependencies
-
-RUN <<EOF
-    # Dependencies
-
-    # Install Dependencies,
-    # see https://github.com/sgl-project/sglang/blob/41c10e67fcae6ac50dfe283655bdf545d224cba9/docker/Dockerfile#L181-L209.
-    cat <<EOT >/tmp/requirements.txt
-nvidia-cutlass-dsl==4.3.0
-datamodel_code_generator
-mooncake-transfer-engine==0.3.7.post2
-nixl
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Download FlashInfer
-## FIXME: Remove this if we can reuse vLLM's FlashInfer installation.
-
-RUN <<EOF
-    # FlashInfer
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-
-    # Download pre-compiled cubins
-    FLASHINFER_CUBIN_DOWNLOAD_THREADS="${CMAKE_MAX_JOBS}" \
-    FLASHINFER_LOGGING_LEVEL=warning \
-        python -m flashinfer --download-cubin
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1733,10 +1657,16 @@ RUN <<EOF
         --package deep-ep \
         --package diffusers \
         --package opencv-python \
-        --package ipython
+        --package ipython \
+        --package mooncake-transfer-engine
 EOF
 
 ## Entrypoint
+
+ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_INT4_WEIGHT=0 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_SET_CPU_AFFINITY=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

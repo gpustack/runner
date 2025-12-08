@@ -39,6 +39,7 @@
 # - VLLM_ASCEND_VERSION: Version of vLLM Ascend to use,
 #   if not specified, it will fetch from the vLLM Ascend PyPi RSS.
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
+# - VLLM_MOONCAKE_VERSION:  Version of MoonCake to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
@@ -52,8 +53,9 @@ ARG MINDIE_VERSION=2.2.rc1
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.11.0
-ARG VLLM_ASCEND_VERSION=0.11.0rc2
+ARG VLLM_ASCEND_VERSION=0.11.0rc3
 ARG VLLM_TORCH_VERSION=2.7.1
+ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.2
 ARG SGLANG_TORCH_VERSION=2.6.0
@@ -675,13 +677,13 @@ ENV PATH="${CANN_HOME}/mindie/latest/mindie-service/bin:${PATH}"
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
 
-# Stage Install vLLM
+# Stage vLLM Build
 #
 # Example build command:
 #   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-vllm${VLLM_VERSION}-linux-arm64 --target=vllm pack/cann
 #
 
-FROM ${VLLM_BASE_IMAGE} AS vllm
+FROM ${VLLM_BASE_IMAGE} AS vllm-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -723,6 +725,80 @@ EOT
         && rm -rf /tmp/*
 EOF
 
+# Stage vLLM Build MoonCake
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-vllm-build-mooncake-linux-arm64 --target=vllm-build-mooncake pack/cann
+#
+
+FROM vllm-build AS vllm-build-mooncake
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build MoonCake
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_MOONCAKE_VERSION
+
+ENV VLLM_MOONCAKE_VERSION=${VLLM_MOONCAKE_VERSION} \
+    PATH="/usr/local/go/bin:${PATH}"
+
+RUN <<EOF
+    # MoonCake
+
+    if [[ "${CANN_ARCHS}" == "310p" ]]; then
+        echo "Skipping MoonCake build for ${CANN_ARCHS}..."
+        exit 0
+    fi
+
+    # Build MoonCake
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/lib64"
+    echo "Building MoonCake with the following environment variables:"
+    env
+
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_MOONCAKE_VERSION} --single-branch \
+        https://github.com/kvcache-ai/Mooncake.git mooncake
+    pushd /tmp/mooncake \
+        && bash dependencies.sh -y \
+        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DUSE_ASCEND_DIRECT=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
+        && cmake --build build --target install -j${MAX_JOBS} \
+        && ./scripts/build_wheel.sh \
+        && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
+        && mv /tmp/mooncake/mooncake-wheel/dist/ /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+# Stage vLLM
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-vllm${VLLM_VERSION}-linux-arm64 --target=vllm pack/cann
+#
+FROM vllm-build AS vllm
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
 ## Install vLLM
 
 ARG CMAKE_MAX_JOBS
@@ -744,7 +820,9 @@ RUN <<EOF
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
-    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/usr/local/Ascend/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    echo "Building vLLM with the following environment variables:"
+    env
 
     # Install vLLM
     git -C /tmp clone --recursive --shallow-submodules \
@@ -774,6 +852,25 @@ RUN <<EOF
     if [[ "${CANN_ARCHS}" == "310p" ]]; then
         sed -i "s/^__soc_version__.*/__soc_version__ = 'ASCEND310P3'/" $(pip show vllm-ascend | grep Location: | cut -d':' -f 2)/vllm_ascend/_build_info.py
     fi
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install MoonCake
+
+RUN --mount=type=bind,from=vllm-build-mooncake,source=/,target=/mooncake,rw <<EOF
+    # MoonCake
+
+    if [[ ! -d /mooncake/workspace ]]; then
+        echo "Skipping MoonCake installation for ${CANN_ARCHS} ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /mooncake/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -828,7 +925,8 @@ EOT
         --package vllm \
         --package vllm-ascend \
         --package torch \
-        --package torch-npu
+        --package torch-npu \
+        --package mooncake-transfer-engine
 EOF
 
 ## Entrypoint
@@ -838,11 +936,12 @@ ENV RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
 
-# Stage Install SGLang
+# Stage SGLang
 #
 # Example build command:
 #   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/cann
 #
+
 FROM ${SGLANG_BASE_IMAGE} AS sglang
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
@@ -926,6 +1025,10 @@ RUN <<EOF
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
     export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    export LD_LIBRARY_PATH="${CANN_HOME}/ascend-toolkit/latest/runtime/lib64/stub:${LD_LIBRARY_PATH}"
+    source ${CANN_HOME}/ascend-toolkit/set_env.sh
+    echo "Building SGLang with the following environment variables:"
+    env
 
     # Install vLLM
     SGLANG_VLLM_VERSION=0.8.5
@@ -955,7 +1058,7 @@ EOT
             https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend-3.2.0%2Bgitb0ea0850-cp311-cp311-linux_aarch64.whl
     fi
 
-    # Install SGLang
+    # Build and Install SGLang
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
@@ -963,10 +1066,7 @@ EOT
         && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
         && uv pip install --verbose .[srt_npu]
 
-    export LD_LIBRARY_PATH="${CANN_HOME}/ascend-toolkit/latest/runtime/lib64/stub:${LD_LIBRARY_PATH}"
-    source ${CANN_HOME}/ascend-toolkit/set_env.sh
-
-    # Install SGLang Kernel
+    # Build and Install SGLang Kernel
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch ${SGLANG_KERNEL_VERSION} --single-branch \
         https://github.com/sgl-project/sgl-kernel-npu.git sgl-kernel-npu
