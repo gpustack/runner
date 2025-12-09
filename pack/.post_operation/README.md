@@ -23,4 +23,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-11-12: Install FlashAttention package for SGLang 0.5.5 CUDA released images.
 - [x] 2025-11-25: Install Posix IPC package for MindIE CANN released images.
 - [x] 2025-12-01: Patch vLLM for CUDA released images.
-- [ ] 2025-12-09: Install AV package for MindIE CANN released images.
+- [x] 2025-12-09: Install AV package for MindIE CANN released images.
