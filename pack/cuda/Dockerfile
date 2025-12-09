@@ -13,8 +13,8 @@
 #    - Install Torch.
 #    - Install dependencies.
 #    - Build GDRCopy.
-#    - Build FlashInfer.
 #    - Build FlashAttention if allowed.
+#    - Build FlashInfer.
 #    - Build DeepGEMM.
 #    - Build DeepEP.
 #    - Build PPLX kernels.
@@ -550,6 +550,76 @@ RUN <<EOF
         && rm -rf /var/cache/apt
 EOF
 
+# Stage vLLM Build FlashAttention
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-flashattention-linux-amd64 --target=vllm-build-flashattention pack/cuda
+#
+
+FROM vllm-build AS vllm-build-flashattention
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build FlashAttention
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_FLASHATTENTION_VERSION
+
+ENV VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
+
+RUN <<EOF
+    # FlashAttention
+
+    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    # Support ARM64 only
+    if [[ "${TARGETARCH}" != "amd64" ]]; then
+        echo "Skipping FlashAttention building for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
+    if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
+        echo "Downloading prebuilt FlashAttention wheel from ${PREBUILD_URL}..."
+        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
+        mkdir -p /workspace \
+            && mv /tmp/*.whl /workspace \
+            && tree -hs /workspace
+        exit 0
+    fi
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_FLASHATTENTION_VERSION} --single-branch \
+        https://github.com/Dao-AILab/flash-attention.git flashattention
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 2" | bc -l) )); then
+        CMAKE_MAX_JOBS="2"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export BUILD_TARGET="cuda"
+    export NVCC_THREADS=2
+    echo "Building FlashAttention with the following environment variables:"
+    env
+    pushd /tmp/flashattention \
+      && python -v -m build --no-isolation --wheel \
+      && tree -hs /tmp/flashattention/dist \
+      && mv /tmp/flashattention/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 # Stage vLLM Build FlashInfer
 #
 # Example build command:
@@ -872,76 +942,6 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
-# Stage vLLM Build FlashAttention
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-flashattention-linux-amd64 --target=vllm-build-flashattention pack/cuda
-#
-
-FROM vllm-build AS vllm-build-flashattention
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build FlashAttention
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_FLASHATTENTION_VERSION
-
-ENV VLLM_FLASHATTENTION_VERSION=${VLLM_FLASHATTENTION_VERSION}
-
-RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw <<EOF
-    # FlashAttention
-
-    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    # Support ARM64 only
-    if [[ "${TARGETARCH}" != "amd64" ]]; then
-        echo "Skipping FlashAttention building for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
-    if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
-        echo "Downloading prebuilt FlashAttention wheel from ${PREBUILD_URL}..."
-        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
-        mkdir -p /workspace \
-            && mv /tmp/*.whl /workspace \
-            && tree -hs /workspace
-        exit 0
-    fi
-
-    # Download
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_FLASHATTENTION_VERSION} --single-branch \
-        https://github.com/Dao-AILab/flash-attention.git flashattention
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 2" | bc -l) )); then
-        CMAKE_MAX_JOBS="2"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export BUILD_TARGET="cuda"
-    export NVCC_THREADS=2
-    echo "Building FlashAttention with the following environment variables:"
-    env
-    pushd /tmp/flashattention \
-      && python -v -m build --no-isolation --wheel \
-      && tree -hs /tmp/flashattention/dist \
-      && mv /tmp/flashattention/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 # Stage vLLM Build vLLM
 #
 # Example build command:
@@ -962,8 +962,7 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
-RUN --mount=type=bind,from=vllm-build-flashinfer,source=/,target=/flashinfer,rw \
-    --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
+RUN <<EOF
     # vLLM
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"

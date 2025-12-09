@@ -467,6 +467,7 @@ RUN <<EOF
 
     # Install dependencies
     cat <<EOT >/tmp/requirements.txt
+av==16.0.1
 absl-py==2.2.2
 accelerate==0.34.2
 aiohappyeyeballs==2.6.1
