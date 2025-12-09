@@ -57,9 +57,9 @@ ARG VLLM_ASCEND_VERSION=0.11.0rc3
 ARG VLLM_TORCH_VERSION=2.7.1
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.2
-ARG SGLANG_TORCH_VERSION=2.6.0
-ARG SGLANG_KERNEL_VERSION=20251106
+ARG SGLANG_VERSION=0.5.6.post1
+ARG SGLANG_TORCH_VERSION=2.8.0
+ARG SGLANG_KERNEL_VERSION=20251206
 
 #
 # Stage Bake Runtime
@@ -680,7 +680,7 @@ ENTRYPOINT [ "tini", "--" ]
 # Stage vLLM Build
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-vllm${VLLM_VERSION}-linux-arm64 --target=vllm pack/cann
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann${CANN_VERSION%.*}-vllm-build-linux-arm64 --target=vllm-build pack/cann
 #
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
@@ -993,8 +993,8 @@ EOT
         uv pip install \
             -r /tmp/requirements.txt
     fi
-    uv pip install --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
-        torch-npu==${SGLANG_TORCH_VERSION}.*
+    uv pip install --verbose \
+        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/torch_npu/torch_npu-2.8.0.post2.dev20251113-cp311-cp311-manylinux_2_28_$(uname -m).whl
     uv pip install \
         numpy==1.26.4 scipy==1.13.1
 
@@ -1008,9 +1008,11 @@ EOF
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
 ARG SGLANG_KERNEL_VERSION
+ARG VLLM_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
-    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION}
+    SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION} \
+    VLLM_VERSION=${VLLM_VERSION}
 
 RUN <<EOF
     # SGLang
@@ -1031,13 +1033,12 @@ RUN <<EOF
     env
 
     # Install vLLM
-    SGLANG_VLLM_VERSION=0.8.5
     git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VLLM_VERSION} --single-branch \
-        https://github.com/vllm-project/vllm.git vllm-${SGLANG_VLLM_VERSION}
+        --depth 1 --branch v${VLLM_VERSION} --single-branch \
+        https://github.com/vllm-project/vllm.git vllm-${VLLM_VERSION}
     VLLM_TARGET_DEVICE="empty" \
         uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
-        /tmp/vllm-${SGLANG_VLLM_VERSION}
+        /tmp/vllm-${VLLM_VERSION}
 
     # Install Dependencies
     cat <<EOT >/tmp/requirements.txt
@@ -1050,13 +1051,8 @@ pyyaml
 EOT
     uv pip install \
         -r /tmp/requirements.txt
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        uv pip install --verbose \
-            https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend-3.2.0.dev20250923-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
-    else
-        uv pip install --verbose \
-            https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend-3.2.0%2Bgitb0ea0850-cp311-cp311-linux_aarch64.whl
-    fi
+    uv pip install --verbose \
+        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend/triton_ascend-3.2.0.dev2025112116-cp311-cp311-manylinux_2_27_$(uname -m).manylinux_2_28_$(uname -m).whl
 
     # Build and Install SGLang
     git -C /tmp clone --recursive --shallow-submodules \
@@ -1099,14 +1095,16 @@ RUN <<EOF
     uv pip install \
         setuptools-rust maturin
 
-    # Install SGLang Router
+    # Download
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang
-    pushd /tmp/sglang/sgl-router \
+
+    # Build
+    pushd /tmp/sglang/sgl-model-gateway/bindings/python \
         && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/dist \
-        && uv pip install --force-reinstall /tmp/sglang/sgl-router/dist/*.whl
+        && tree -hs /tmp/sglang/sgl-model-gateway/bindings/python/dist \
+        && uv pip install --force-reinstall /tmp/sglang/sgl-model-gateway/bindings/python/dist/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1118,20 +1116,22 @@ RUN <<EOF
         && ccache --clear --clean
 EOF
 
-## Install Custom Ops
+## Install Dependencies
 
 RUN <<EOF
-    # Custom Ops
+    # Dependencies
 
-    if [[ "${TARGETARCH}" == "amd64" ]]; then
-        echo "Skipping Custom Ops installation on ${TARGETARCH}..."
-        exit 0
-    fi
-
-    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    ARCH="$(uname -m)"
+    # Install Custom Ops
     UV_SKIP_WHEEL_FILENAME_CHECK=1 uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/ops/custom_ops-1.0.${CANN_ARCHS}-cp311-cp311-${OS}_${ARCH}.whl
+        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/ops/custom_ops-2.0.${CANN_ARCHS}-cp311-cp311-linux_$(uname -m).whl
+
+    # Install BiSheng
+    BISHENG_FILE="Ascend-BiSheng-toolkit_aarch64_20251121.run"
+    BISHENG_PATH="/tmp/${BISHENG_FILE}"
+    BISHENG_URL="https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend/${BISHENG_FILE}"
+    curl --retry 3 --retry-connrefused -fL -o "${BISHENG_PATH}" "${BISHENG_URL}"
+    chmod a+x "${BISHENG_PATH}"
+    printf "Y\n" | "${BISHENG_PATH}" --install
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1157,6 +1157,10 @@ RUN <<EOF
 EOF
 
 ## Entrypoint
+
+ENV SGLANG_SET_CPU_AFFINITY=1 \
+    PYTORCH_NPU_ALLOC_CONF=expandable_segments:True \
+    STREAMS_PER_DEVICE=32
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

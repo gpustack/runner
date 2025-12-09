@@ -111,11 +111,11 @@ ARG VLLM_PPLX_KERNEL_COMMIT=12cecfda
 ARG VLLM_DEEPEP_COMMIT=b57e5e21
 ARG VLLM_DEEPGEMM_COMMIT=9b680f42
 ARG VLLM_FLASHINFER_VERSION=0.5.3
-ARG VLLM_FLASHATTENTION_VERSION=2.8.2
+ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_LMCACHE_VERSION=0.3.10.post1
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.6
+ARG SGLANG_VERSION=0.5.6.post1
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
 ARG SGLANG_KERNEL_VERSION=0.3.18.post2
 
@@ -1577,10 +1577,10 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         https://github.com/sgl-project/sglang.git sglang
 
     # Build
-    pushd /tmp/sglang/sgl-router/bindings/python \
+    pushd /tmp/sglang/sgl-model-gateway/bindings/python \
         && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/bindings/python/dist \
-        && mv /tmp/sglang/sgl-router/bindings/python/dist /workspace
+        && tree -hs /tmp/sglang/sgl-model-gateway/bindings/python/dist \
+        && mv /tmp/sglang/sgl-model-gateway/bindings/python/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \

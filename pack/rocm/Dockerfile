@@ -69,11 +69,11 @@
 #   which is used to build the SGLang from source.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
-ARG ROCM_VERSION=7.0.2
+ARG ROCM_VERSION=7.1.1
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.12.0
-ARG VLLM_TORCH_VERSION=2.9.0
+ARG VLLM_TORCH_VERSION=2.9.1
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
@@ -83,7 +83,7 @@ ARG VLLM_AITER_VERSION=0.1.7.post2
 ARG VLLM_LMCACHE_VERSION=0.3.10.post1
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.5.post3
+ARG SGLANG_VERSION=0.5.6.post1
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
 
 # Stage Bake Runtime
@@ -318,7 +318,11 @@ ENV ROCM_HOME="/opt/rocm" \
 RUN <<EOF
     # Toolkit
 
-    uv pip install --system amdsmi==${ROCM_VERSION}
+    export UV_SYSTEM_PYTHON=1
+    export UV_PRERELEASE=allow
+    uv pip install --no-build-isolation \
+        /opt/rocm/share/amd_smi
+    uv pip tree
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -684,6 +688,9 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
     pushd /tmp/vllm \
+        && sed -i "s/\"torch ==.*\"/\"torch\"/g" /tmp/vllm/pyproject.toml \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
@@ -1230,10 +1237,10 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
         https://github.com/sgl-project/sglang.git sglang
 
     # Build
-    pushd /tmp/sglang/sgl-router/bindings/python \
+    pushd /tmp/sglang/sgl-model-gateway/bindings/python \
         && ulimit -n 65536 && maturin build --release --features vendored-openssl --out dist \
-        && tree -hs /tmp/sglang/sgl-router/bindings/python/dist \
-        && mv /tmp/sglang/sgl-router/bindings/python/dist /workspace
+        && tree -hs /tmp/sglang/sgl-model-gateway/bindings/python/dist \
+        && mv /tmp/sglang/sgl-model-gateway/bindings/python/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \

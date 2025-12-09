@@ -22,7 +22,14 @@ rules:
     services:
       - "mindie"
       - "vllm"
+    args:
+      - "CANN_VERSION=8.3.rc2"
+      - "CANN_ARCHS=a3"
+  - backend: "cann"
+    services:
       - "sglang"
+    platforms:
+      - "linux/arm64"
     args:
       - "CANN_VERSION=8.3.rc2"
       - "CANN_ARCHS=a3"
@@ -32,7 +39,14 @@ rules:
     services:
       - "mindie"
       - "vllm"
+    args:
+      - "CANN_VERSION=8.3.rc2"
+      - "CANN_ARCHS=910b"
+  - backend: "cann"
+    services:
       - "sglang"
+    platforms:
+      - "linux/arm64"
     args:
       - "CANN_VERSION=8.3.rc2"
       - "CANN_ARCHS=910b"
@@ -129,8 +143,7 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.0.2, using PyTorch +rocm6.4,
-  ## see https://www.amd.com/en/developer/resources/technical-articles/2025/pytorch-2-9-wheel-variant-support-expands-to-rocm.html.
+  ## AMD ROCm 7.1.1, using PyTorch +rocm7.1.
   ##
   - backend: "rocm"
     services:
@@ -138,9 +151,8 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "ROCM_VERSION=7.0.2"
-      - "VLLM_TORCH_ROCM_VERSION=6.4.4"
-  ## AMD ROCm 6.4.4, using PyTorch +rocm6.4.
+      - "ROCM_VERSION=7.1.1"
+      - "VLLM_TORCH_SOURCE=radeon"
   ##
   - backend: "rocm"
     services:
