@@ -463,28 +463,6 @@
   },
   {
     "backend": "cann",
-    "backend_version": "8.3",
-    "original_backend_version": "8.3.rc2",
-    "backend_variant": "310p",
-    "service": "vllm",
-    "service_version": "0.11.0",
-    "platform": "linux/amd64",
-    "docker_image": "gpustack/runner:cann8.3-310p-vllm0.11.0",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
-    "backend_version": "8.3",
-    "original_backend_version": "8.3.rc2",
-    "backend_variant": "310p",
-    "service": "vllm",
-    "service_version": "0.11.0",
-    "platform": "linux/arm64",
-    "docker_image": "gpustack/runner:cann8.3-310p-vllm0.11.0",
-    "deprecated": false
-  },
-  {
-    "backend": "cann",
     "backend_version": "8.2",
     "original_backend_version": "8.2.rc1",
     "backend_variant": "310p",
