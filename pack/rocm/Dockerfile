@@ -474,12 +474,12 @@ EOT
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    TT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    TT_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${TT_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -671,19 +671,19 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    VL_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    VL_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
     export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
 
-    # Install
+    # Build
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
@@ -734,12 +734,12 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    LC_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    LC_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${LC_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -1145,12 +1145,12 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    SG_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    SG_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${SG_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            SG_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            SG_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     SK_ROCM_ARCHS="gfx950"
