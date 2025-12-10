@@ -365,13 +365,35 @@ RUN <<EOF
     # Install
     if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
         WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
         TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TRITON_URL}" ]]; then
+            TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
         TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCH_TRITON_URL}" ]]; then
+            TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
         TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCH_URL}" ]]; then
+            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
         TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCHVISION_URL}" ]]; then
+            TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
         TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCHAUDIO_URL}" ]]; then
+            TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        if [[ -z "${TORCHAUDIO_URL}" ]]; then
+            TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${TORCH_MAJOR}.${TORCH_MINOR}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        if [[ -z "${TORCHAUDIO_URL}" ]]; then
+            TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${TORCH_MAJOR}.${TORCH_MINOR}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
             echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
@@ -854,13 +876,35 @@ RUN <<EOF
     # Install
     if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then
         IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+        IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
         WHEEL_PREFIX="https://repo.radeon.com/rocm/manylinux/rocm-rel-${VLLM_TORCH_ROCM_VERSION}/"
         WHEEL_SUFFIX="cp${PYTHON_MAJOR}${PYTHON_MINOR}-linux_$(uname -m).whl"
-        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
-        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p')"
+        TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TRITON_URL}" ]]; then
+            TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "triton-" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCH_TRITON_URL}" ]]; then
+            TORCH_TRITON_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "pytorch_triton_rocm-" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCH_URL}" ]]; then
+            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCHVISION_URL}" ]]; then
+            TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        if [[ -z "${TORCHAUDIO_URL}" ]]; then
+            TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${VLLM_TORCH_VERSION}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        if [[ -z "${TORCHAUDIO_URL}" ]]; then
+            TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${TORCH_MAJOR}.${TORCH_MINOR}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        if [[ -z "${TORCHAUDIO_URL}" ]]; then
+            TORCHAUDIO_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchaudio-${TORCH_MAJOR}.${TORCH_MINOR}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
         if [[ -z "${TORCH_URL}" || -z "${TORCHVISION_URL}" || -z "${TORCHAUDIO_URL}" ]]; then
             echo "Failed to get ROCM PyTorch wheels for version ${VLLM_TORCH_VERSION} from radeon source."
             exit 1
