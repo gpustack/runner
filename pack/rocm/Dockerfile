@@ -1342,6 +1342,16 @@ RUN <<EOF
         --package mooncake-transfer-engine
 EOF
 
+## Patch
+
+RUN --mount=type=bind,target=/workspace,rw <<EOF
+    # Patch
+
+    tree -hs /workspace/patches
+    pushd $(pip show sglang | grep Location: | cut -d" " -f 2) \
+        && patch -p1 < /workspace/patches/*.patch
+EOF
+
 ## Entrypoint
 
 ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
