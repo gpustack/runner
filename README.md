@@ -19,21 +19,21 @@ backends.
     backends or services not shown here, please refer to previous release tags.
 > - Deprecated inference service versions in the latest release are marked with ~~strikethrough~~ formatting. They may
     still be available in previous releases, and not recommended for new deployments.
-> - Polished inference service versions in the latest release are marked with **bold** formatting. If they are using in your
-    deployment, it is recommended to pull the latest images and upgrade.
+> - Polished inference service versions in the latest release are marked with **bold** formatting. If they are using in
+    your deployment, it is recommended to pull the latest images and upgrade.
 
 The following table lists the supported accelerated backends and their corresponding inference services with versions.
 
 ### Ascend CANN
 
-| CANN Version (Variant) | Inference Service (Version List)                                                                                                             |
-|------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| 8.3 (A3/910C)          | MindIE: **`2.2.rc1`** <br/> vLLM: **`0.11.0`**                                                                                               |
-| 8.3 (910B)             | MindIE: **`2.2.rc1`** <br/> vLLM: **`0.11.0`**                                                                                               |
-| 8.3 (310P)             | MindIE: **`2.2.rc1`**                                                                                                                        |
-| 8.2 (A3/910C)          | MindIE: **`2.1.rc2`** <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`  <br/> SGLang:  `0.5.2`, `0.5.1.post3`                                      |
-| 8.2 (910B)             | MindIE: **`2.1.rc2`**, `2.1.rc1` <br/> vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0`, `0.9.2`, `0.9.1` <br/> SGLang: `0.5.2`, `0.5.1.post3` |
-| 8.2 (310P)             | MindIE: **`2.1.rc2`**, `2.1.rc1` <br/> vLLM: `0.10.0`, `0.9.2`                                                                               |
+| CANN Version <br/> (Variant) | MindIE                   | vLLM                                                                 | SGLang                 |
+|------------------------------|--------------------------|----------------------------------------------------------------------|------------------------|
+| 8.3 (A3/910C)                | **`2.2.rc1`**            | **`0.11.0`**                                                         |                        |
+| 8.3 (910B)                   | **`2.2.rc1`**            | **`0.11.0`**                                                         |                        |
+| 8.3 (310P)                   | **`2.2.rc1`**            |                                                                      |                        |
+| 8.2 (A3/910C)                | **`2.1.rc2`**            | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`                                  | `0.5.2`, `0.5.1.post3` |
+| 8.2 (910B)                   | **`2.1.rc2`**, `2.1.rc1` | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`, <br/>`0.9.2`, `0.9.1` | `0.5.2`, `0.5.1.post3` |
+| 8.2 (310P)                   | **`2.1.rc2`**, `2.1.rc1` | `0.10.0`, `0.9.2`                                                    |                        |
 
 > [!WARNING]
 > - The Atlas 300I series is currently experimental in vLLM, only supporting eager mode and float16 data type. And there
@@ -43,18 +43,18 @@ The following table lists the supported accelerated backends and their correspon
 
 ### Iluvatar CoreX
 
-| CoreX Version (Variant) | Inference Service (Version List) |
-|-------------------------|----------------------------------|
-| 4.2                     | vLLM: `0.8.3`                    |
+| CoreX Version <br/> (Variant) | vLLM    |
+|-------------------------------|---------|
+| 4.2                           | `0.8.3` |
 
 ### NVIDIA CUDA
 
-| CUDA Version (Variant) | Inference Service (Version List)                                                                                                    |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
-| 12.9                   | vLLM: `0.11.2`                                                                                                                      |
-| 12.8                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> SGLang: `0.5.5.post3`, `0.5.5`, `0.5.4.post3` <br/> VoxBox: `0.0.20` |
-| 12.6                   | vLLM: `0.11.2`, `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                                     |
-| 12.4                   | vLLM: `0.11.0`, `0.10.2`, `0.10.1.1`, `0.10.0` <br/> VoxBox: `0.0.20`                                                               |
+| CUDA Version <br/> (Variant) | vLLM                                                         | SGLang                                     | VoxBox   |
+|------------------------------|--------------------------------------------------------------|--------------------------------------------|----------|
+| 12.9                         | `0.11.2`                                                     |                                            |          |
+| 12.8                         | `0.11.2`, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` | `0.5.5.post3`, `0.5.5`, <br/>`0.5.4.post3` | `0.0.20` |
+| 12.6                         | `0.11.2`, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` |                                            | `0.0.20` |
+| 12.4                         | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`                |                                            | `0.0.20` |
 
 > [!NOTE]
 > - CUDA 12.9 supports Compute Capabilities:
@@ -66,35 +66,35 @@ The following table lists the supported accelerated backends and their correspon
 
 ### Hygon DTK
 
-| DTK Version (Variant) | Inference Service (Version List) |
-|-----------------------|----------------------------------|
-| 25.04                 | vLLM: `0.9.2`, `0.8.5`           |
+| DTK Version <br/> (Variant) | vLLM             |
+|-----------------------------|------------------|
+| 25.04                       | `0.9.2`, `0.8.5` |
 
 ### MetaX MACA
 
-| MACA Version (Variant) | Inference Service (Version List) |
-|------------------------|----------------------------------|
-| 3.2                    | vLLM: `0.10.2`                   |
-| 3.0                    | vLLM: `0.9.1`                    |
+| MACA Version <br/> (Variant) | vLLM     |
+|------------------------------|----------|
+| 3.2                          | `0.10.2` |
+| 3.0                          | `0.9.1`  |
 
 ### AMD ROCm
 
-| ROCm Version (Variant) | Inference Service (Version List)                     |
-|------------------------|------------------------------------------------------|
-| 7.0                    | vLLM: `0.11.2`, `0.11.0`                             |
-| 6.4                    | vLLM: `0.11.2`, `0.10.2` <br/> SGLang: `0.5.5.post3` |
-| 6.3                    | vLLM: `0.10.1.1`, `0.10.0`                           |
+| ROCm Version <br/> (Variant) | vLLM                 | SGLang        |
+|------------------------------|----------------------|---------------|
+| 7.0                          | `0.11.2`, `0.11.0`   |               |
+| 6.4                          | `0.11.2`, `0.10.2`   | `0.5.5.post3` |
+| 6.3                          | `0.10.1.1`, `0.10.0` |               |
 
 > [!NOTE]
 > - ROCm 7.0 supports LLVM Targets:
-    `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
+    `gfx908 gfx90a gfx942 gfx950 gfx1030 gfx1100 gfx1101 gfx1200 gfx1201`.
 > - ROCm 6.4/6.3 supports LLVM Targets:
-    `gfx900 gfx906 gfx908 gfx90a gfx942 gfx1030 gfx1100 gfx1101 gfx1102 gfx1200 gfx1201`.
+    `gfx908 gfx90a gfx942 gfx1030 gfx1100`.
 > - SGLang supports LLVM Targets: `gfx942`.
 
 > [!WARNING]
-> - Because ROCm 7.0 is reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm 7.0 specific PyTorch build.
-    Although ROCm supports 7.0, gfx115* series are not supported yet.
+> - Because ROCm 7.0 is reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm 7.0 specific PyTorch
+    build. Although ROCm supports 7.0, gfx115* series are not supported yet.
 
 ## Directory Structure
 
