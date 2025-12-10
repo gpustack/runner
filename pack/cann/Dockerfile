@@ -44,6 +44,7 @@
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
+# - SGLANG_VLLM_VERSION: Version of vLLM for SGLang to use.
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=8.3.rc2
@@ -60,6 +61,7 @@ ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${
 ARG SGLANG_VERSION=0.5.6.post1
 ARG SGLANG_TORCH_VERSION=2.8.0
 ARG SGLANG_KERNEL_VERSION=20251206
+ARG SGLANG_VLLM_VERSION=0.9.2
 
 #
 # Stage Bake Runtime
@@ -1009,11 +1011,11 @@ EOF
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
 ARG SGLANG_KERNEL_VERSION
-ARG VLLM_VERSION
+ARG SGLANG_VLLM_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION} \
     SGLANG_KERNEL_VERSION=${SGLANG_KERNEL_VERSION} \
-    VLLM_VERSION=${VLLM_VERSION}
+    SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
 
 RUN <<EOF
     # SGLang
@@ -1035,11 +1037,11 @@ RUN <<EOF
 
     # Install vLLM
     git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_VERSION} --single-branch \
-        https://github.com/vllm-project/vllm.git vllm-${VLLM_VERSION}
-    VLLM_TARGET_DEVICE="empty" \
-        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
-        /tmp/vllm-${VLLM_VERSION}
+        --depth 1 --branch v${SGLANG_VLLM_VERSION} --single-branch \
+        https://github.com/vllm-project/vllm.git vllm-${SGLANG_VLLM_VERSION}
+    pushd /tmp/vllm-${SGLANG_VLLM_VERSION} \
+        && sed -i "s/\"torch ==.*\"/\"torch\"/g" /tmp/vllm-${SGLANG_VLLM_VERSION}/pyproject.toml \
+        && VLLM_TARGET_DEVICE="empty" uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ /tmp/vllm-${SGLANG_VLLM_VERSION}
 
     # Install Dependencies
     cat <<EOT >/tmp/requirements.txt

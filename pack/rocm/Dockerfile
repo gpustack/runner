@@ -27,10 +27,12 @@
 #    - Postprocess, review installation.
 # 3.1. sglang-build target.
 #    - Install Torch.
+#    - Build vLLM.
 #    - Build SGLang.
 #    - Build SGLang Router.
 # 3.2. sglang target.
 #    - Install Torch.
+#    - Install vLLM.
 #    - Install SGLang.
 #    - Install SGLang Router.
 #    - Install dependencies.
@@ -67,6 +69,7 @@
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
 #   which is used to build the SGLang from source.
+# - SGLANG_VLLM_VERSION: Version of vLLM to use for SGLang.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.1.1
@@ -85,6 +88,7 @@ ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.6.post1
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
+ARG SGLANG_VLLM_VERSION=0.9.2
 
 # Stage Bake Runtime
 #
@@ -474,12 +478,12 @@ EOT
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    TT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    TT_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${TT_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            TT_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -671,19 +675,19 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    VL_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    VL_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            VL_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
     export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
 
-    # Install
+    # Build
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
@@ -734,12 +738,12 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    LC_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    LC_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${LC_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            LC_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -1113,6 +1117,68 @@ EOT
         && rm -rf /tmp/*
 EOF
 
+# Stage SGLang Build vLLM
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-sglang-build-vllm-linux-amd64 --target=sglang-build-vllm pack/rocm
+#
+
+FROM sglang-build AS sglang-build-vllm
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build vLLM
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_VLLM_VERSION
+
+ENV SGLANG_VLLM_VERSION=${SGLANG_VLLM_VERSION}
+
+RUN <<EOF
+    # vLLM
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    VL_ROCM_ARCHS="${ROCM_ARCHS}"
+    if [[ -z "${VL_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
+        else
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_VLLM_VERSION} --single-branch \
+        https://github.com/vllm-project/vllm.git vllm
+    pushd /tmp/vllm \
+        && sed -i "s/\"torch ==.*\"/\"torch\"/g" /tmp/vllm/pyproject.toml \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/vllm/dist \
+        && mv /tmp/vllm/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
 # Stage SGLang Build SGLang
 #
 # Example build command:
@@ -1145,12 +1211,12 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    SG_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    SG_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${SG_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201"
+            SG_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
         else
-            SG_ROCM_ARCHS="gfx900;gfx906;gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1102;gfx1200;gfx1201;gfx1150;gfx1151"
+            SG_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
     fi
     SK_ROCM_ARCHS="gfx950"
@@ -1275,11 +1341,14 @@ ARG SGLANG_VERSION
 
 ENV SGLANG_VERSION=${SGLANG_VERSION}
 
-RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
+RUN --mount=type=bind,from=sglang-build-vllm,source=/,target=/vllm,rw \
+    --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
     --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
     # SGLang
 
     # Install
+    uv pip install --no-deps \
+        /vllm/workspace/*.whl
     uv pip install \
         "$(ls /sglang/workspace/sglang-*.whl)[all_hip]"
     uv pip install \
