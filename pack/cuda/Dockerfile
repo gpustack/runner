@@ -117,7 +117,7 @@ ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.6.post1
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
-ARG SGLANG_KERNEL_VERSION=0.3.18.post2
+ARG SGLANG_KERNEL_VERSION=0.3.19
 
 #
 # Stage Bake Runtime
@@ -1511,9 +1511,9 @@ RUN <<EOF
     # Build SGLang
     pushd /tmp/sglang/python \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
-        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/pyproject.toml \
-        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/pyproject.toml \
-        && cat /tmp/sglang/pyproject.toml \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/python/pyproject.toml \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/python/pyproject.toml \
+        && cat /tmp/sglang/python/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/sglang/python/dist \
         && mv /tmp/sglang/python/dist /workspace
@@ -1521,11 +1521,11 @@ RUN <<EOF
     # Download pre-complied SGLang Kernel
     if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} <= 12.9" | bc -l) )); then
         curl --retry 3 --retry-connrefused -fL \
-            "https://github.com/sgl-project/whl/releases/download/${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_$(uname -m).whl" \
+            "https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_$(uname -m).whl" \
             -o "/workspace/sgl_kernel-${SGLANG_KERNEL_VERSION}-cp310-abi3-manylinux2014_$(uname -m).whl"
     else
         curl --retry 3 --retry-connrefused -fL \
-            "https://github.com/sgl-project/whl/releases/download/${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl" \
+            "https://github.com/sgl-project/whl/releases/download/v${SGLANG_KERNEL_VERSION}/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl" \
             -o "/workspace/sgl_kernel-${SGLANG_KERNEL_VERSION}+cu130-cp310-abi3-manylinux2014_$(uname -m).whl"
     fi
 

@@ -1178,9 +1178,9 @@ RUN <<EOF
     pushd /tmp/sglang/python \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
         && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
-        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/pyproject.toml \
-        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/pyproject.toml \
-        && cat /tmp/sglang/pyproject.toml \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/python/pyproject.toml \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/python/pyproject.toml \
+        && cat /tmp/sglang/python/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/sglang/python/dist \
         && mv /tmp/sglang/python/dist /workspace
