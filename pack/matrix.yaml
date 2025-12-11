@@ -143,16 +143,19 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.1.1, using PyTorch +rocm7.1.
+  ## AMD ROCm 7.0.2, using PyTorch +rocm7.0.
   ##
   - backend: "rocm"
     services:
       - "vllm"
+      - "sglang"
     platforms:
       - "linux/amd64"
     args:
-      - "ROCM_VERSION=7.1.1"
+      - "ROCM_VERSION=7.0.2"
       - "VLLM_TORCH_SOURCE=radeon"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.12.0"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.12.0"
   ##
   - backend: "rocm"
     services:
