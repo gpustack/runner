@@ -55,7 +55,6 @@ rules:
   - backend: "cann"
     services:
       - "mindie"
-      - "vllm"
     args:
       - "CANN_VERSION=8.3.rc2"
       - "CANN_ARCHS=310p"
