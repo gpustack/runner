@@ -164,5 +164,6 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=6.4.4"
+      - "VLLM_AITER_VERSION=0.1.7.post2"
       - "SGLANG_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.12.0"
       - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.12.0"
