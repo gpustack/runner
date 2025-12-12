@@ -26,6 +26,12 @@ The following table lists the supported accelerated backends and their correspon
 
 ### Ascend CANN
 
+> [!WARNING]
+> - The Atlas 300I series is currently experimental in vLLM, only supporting eager mode and float16 data type. And there
+    are some known issues for running vLLM, you can refer to
+    vllm-ascend [#3316](https://github.com/vllm-project/vllm-ascend/issues/3316)
+    and [#2795](https://github.com/vllm-project/vllm-ascend/issues/2795).
+
 | CANN Version <br/> (Variant) | MindIE                   | vLLM                                                                 | SGLang                 |
 |------------------------------|--------------------------|----------------------------------------------------------------------|------------------------|
 | 8.3 (A3/910C)                | **`2.2.rc1`**            | **`0.11.0`**                                                         |                        |
@@ -35,12 +41,6 @@ The following table lists the supported accelerated backends and their correspon
 | 8.2 (910B)                   | **`2.1.rc2`**, `2.1.rc1` | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`, <br/>`0.9.2`, `0.9.1` | `0.5.2`, `0.5.1.post3` |
 | 8.2 (310P)                   | **`2.1.rc2`**, `2.1.rc1` | `0.10.0`, `0.9.2`                                                    |                        |
 
-> [!WARNING]
-> - The Atlas 300I series is currently experimental in vLLM, only supporting eager mode and float16 data type. And there
-    are some known issues for running vLLM, you can refer to
-    vllm-ascend [#3316](https://github.com/vllm-project/vllm-ascend/issues/3316)
-    and [#2795](https://github.com/vllm-project/vllm-ascend/issues/2795).
-
 ### Iluvatar CoreX
 
 | CoreX Version <br/> (Variant) | vLLM    |
@@ -49,13 +49,6 @@ The following table lists the supported accelerated backends and their correspon
 
 ### NVIDIA CUDA
 
-| CUDA Version <br/> (Variant) | vLLM                                                         | SGLang                                     | VoxBox   |
-|------------------------------|--------------------------------------------------------------|--------------------------------------------|----------|
-| 12.9                         | `0.11.2`                                                     |                                            |          |
-| 12.8                         | `0.11.2`, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` | `0.5.5.post3`, `0.5.5`, <br/>`0.5.4.post3` | `0.0.20` |
-| 12.6                         | `0.11.2`, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` |                                            | `0.0.20` |
-| 12.4                         | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`                |                                            | `0.0.20` |
-
 > [!NOTE]
 > - CUDA 12.9 supports Compute Capabilities:
     `7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX`.
@@ -63,6 +56,13 @@ The following table lists the supported accelerated backends and their correspon
     `7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX`.
 > - CUDA 12.6/12.4 supports Compute Capabilities:
     `7.5 8.0+PTX 8.9 9.0+PTX`.
+
+| CUDA Version <br/> (Variant) | vLLM                                                         | SGLang                                     | VoxBox   |
+|------------------------------|--------------------------------------------------------------|--------------------------------------------|----------|
+| 12.9                         | `0.11.2`                                                     |                                            |          |
+| 12.8                         | `0.11.2`, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` | `0.5.5.post3`, `0.5.5`, <br/>`0.5.4.post3` | `0.0.20` |
+| 12.6                         | `0.11.2`, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` |                                            | `0.0.20` |
+| 12.4                         | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`                |                                            | `0.0.20` |
 
 ### Hygon DTK
 
@@ -79,22 +79,22 @@ The following table lists the supported accelerated backends and their correspon
 
 ### AMD ROCm
 
+> [!NOTE]
+> - ROCm 7.0 supports LLVM targets:
+    `gfx908 gfx90a gfx942 gfx950 gfx1030 gfx1100 gfx1101 gfx1200 gfx1201 gfx1150 gfx1151`.
+> - ROCm 6.4/6.3 supports LLVM targets:
+    `gfx908 gfx90a gfx942 gfx1030 gfx1100`.
+
+> [!WARNING]
+> - ROCm 7.0 vLLM `0.11.2` and `0.11.0` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
+    7.0 specific PyTorch build. Although ROCm supports 7.0, `gfx1150 gfx1151` are not supported yet.
+> - SGLang supports `gfx942` only.
+
 | ROCm Version <br/> (Variant) | vLLM                 | SGLang        |
 |------------------------------|----------------------|---------------|
 | 7.0                          | `0.11.2`, `0.11.0`   |               |
 | 6.4                          | `0.11.2`, `0.10.2`   | `0.5.5.post3` |
 | 6.3                          | `0.10.1.1`, `0.10.0` |               |
-
-> [!NOTE]
-> - ROCm 7.0 supports LLVM Targets:
-    `gfx908 gfx90a gfx942 gfx950 gfx1030 gfx1100 gfx1101 gfx1200 gfx1201`.
-> - ROCm 6.4/6.3 supports LLVM Targets:
-    `gfx908 gfx90a gfx942 gfx1030 gfx1100`.
-> - SGLang supports LLVM Targets: `gfx942`.
-
-> [!WARNING]
-> - Because ROCm 7.0 is reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm 7.0 specific PyTorch
-    build. Although ROCm supports 7.0, gfx115* series are not supported yet.
 
 ## Directory Structure
 
