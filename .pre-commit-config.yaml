@@ -6,7 +6,9 @@ repos:
     hooks:
       - id: destroyed-symlinks
       - id: trailing-whitespace
+        exclude: \.patch$
       - id: end-of-file-fixer
+        exclude: \.patch$
       - id: check-symlinks
       - id: check-yaml
         args: [--allow-multiple-documents]
