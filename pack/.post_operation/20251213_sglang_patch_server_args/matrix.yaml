@@ -1,0 +1,22 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "SGLANG_VERSION=0.5.6.post2"
+  ## Packed NVIDIA CUDA 12.8.
+  ##
+  - backend: "cuda"
+    services:
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "SGLANG_VERSION=0.5.6.post2"
