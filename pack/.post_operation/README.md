@@ -24,4 +24,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-11-25: Install Posix IPC package for MindIE CANN released images.
 - [x] 2025-12-01: Patch vLLM for CUDA released images.
 - [x] 2025-12-09: Install AV package for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
-- [ ] 2025-12-13: Patch MiniCPM Qwen2 V2 for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
+- [x] 2025-12-13: Patch MiniCPM Qwen2 V2 for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
