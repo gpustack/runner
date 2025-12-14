@@ -1230,6 +1230,7 @@ einops
 cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
 pynvml==${CUDA_MAJOR}
 nvidia-nvshmem-cu${CUDA_MAJOR}
+nvshmem4py-cu${CUDA_MAJOR}
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -1433,7 +1434,9 @@ EOF
 
 ## Entrypoint
 
-ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
+ENV PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/cuda/nvvm/bin:${PATH}" \
+    LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}" \
+    RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
     SAFETENSORS_FAST_GPU=1
 
 WORKDIR /
