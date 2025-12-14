@@ -26,3 +26,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-12-09: Install AV package for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
 - [x] 2025-12-13: Patch MiniCPM Qwen2 V2 for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
 - [x] 2025-12-13: Patch SGLang 0.5.6.post2 CUDA released images.
+- [ ] 2025-12-14: Patch vLLM 0.12.0 and SGLang 0.5.6.post2 for CUDA released images.
