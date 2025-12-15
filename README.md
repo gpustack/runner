@@ -32,6 +32,10 @@ The following table lists the supported accelerated backends and their correspon
     vllm-ascend [#3316](https://github.com/vllm-project/vllm-ascend/issues/3316)
     and [#2795](https://github.com/vllm-project/vllm-ascend/issues/2795).
 
+> [!IMPORTANT]
+> - Update MindIE 2.2.rc1 and 2.1.rc2 with [`av` package installed](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3631228085) and [ATB model patched](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3646603380).
+> - Update vLLM 0.11.0 with envs polished and Triton (Ascend) installed.
+
 | CANN Version <br/> (Variant) | MindIE                   | vLLM                                                                 | SGLang                 |
 |------------------------------|--------------------------|----------------------------------------------------------------------|------------------------|
 | 8.3 (A3/910C)                | **`2.2.rc1`**            | **`0.11.0`**                                                         | `0.5.6.post2`          |
@@ -57,12 +61,15 @@ The following table lists the supported accelerated backends and their correspon
 > - CUDA 12.6/12.4 supports Compute Capabilities:
     `7.5 8.0+PTX 8.9 9.0+PTX`.
 
-| CUDA Version <br/> (Variant) | vLLM                                                                   | SGLang                                                    | VoxBox   |
-|------------------------------|------------------------------------------------------------------------|-----------------------------------------------------------|----------|
-| 12.9                         | `0.12.0`, `0.11.2`                                                     | `0.5.6.post2`                                             |          |
-| 12.8                         | `0.12.0`, `0.11.2`, <br/>`0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0` | `0.5.6.post2`, `0.5.5.post3`, <br/>`0.5.5`, `0.5.4.post3` | `0.0.20` |
-| 12.6                         | `0.12.0`, `0.11.2`, <br/>`0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0` | `0.5.6.post2`                                             | `0.0.20` |
-| 12.4                         | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`                          |                                                           | `0.0.20` |
+> [!IMPORTANT]
+> - Update vLLM 0.11.2 with [Qwen2.5 VL patched](https://github.com/gpustack/gpustack/issues/3606).
+
+| CUDA Version <br/> (Variant) | vLLM                                                                       | SGLang                                                    | VoxBox   |
+|------------------------------|----------------------------------------------------------------------------|-----------------------------------------------------------|----------|
+| 12.9                         | `0.12.0`, **`0.11.2`**                                                     | `0.5.6.post2`                                             |          |
+| 12.8                         | `0.12.0`, **`0.11.2`**, <br/>`0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0` | `0.5.6.post2`, `0.5.5.post3`, <br/>`0.5.5`, `0.5.4.post3` | `0.0.20` |
+| 12.6                         | `0.12.0`, **`0.11.2`**, <br/>`0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0` | `0.5.6.post2`                                             | `0.0.20` |
+| 12.4                         | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`                              |                                                           | `0.0.20` |
 
 ### Hygon DTK
 
