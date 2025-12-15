@@ -53,9 +53,9 @@ ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${
 ARG MINDIE_VERSION=2.2.rc1
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.0
-ARG VLLM_ASCEND_VERSION=0.11.0rc3
-ARG VLLM_TORCH_VERSION=2.7.1
+ARG VLLM_VERSION=0.12.0
+ARG VLLM_ASCEND_VERSION
+ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.6.post2
@@ -582,9 +582,9 @@ ADD --chmod=550 https://modelscope.cn/models/OpenBMB/MiniCPM-V-2_6/resolve/maste
 RUN --mount=type=bind,target=/workspace,rw <<EOF
     # Patch
 
-    unzip /workspace/patches.zip -d /workspace
+    unzip /workspace/patches/mindie.zip -d /workspace/patches
     pushd /usr/local/Ascend/atb-models \
-        && patch -p1 < /workspace/patches/*.patch
+        && patch -p1 < /workspace/patches/mindie/*.patch
 EOF
 
 ## Postprocess
@@ -835,6 +835,13 @@ RUN <<EOF
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
     export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    if [[ "${CANN_ARCHS}" == "a3" ]]; then
+        export SOC_VERSION="ascend910_9391"
+    elif [[ "${CANN_ARCHS}" == "310p" ]]; then
+        export SOC_VERSION="ascend310p1"
+    else
+        export SOC_VERSION="ascend910b1"
+    fi
     echo "Building vLLM with the following environment variables:"
     env
 
@@ -862,11 +869,6 @@ RUN <<EOF
     VLLM_TARGET_DEVICE="empty" \
         uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
         /tmp/vllm-ascend-${VLLM_ASCEND_VERSION}
-    # Fix
-    # - Replace SoC version instead of compile.
-    if [[ "${CANN_ARCHS}" == "310p" ]]; then
-        sed -i "s/^__soc_version__.*/__soc_version__ = 'ASCEND310P3'/" $(pip show vllm-ascend | grep Location: | cut -d':' -f 2)/vllm_ascend/_build_info.py
-    fi
 
     # Cleanup
     rm -rf /var/tmp/* \
