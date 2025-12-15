@@ -845,9 +845,10 @@ RUN <<EOF
     VLLM_TARGET_DEVICE="empty" \
         uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
         /tmp/vllm-${VLLM_VERSION}
-    # Fix
-    # - vLLM Ascend doesn't support triton, uninstall it.
+
+    # Uninstall Triton and install Triton Ascend
     uv pip uninstall triton || true
+    uv pip install triton-ascend
 
     # Install vLLM Ascend
     VLLM_ASCEND_VERSION=${VLLM_ASCEND_VERSION:-}
@@ -940,12 +941,14 @@ EOT
         --package vllm-ascend \
         --package torch \
         --package torch-npu \
-        --package mooncake-transfer-engine
+        --package mooncake-transfer-engine \
+        --package triton-ascend
 EOF
 
 ## Entrypoint
 
-ENV RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
+ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \
+    RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
@@ -1172,8 +1175,9 @@ EOF
 
 ## Entrypoint
 
-ENV SGLANG_SET_CPU_AFFINITY=1 \
-    PYTORCH_NPU_ALLOC_CONF=expandable_segments:True \
+ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \
+    PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
+    SGLANG_SET_CPU_AFFINITY=1 \
     STREAMS_PER_DEVICE=32
 
 WORKDIR /

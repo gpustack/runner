@@ -1,0 +1,60 @@
+rules:
+
+  #
+  # Ascend CANN
+  #
+
+  ## Packed Ascend CANN 8.3, using CANN Kernel for A3.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=a3"
+      - "VLLM_VERSION=0.11.0"
+  - backend: "cann"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/arm64"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=a3"
+      - "SGLANG_VERSION=0.5.6.post2"
+  ## Packed Ascend CANN 8.3, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.11.0"
+  - backend: "cann"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/arm64"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=910b"
+      - "SGLANG_VERSION=0.5.6.post2"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for A3.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=a3"
+      - "VLLM_VERSION=0.11.0"
+  ## Packed Ascend CANN 8.2, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.11.0"

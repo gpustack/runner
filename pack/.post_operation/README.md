@@ -21,9 +21,10 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-11-07: Reinstall `lmcache` package for vLLM 0.11.0 CUDA released images.
 - [x] 2025-11-10: Install diffusion extension package for SGLang 0.5.5 CUDA released images.
 - [x] 2025-11-12: Install FlashAttention package for SGLang 0.5.5 CUDA released images.
-- [x] 2025-11-25: Install Posix IPC package for MindIE CANN released images.
-- [x] 2025-12-01: Patch vLLM for CUDA released images.
-- [x] 2025-12-09: Install AV package for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
-- [x] 2025-12-13: Patch MiniCPM Qwen2 V2 for MindIE 2.1.rc2 and 2.2.rc1 CANN released images.
-- [x] 2025-12-13: Patch SGLang 0.5.6.post2 CUDA released images.
-- [x] 2025-12-14: Patch vLLM 0.12.0 and SGLang 0.5.6.post2 for CUDA released images.
+- [x] 2025-11-25: Install Posix IPC package for MindIE 2.2.rc1 CANN released images.
+- [x] 2025-12-01: Apply Qwen2.5 VL patches to vLLM 0.11.2 for CUDA released images.
+- [x] 2025-12-09: Install AV package for MindIE 2.2.rc1 and 2.1.rc2 CANN released images.
+- [x] 2025-12-13: Apply MiniCPM Qwen2 V2 patches to MindIE 2.2.rc1 and 2.1.rc2 for CANN released images.
+- [x] 2025-12-13: Apply server args patches to SGLang 0.5.6.post2 for CUDA released images.
+- [x] 2025-12-14: Apply several patches to vLLM 0.12.0 and SGLang 0.5.6.post2 for CUDA released images.
+- [x] 2025-12-15: Apply several patches to vLLM 0.11.0 and SGLang 0.5.6.post2 for CANN released images.
