@@ -855,7 +855,8 @@ RUN <<EOF
 
     # Uninstall Triton and install Triton Ascend
     uv pip uninstall triton || true
-    uv pip install triton-ascend
+    uv pip install --verbose \
+        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend/triton_ascend-3.2.0.dev2025112116-cp311-cp311-manylinux_2_27_$(uname -m).manylinux_2_28_$(uname -m).whl
 
     # Install vLLM Ascend
     VLLM_ASCEND_VERSION=${VLLM_ASCEND_VERSION:-}
