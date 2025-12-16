@@ -68,6 +68,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Setup UV
+        continue-on-error: true
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.24"
