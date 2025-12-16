@@ -1254,6 +1254,11 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     uv pip install \
         /vllm/workspace/*.whl
 
+    # Uninstall
+    ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
+    uv pip uninstall \
+        runai-model-streamer || true
+
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/*
@@ -1437,7 +1442,10 @@ EOF
 ENV PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/cuda/nvvm/bin:${PATH}" \
     LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}" \
     RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
-    SAFETENSORS_FAST_GPU=1
+    SAFETENSORS_FAST_GPU=1 \
+    RUNAI_STREAMER_MEMORY_LIMIT=0 \
+    RUNAI_STREAMER_LOG_TO_STDERR=1 \
+    RUNAI_STREAMER_LOG_LEVEL=INFO
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
@@ -1636,6 +1644,11 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
         "$(ls /sglang/workspace/sgl_kernel-*.whl)"
     uv pip install --force-reinstall \
         /sglangrouter/workspace/*.whl
+
+    # Uninstall
+    ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
+    uv pip uninstall \
+        runai-model-streamer || true
 
     # Cleanup
     rm -rf /var/tmp/* \

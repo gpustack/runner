@@ -28,3 +28,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-12-13: Apply server args patches to SGLang 0.5.6.post2 for CUDA released images.
 - [x] 2025-12-14: Apply several patches to vLLM 0.12.0 and SGLang 0.5.6.post2 for CUDA released images.
 - [x] 2025-12-15: Apply several patches to vLLM 0.11.0 and SGLang 0.5.6.post2 for CANN released images.
+- [ ] 2025-12-16: Uninstall `runai-model-streamer` packages from SGLang 0.5.6.post2 for CUDA released images.
