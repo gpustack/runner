@@ -686,7 +686,10 @@ EOF
 
 ## Entrypoint
 
-ENV PATH="${CANN_HOME}/mindie/latest/mindie-service/bin:${PATH}"
+ENV PATH="${CANN_HOME}/mindie/latest/mindie-service/bin:${PATH}" \
+    TASK_QUEUE_ENABLE=2 \
+    CPU_AFFINITY_CONF=1 \
+    PYTORCH_NPU_ALLOC_CONF="expandable_segments:True"
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
@@ -951,6 +954,9 @@ EOF
 ## Entrypoint
 
 ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \
+    TASK_QUEUE_ENABLE=2 \
+    CPU_AFFINITY_CONF=1 \
+    PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
     RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
 
 WORKDIR /
@@ -1179,9 +1185,10 @@ EOF
 ## Entrypoint
 
 ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \
+    TASK_QUEUE_ENABLE=2 \
+    CPU_AFFINITY_CONF=1 \
     PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
-    SGLANG_SET_CPU_AFFINITY=1 \
-    STREAMS_PER_DEVICE=32
+    SGLANG_SET_CPU_AFFINITY=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
