@@ -687,7 +687,7 @@ EOF
 ## Entrypoint
 
 ENV PATH="${CANN_HOME}/mindie/latest/mindie-service/bin:${PATH}" \
-    TASK_QUEUE_ENABLE=2 \
+    TASK_QUEUE_ENABLE=1 \
     CPU_AFFINITY_CONF=1 \
     PYTORCH_NPU_ALLOC_CONF="expandable_segments:True"
 
@@ -954,7 +954,7 @@ EOF
 ## Entrypoint
 
 ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \
-    TASK_QUEUE_ENABLE=2 \
+    TASK_QUEUE_ENABLE=1 \
     CPU_AFFINITY_CONF=1 \
     PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
     RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1
@@ -1185,7 +1185,7 @@ EOF
 ## Entrypoint
 
 ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \
-    TASK_QUEUE_ENABLE=2 \
+    TASK_QUEUE_ENABLE=1 \
     CPU_AFFINITY_CONF=1 \
     PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
     SGLANG_SET_CPU_AFFINITY=1
