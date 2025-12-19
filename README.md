@@ -33,7 +33,8 @@ The following table lists the supported accelerated backends and their correspon
     and [#2795](https://github.com/vllm-project/vllm-ascend/issues/2795).
 
 > [!IMPORTANT]
-> - Update MindIE 2.2.rc1 and 2.1.rc2 with [`av` package installed](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3631228085) and [ATB model patched](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3646603380).
+> - Applied [ATB model patched](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3646603380) to MindIE 2.2.rc1/2.1.rc2.
+> - Applied [av package](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3631228085) to MindIE 2.2.rc1/2.1.rc2.
 > - Update vLLM 0.11.0 with stable vLLM Ascend plugin.
 
 | CANN Version <br/> (Variant) | MindIE                   | vLLM                                                                     | SGLang                 |
@@ -62,7 +63,8 @@ The following table lists the supported accelerated backends and their correspon
     `7.5 8.0+PTX 8.9 9.0+PTX`.
 
 > [!IMPORTANT]
-> - Update vLLM 0.11.2 with [Qwen2.5 VL patched](https://github.com/gpustack/gpustack/issues/3606).
+> - Applied [Qwen2.5 VL patched](https://github.com/gpustack/gpustack/issues/3606) to vLLM 0.11.2.
+> - Applied [vLLM[audio] packages](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L720-L724) to vLLM 0.11.2.
 
 | CUDA Version <br/> (Variant) | vLLM                                                                       | SGLang                                                    | VoxBox   |
 |------------------------------|----------------------------------------------------------------------------|-----------------------------------------------------------|----------|
@@ -93,15 +95,19 @@ The following table lists the supported accelerated backends and their correspon
     `gfx908 gfx90a gfx942 gfx1030 gfx1100`.
 
 > [!WARNING]
-> - ROCm 7.0 vLLM `0.11.2` and `0.11.0` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
-    7.0 specific PyTorch build. Although ROCm supports 7.0, `gfx1150 gfx1151` are not supported yet.
+> - ROCm 7.0 vLLM `0.11.2/0.11.0` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
+    7.0 specific PyTorch build. Although supports ROCm 7.0 in vLLM `0.11.2/0.11.0`, `gfx1150/gfx1151` are not supported yet.
 > - SGLang supports `gfx942` only.
 
-| ROCm Version <br/> (Variant) | vLLM                               | SGLang                       |
-|------------------------------|------------------------------------|------------------------------|
-| 7.0                          | `0.12.0`, `0.11.2`, <br/> `0.11.0` | `0.5.6.post2`                |
-| 6.4                          | `0.12.0`, `0.11.2`, <br/> `0.10.2` | `0.5.6.post2`, `0.5.5.post3` |
-| 6.3                          | `0.10.1.1`, `0.10.0`               |                              |
+> [!IMPORTANT]
+> - Applied [vLLM[audio] packages](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L720-L724) to vLLM 0.11.2.
+> - Applied [petit-kernel package](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L728) to vLLM 0.11.2 and SGLang 0.5.5.post3.
+
+| ROCm Version <br/> (Variant) | vLLM                                   | SGLang                           |
+|------------------------------|----------------------------------------|----------------------------------|
+| 7.0                          | `0.12.0`, **`0.11.2`**, <br/> `0.11.0` | `0.5.6.post2`                    |
+| 6.4                          | `0.12.0`, **`0.11.2`**, <br/> `0.10.2` | `0.5.6.post2`, **`0.5.5.post3`** |
+| 6.3                          | `0.10.1.1`, `0.10.0`                   |                                  |
 
 ## Directory Structure
 
