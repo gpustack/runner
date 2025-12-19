@@ -1,0 +1,52 @@
+rules:
+
+  #
+  # AMD ROCm
+  #
+
+    #
+  # AMD ROCm
+  #
+
+  ## Packed AMD ROCm 7.0.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.0"
+      - "VLLM_VERSION=0.12.0"
+      - "SGLANG_VERSION=0.5.6.post2"
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.0"
+      - "VLLM_VERSION=0.11.2"
+  ## Packed AMD ROCm 6.4.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "VLLM_VERSION=0.12.0"
+      - "SGLANG_VERSION=0.5.6.post2"
+  - backend: "rocm"
+    services:
+      - "vllm"
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "VLLM_VERSION=0.11.2"
+      - "SGLANG_VERSION=0.5.5.post3"

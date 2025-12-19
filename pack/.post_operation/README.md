@@ -19,13 +19,15 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-11-05: Polish NVIDIA HPC-X configuration for CUDA released images.
 - [x] 2025-11-06: Install EP kernel for CUDA released images.
 - [x] 2025-11-07: Reinstall `lmcache` package for vLLM 0.11.0 CUDA released images.
-- [x] 2025-11-10: Install diffusion extension package for SGLang 0.5.5 CUDA released images.
-- [x] 2025-11-12: Install FlashAttention package for SGLang 0.5.5 CUDA released images.
-- [x] 2025-11-25: Install Posix IPC package for MindIE 2.2.rc1 CANN released images.
+- [x] 2025-11-10: Install `sglang[diffusion]` package for SGLang 0.5.5 CUDA released images.
+- [x] 2025-11-12: Install `FlashAttention` package for SGLang 0.5.5 CUDA released images.
+- [x] 2025-11-25: Install `Posix IPC` package for MindIE 2.2.rc1 CANN released images.
 - [x] 2025-12-01: Apply Qwen2.5 VL patches to vLLM 0.11.2 for CUDA released images.
-- [x] 2025-12-09: Install AV package for MindIE 2.2.rc1 and 2.1.rc2 CANN released images.
-- [x] 2025-12-13: Apply MiniCPM Qwen2 V2 patches to MindIE 2.2.rc1 and 2.1.rc2 for CANN released images.
+- [x] 2025-12-09: Install `AV` package for MindIE 2.2.rc1/2.1.rc2 CANN released images.
+- [x] 2025-12-13: Apply MiniCPM Qwen2 V2 patches to MindIE 2.2.rc1/2.1.rc2 for CANN released images.
 - [x] 2025-12-13: Apply server args patches to SGLang 0.5.6.post2 for CUDA released images.
 - [x] 2025-12-14: Apply several patches to vLLM 0.12.0 and SGLang 0.5.6.post2 for CUDA released images.
 - [x] 2025-12-15: Apply several patches to vLLM 0.11.0 and SGLang 0.5.6.post2 for CANN released images.
-- [ ] 2025-12-16: Uninstall `runai-model-streamer` packages from SGLang 0.5.6.post2 for CUDA released images.
+- [x] 2025-12-16: Uninstall `runai-model-streamer` packages from SGLang 0.5.6.post2 for CUDA released images.
+- [x] 2025-12-19: Install `vLLM[audio]` packages for vLLM 0.12.0/0.11.2 of CUDA/ROCm released images.
+- [x] 2025-12-19: Install `petit-kernel` package for vLLM 0.12.0/0.11.2 and SGLang 0.5.6.post2/0.5.5.post3 of ROcm released images.

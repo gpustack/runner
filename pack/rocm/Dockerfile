@@ -1074,6 +1074,7 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
+# dockerfile extras
 accelerate
 hf_transfer
 modelscope
@@ -1083,6 +1084,14 @@ awscrt==0.28.2
 cufile-python==0.2.0
 nvtx==0.2.13
 sortedcontainers==2.4.0
+
+# audio extras
+librosa
+soundfile
+mistral_common[audio]
+
+# petit extras
+petit-kernel
 EOT
     uv pip install \
         -r /tmp/requirements.txt

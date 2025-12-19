@@ -1400,14 +1400,22 @@ RUN <<EOF
         BITSANDBYTES_VERSION="0.42.0"
     fi
     cat <<EOT >/tmp/requirements.txt
+# dockerfile extras
 accelerate
 hf_transfer
 modelscope
 bitsandbytes>=${BITSANDBYTES_VERSION}
 timm>=1.0.17
 boto3
+
+# kvconnectors extras
 nixl>=0.7.1
 mooncake-transfer-engine==${VLLM_MOONCAKE_VERSION}
+
+# audio extras
+librosa
+soundfile
+mistral_common[audio]
 EOT
     uv pip install \
         -r /tmp/requirements.txt
