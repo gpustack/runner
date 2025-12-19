@@ -178,6 +178,7 @@ jobs:
       - name: Get Metadata
         id: metadata
         env:
+          INPUT_POST_OPERATION: ${{ github.event.inputs.post_operation }}
           INPUT_WITH_CACHE: ${{ github.event.inputs.with_cache }}
           INPUT_PLATFORM_TAG: ${{ matrix.platform_tag }}
           INPUT_PLATFORM_TAG_CACHE: ${{ join(matrix.platform_tag_cache, ' ') }}
@@ -210,9 +211,11 @@ jobs:
 
           # Export cache_to to GH output.
           echo "cache_to<<EOF" >> $GITHUB_OUTPUT
-          for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
-            echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}" >> $GITHUB_OUTPUT
-          done
+          if [[ -z "${INPUT_POST_OPERATION}" ]]; then
+            for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
+              echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}" >> $GITHUB_OUTPUT
+            done
+          fi
           echo "EOF" >> $GITHUB_OUTPUT
       - name: Package
         timeout-minutes: 360

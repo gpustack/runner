@@ -117,7 +117,7 @@ package:
 				JOB_EXTRA_ARGS+=("--cache-from=type=registry,ref=gpustack/runner-build-cache:$${TAG_CACHE}"); \
 			done; \
 		fi; \
-		if [[ "$(PACKAGE_PUSH)" == "true" ]] || [[ "$(PACKAGE_CACHE_PUSH)" == "true" ]]; then \
+		if [[ "$(PACKAGE_PUSH)" == "true" || "$(PACKAGE_CACHE_PUSH)" == "true" ]] && [[ -z "$(PACKAGE_POST_OPERATION)" ]]; then \
 			for TAG_CACHE in $${JOB_PLATFORM_CACHE}; do \
 				JOB_EXTRA_ARGS+=("--cache-to=type=registry,ignore-error=true,mode=max,compression=gzip,ref=$(PACKAGE_NAMESPACE)/$(PACKAGE_CACHE_REPOSITORY):$${TAG_CACHE}"); \
 			done; \

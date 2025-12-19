@@ -99,7 +99,7 @@ ARG VOXBOX_VERSION=0.0.20
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.12.0
+ARG VLLM_VERSION=0.13.0
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
@@ -112,7 +112,7 @@ ARG VLLM_DEEPEP_COMMIT=b57e5e21
 ARG VLLM_DEEPGEMM_COMMIT=9b680f42
 ARG VLLM_FLASHINFER_VERSION=0.5.3
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_LMCACHE_VERSION=0.3.10.post1
+ARG VLLM_LMCACHE_VERSION=0.3.11
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.6.post2
@@ -492,6 +492,7 @@ einops
 cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
 pynvml==${CUDA_MAJOR}
 nvidia-nvshmem-cu${CUDA_MAJOR}
+nvshmem4py-cu${CUDA_MAJOR}
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -575,20 +576,24 @@ RUN <<EOF
 
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+    IFS="." read -r PYTHON_MAJOR PYTHON_MINOR <<< "${PYTHON_VERSION}"
+
+    PYTHON_MAJOR_MINOR="${PYTHON_MAJOR}${PYTHON_MINOR}"
+    for ABI in FALSE TRUE; do
+        PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abi${ABI}-cp${PYTHON_MAJOR_MINOR}-cp${PYTHON_MAJOR_MINOR}-linux_$(uname -m).whl"
+        if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
+            echo "Downloading prebuilt FlashAttention wheel from ${PREBUILD_URL}..."
+            curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abi${ABI}-cp${PYTHON_MAJOR_MINOR}-cp${PYTHON_MAJOR_MINOR}-linux_$(uname -m).whl"
+            mkdir -p /workspace \
+                && mv /tmp/*.whl /workspace \
+                && tree -hs /workspace
+            exit 0
+        fi
+    done
 
     # Support ARM64 only
     if [[ "${TARGETARCH}" != "amd64" ]]; then
         echo "Skipping FlashAttention building for ${TARGETARCH}..."
-        exit 0
-    fi
-
-    PREBUILD_URL="https://github.com/Dao-AILab/flash-attention/releases/download/v${VLLM_FLASHATTENTION_VERSION}/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
-    if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
-        echo "Downloading prebuilt FlashAttention wheel from ${PREBUILD_URL}..."
-        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flash_attn-${VLLM_FLASHATTENTION_VERSION}+cu${CUDA_MAJOR}torch${TORCH_MAJOR}.${TORCH_MINOR}cxx11abiFALSE-cp310-cp310-linux_$(uname -m).whl"
-        mkdir -p /workspace \
-            && mv /tmp/*.whl /workspace \
-            && tree -hs /workspace
         exit 0
     fi
 
@@ -962,7 +967,7 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
     # vLLM
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
@@ -986,6 +991,8 @@ RUN <<EOF
     export TORCH_CUDA_ARCH_LIST="${VL_CUDA_ARCHS}"
     export COMPILE_CUSTOM_KERNELS=1
     export NVCC_THREADS=1
+    echo "Building vLLM with the following environment variables:"
+    env
 
     # Install
     git -C /tmp clone --recursive --shallow-submodules \
@@ -1047,6 +1054,9 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
     export NVCC_THREADS=1
+    echo "Building LMCache with the following environment variables:"
+    env
+
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache

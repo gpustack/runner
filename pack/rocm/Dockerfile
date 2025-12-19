@@ -69,10 +69,10 @@
 #   which is used to build the SGLang from source.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
-ARG ROCM_VERSION=7.1.1
+ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.12.0
+ARG VLLM_VERSION=0.13.0
 ARG VLLM_TORCH_VERSION=2.9.1
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
@@ -80,7 +80,7 @@ ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python$
 ARG VLLM_TRITON_COMMIT=57c693b6
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_AITER_VERSION=0.1.7.post5
-ARG VLLM_LMCACHE_VERSION=0.3.10.post1
+ARG VLLM_LMCACHE_VERSION=0.3.11
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.6.post2
@@ -679,12 +679,12 @@ ARG VLLM_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION}
 
-RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
-    --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw \
+RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw \
     --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # vLLM
 
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+    IFS="." read -r VL_MAJOR VL_MINOR VL_PATCH <<< "${VLLM_VERSION}"
 
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -697,6 +697,14 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
             VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
+            if (( $(echo "${VL_MAJOR}.${VL_MINOR} == 0.13" | bc -l) )); then
+                # TODO(thxCode): Temporarily remove gfx1030 for vLLM ROCm build due to build error in ROCm 6.4.4.
+                # #15 134.9 /tmp/vllm/build/temp.linux-x86_64-cpython-312/csrc/sampler.hip:564:63: error: local memory (66032) exceeds limit (65536) in 'void vllm::topKPerRowDecode<1024, true, false, true>(float const*, int const*, int*, int, int, int, int, float*, int, int const*)'
+                # ##15 134.9   564 | static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
+                # ##15 134.9       |                                                               ^
+                # ##15 134.9 16 warnings and 1 error generated when compiling for gfx1030.
+                VL_ROCM_ARCHS="gfx908;gfx90a;gfx942"
+            fi
         else
             VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
         fi
@@ -704,6 +712,8 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
     export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
+    echo "Building vLLM with the following environment variables:"
+    env
 
     # Build
     git -C /tmp clone --recursive --shallow-submodules \
@@ -712,7 +722,9 @@ RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw \
     pushd /tmp/vllm \
         && sed -i "s/\"torch ==.*\"/\"torch\"/g" /tmp/vllm/pyproject.toml \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"torchvision==.*\"/\"torchvision\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"triton==.*\"/\"triton\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
@@ -769,6 +781,8 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     export TORCH_DONT_CHECK_COMPILER_ABI=1
     export CXX=hipcc
     export BUILD_WITH_HIP=1
+    echo "Building LMCache with the following environment variables:"
+    env
 
     # Install LMCache
     git -C /tmp clone --recursive --shallow-submodules \
@@ -1403,7 +1417,7 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd $(pip show sglang | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/*.patch
+        && patch -p1 < /workspace/patches/sglang_*.patch
 EOF
 
 ## Entrypoint
