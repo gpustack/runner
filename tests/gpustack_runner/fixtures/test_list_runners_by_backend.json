@@ -929,6 +929,28 @@
         "original_backend_version": "12.8.1",
         "backend_variant": "",
         "service": "voxbox",
+        "service_version": "0.0.21",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.21",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.8",
+        "original_backend_version": "12.8.1",
+        "backend_variant": "",
+        "service": "voxbox",
+        "service_version": "0.0.21",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.21",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.8",
+        "original_backend_version": "12.8.1",
+        "backend_variant": "",
+        "service": "voxbox",
         "service_version": "0.0.20",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20",
@@ -1097,6 +1119,28 @@
         "service_version": "0.10.0",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda12.6-vllm0.10.0",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.6",
+        "original_backend_version": "12.6.3",
+        "backend_variant": "",
+        "service": "voxbox",
+        "service_version": "0.0.21",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.21",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.6",
+        "original_backend_version": "12.6.3",
+        "backend_variant": "",
+        "service": "voxbox",
+        "service_version": "0.0.21",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.21",
         "deprecated": false
       },
       {
