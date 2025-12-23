@@ -102,7 +102,6 @@ rules:
   ##
   - backend: "cuda"
     services:
-      - "voxbox"
       - "vllm"
       - "sglang"
     args:
