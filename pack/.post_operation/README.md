@@ -31,3 +31,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-12-16: Uninstall `runai-model-streamer` packages from SGLang 0.5.6.post2 for CUDA released images.
 - [x] 2025-12-19: Install `vLLM[audio]` packages for vLLM 0.12.0/0.11.2 of CUDA/ROCm released images.
 - [x] 2025-12-19: Install `petit-kernel` package for vLLM 0.12.0/0.11.2 and SGLang 0.5.6.post2/0.5.5.post3 of ROcm released images.
+- [ ] 2025-12-24: Apply ATB config patches to MindIE 2.2.rc1 for CANN released images.

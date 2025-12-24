@@ -583,8 +583,10 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
     # Patch
 
     unzip /workspace/patches/mindie.zip -d /workspace/patches
-    pushd /usr/local/Ascend/atb-models \
+    pushd ${CANN_HOME}/atb-models \
         && patch -p1 < /workspace/patches/mindie/*.patch
+
+    sed -i "s/\"ep_level\": 2/\"ep_level\": 1/g" ${CANN_HOME}/atb-models/atb_llm/conf/config.json
 EOF
 
 ## Postprocess
