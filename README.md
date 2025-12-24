@@ -34,6 +34,7 @@ The following table lists the supported accelerated backends and their correspon
 
 > [!IMPORTANT]
 > - Applied [ATB model patched](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3646603380) to MindIE 2.2.rc1/2.1.rc2.
+> - Applied [ATB config patched](https://github.com/gpustack/gpustack/issues/3551) to MindIE 2.2.rc1.
 > - Applied [av package](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3631228085) to MindIE 2.2.rc1/2.1.rc2.
 > - Update vLLM 0.11.0 with stable vLLM Ascend plugin.
 
