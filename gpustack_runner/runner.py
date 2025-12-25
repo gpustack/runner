@@ -10,13 +10,15 @@ from typing import Any
 
 from dataclasses_json import dataclass_json
 
+from . import envs
+
 _RE_DOCKER_IMAGE = re.compile(
-    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?gpustack/runner:(?P<backend>(Host|cann|corex|cuda|dtk|maca|rocm))(?P<backend_version>[XY\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie|sglang))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
+    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?runner:(?P<backend>(Host|cann|corex|cuda|dtk|maca|rocm))(?P<backend_version>[XY\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie|sglang))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
 )
 """
 Regex for Docker image parsing,
 which captures the following named groups:
-    - `prefix`: The optional prefix before `gpustack/runner`, e.g. a registry URL or namespace.
+    - `prefix`: The optional prefix before `runner`, e.g. a registry URL or namespace.
     - `backend`: The backend name, e.g. "cann", "cuda", "rocm", etc.
     - `backend_version`: The backend version, ignored patch version, e.g. "8.2", "12.4", "6.3", etc.
     - `backend_variant`: The optional backend variant, e.g. "910b", etc.
@@ -33,7 +35,7 @@ def set_re_docker_image(pattern: str):
     Args:
         pattern:
             The regex pattern to set. It should capture the following named groups:
-            - `prefix`: The optional prefix before `gpustack/runner`, e.g. a registry URL or namespace.
+            - `prefix`: The optional prefix before `runner`, e.g. a registry URL or namespace.
             - `backend`: The backend name, e.g. "cann", "cuda",
             - `backend_version`: The backend version, ignored patch version, e.g. "8.2", "12.4", "6.3", etc.
             - `backend_variant`: The optional backend variant, e.g. "910b", etc
@@ -82,7 +84,7 @@ class DockerImage:
         Parse the Docker image string into a DockerImage object.
 
         The given image string must follow the below regex format:
-        `[prefix/]gpustack/runner:{backend}{backend_version}[-backend_variant]-{service}{service_version}[-suffix]`
+        `[prefix/]runner:{backend}{backend_version}[-backend_variant]-{service}{service_version}[-suffix]`
 
         Args:
             image:
@@ -100,7 +102,7 @@ class DockerImage:
     def __str__(self):
         parts = [
             "",
-            "gpustack/runner:",
+            "runner:",
             self.backend,
             self.backend_version,
         ]
@@ -235,7 +237,13 @@ def list_runners(**kwargs) -> Runners | list[dict]:
             data_path = Path(_data_path) if isinstance(_data_path, str) else _data_path
     with data_path.open("r", encoding="utf-8") as f:
         json_list = json.load(f)
-        runners = [Runner.from_dict(item) for item in json_list]
+        runners = []
+        for item in json_list:
+            if namespace := envs.GPUSTACK_RUNNER_DOCKER_IMAGE_DEFAULT_NAMESPACE:
+                docker_image = item["docker_image"]
+                docker_image = docker_image.replace("gpustack/", f"{namespace}/")
+                item["docker_image"] = docker_image
+            runners.append(Runner.from_dict(item))
 
     todict = kwargs.pop("todict", False)
     if not kwargs:

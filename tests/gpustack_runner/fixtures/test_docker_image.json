@@ -3,7 +3,7 @@
     "gpustack/runner:cuda12.8-vllm0.10.0",
     "gpustack/runner:cuda12.8-vllm0.10.0",
     {
-      "prefix": "",
+      "prefix": "gpustack",
       "backend": "cuda",
       "backend_version": "12.8",
       "backend_variant": "",
@@ -16,7 +16,7 @@
     "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
     "gpustack/runner:cann8.2-910b-mindie2.1.rc1",
     {
-      "prefix": "",
+      "prefix": "gpustack",
       "backend": "cann",
       "backend_version": "8.2",
       "backend_variant": "910b",
@@ -29,7 +29,7 @@
     "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1",
     "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1",
     {
-      "prefix": "website.com/abc",
+      "prefix": "website.com/abc/gpustack",
       "backend": "cann",
       "backend_version": "8.2",
       "backend_variant": "910b",
@@ -42,7 +42,7 @@
     "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1-dev",
     "website.com/abc/gpustack/runner:cann8.2-910b-mindie2.1.rc1-dev",
     {
-      "prefix": "website.com/abc",
+      "prefix": "website.com/abc/gpustack",
       "backend": "cann",
       "backend_version": "8.2",
       "backend_variant": "910b",
@@ -55,7 +55,7 @@
     "website.com/abc/gpustack/runner:HostX.Y-mindie2.1.rc1-dev",
     "website.com/abc/gpustack/runner:HostX.Y-mindie2.1.rc1-dev",
     {
-      "prefix": "website.com/abc",
+      "prefix": "website.com/abc/gpustack",
       "backend": "Host",
       "backend_version": "X.Y",
       "backend_variant": "",
