@@ -46,6 +46,10 @@ _AVAILABLE_PLATFORMS = [
 ]
 
 
+# Disable overriding default namespace at images operations.
+os.environ["GPUSTACK_RUNNER_DEFAULT_NAMESPACE"] = "gpustack"
+
+
 class ListImagesSubCommand(SubCommand):
     """
     Command to list images.
