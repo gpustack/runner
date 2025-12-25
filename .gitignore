@@ -57,3 +57,6 @@ coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
+
+# Test
+pack/cann/mindie-*/
