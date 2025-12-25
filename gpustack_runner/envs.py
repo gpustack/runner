@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
     # Global
 
-    GPUSTACK_RUNNER_DOCKER_IMAGE_DEFAULT_NAMESPACE: str | None = None
+    GPUSTACK_RUNNER_DEFAULT_NAMESPACE: str | None = None
     """
     Namespace for default runner images.
     If not set, it should be "gpustack".
@@ -19,9 +19,12 @@ if TYPE_CHECKING:
 
 variables: dict[str, Callable[[], Any]] = {
     # Global
-    "GPUSTACK_RUNNER_DOCKER_IMAGE_DEFAULT_NAMESPACE": lambda: trim_str(
-        getenv(
-            "GPUSTACK_RUNNER_DOCKER_IMAGE_DEFAULT_NAMESPACE",
+    "GPUSTACK_RUNNER_DEFAULT_NAMESPACE": lambda: trim_str(
+        getenvs(
+            keys=[
+                "GPUSTACK_RUNNER_DEFAULT_NAMESPACE",
+                "GPUSTACK_RUNTIME_DEPLOY_DEFAULT_NAMESPACE",  ## Compatible with gpustack/gpustack_runtime.
+            ],
         ),
     ),
 }
