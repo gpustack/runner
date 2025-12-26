@@ -98,8 +98,9 @@ The following table lists the supported accelerated backends and their correspon
 > [!WARNING]
 > - ROCm 7.0 vLLM `0.11.2/0.11.0` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
     7.0 specific PyTorch build. Although supports ROCm 7.0 in vLLM `0.11.2/0.11.0`, `gfx1150/gfx1151` are not supported yet.
-> - SGLang supports `gfx942` only.
 > - ROCm 6.4 vLLM `0.13.0` supports `gfx903 gfx90a gfx942` only.
+> - ROCm 6.4 SGLang supports `gfx942` only.
+> - ROCm 7.0 SGLang supports `gfx950` only.
 
 > [!IMPORTANT]
 > - Applied [vLLM[audio] packages](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L720-L724) to vLLM 0.11.2.
