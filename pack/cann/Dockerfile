@@ -53,7 +53,7 @@ ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${
 ARG MINDIE_VERSION=2.2.rc1
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.12.0
+ARG VLLM_VERSION=0.13.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
@@ -938,6 +938,7 @@ source \${CANN_HOME}/ascend-toolkit/set_env.sh
 source \${CANN_HOME}/nnal/atb/set_env.sh
 
 export LD_LIBRARY_PATH=${PYTHON_LIB_PREFIX}/lib:${PYTHON_LIB_PREFIX}/lib64:\${LD_LIBRARY_PATH}
+export LD_PRELOAD=/usr/lib/$(uname -m)-linux-gnu/libjemalloc.so:\${LD_PRELOAD}
 
 exec \${BASH_SOURCE[0]}_ "\$@"
 EOT
