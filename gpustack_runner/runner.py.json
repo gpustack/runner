@@ -745,7 +745,7 @@
     "service_version": "0.5.5",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.8-sglang0.5.5",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -767,7 +767,7 @@
     "service_version": "0.5.5",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.8-sglang0.5.5",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
