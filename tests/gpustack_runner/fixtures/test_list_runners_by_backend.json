@@ -998,7 +998,7 @@
         "service_version": "0.0.20",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "cuda",
@@ -1009,7 +1009,7 @@
         "service_version": "0.0.20",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda12.8-voxbox0.0.20",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "cuda",
@@ -1196,7 +1196,7 @@
         "service_version": "0.0.20",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.20",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "cuda",
@@ -1207,7 +1207,7 @@
         "service_version": "0.0.20",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.20",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "cuda",
