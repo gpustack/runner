@@ -26,26 +26,24 @@ The following table lists the supported accelerated backends and their correspon
 
 ### Ascend CANN
 
+> [!CAUTION]
+> Since v0.1.23:
+> - Deprecated MindIE `2.1.rc1`.
+
 > [!WARNING]
 > - The Atlas 300I series is currently experimental in vLLM, only supporting eager mode and float16 data type. And there
     are some known issues for running vLLM, you can refer to
     vllm-ascend [#3316](https://github.com/vllm-project/vllm-ascend/issues/3316)
     and [#2795](https://github.com/vllm-project/vllm-ascend/issues/2795).
 
-> [!IMPORTANT]
-> - Applied [ATB model patched](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3646603380) to MindIE 2.2.rc1/2.1.rc2.
-> - Applied [ATB config patched](https://github.com/gpustack/gpustack/issues/3551) to MindIE 2.2.rc1.
-> - Applied [av package](https://github.com/gpustack/gpustack/issues/2016#issuecomment-3631228085) to MindIE 2.2.rc1/2.1.rc2.
-> - Update vLLM 0.11.0 with stable vLLM Ascend plugin.
-
-| CANN Version <br/> (Variant) | MindIE                   | vLLM                                                                     | SGLang                 |
-|------------------------------|--------------------------|--------------------------------------------------------------------------|------------------------|
-| 8.3 (A3/910C)                | **`2.2.rc1`**            | `0.12.0`, **`0.11.0`**                                                   | `0.5.6.post2`          |
-| 8.3 (910B)                   | **`2.2.rc1`**            | `0.12.0`, **`0.11.0`**                                                   | `0.5.6.post2`          |
-| 8.3 (310P)                   | **`2.2.rc1`**            |                                                                          |                        |
-| 8.2 (A3/910C)                | **`2.1.rc2`**            | ~~`0.11.0`~~, `0.10.2`, <br/>`0.10.1.1`                                  | `0.5.2`, `0.5.1.post3` |
-| 8.2 (910B)                   | **`2.1.rc2`**, `2.1.rc1` | ~~`0.11.0`~~, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`, <br/>`0.9.2`, `0.9.1` | `0.5.2`, `0.5.1.post3` |
-| 8.2 (310P)                   | **`2.1.rc2`**, `2.1.rc1` | `0.10.0`, `0.9.2`                                                        |                        |
+| CANN Version <br/> (Variant) | MindIE                   | vLLM                                                       | SGLang                 |
+|------------------------------|--------------------------|------------------------------------------------------------|------------------------|
+| 8.3 (A3/910C)                | `2.2.rc1`                | `0.13.0`, `0.12.0`, `0.11.0`                               | `0.5.6.post2`          |
+| 8.3 (910B)                   | `2.2.rc1`                | `0.13.0`, `0.12.0`, `0.11.0`                               | `0.5.6.post2`          |
+| 8.3 (310P)                   | `2.2.rc1`                |                                                            |                        |
+| 8.2 (A3/910C)                | `2.1.rc2`                | `0.10.2`, `0.10.1.1`                                       | `0.5.2`, `0.5.1.post3` |
+| 8.2 (910B)                   | `2.1.rc2`, ~~`2.1.rc1`~~ | `0.10.2`, `0.10.1.1`, <br/>`0.10.0`, `0.9.2`, <br/>`0.9.1` | `0.5.2`, `0.5.1.post3` |
+| 8.2 (310P)                   | `2.1.rc2`, ~~`2.1.rc1`~~ | `0.10.0`, `0.9.2`                                          |                        |
 
 ### Iluvatar CoreX
 
@@ -55,6 +53,13 @@ The following table lists the supported accelerated backends and their correspon
 
 ### NVIDIA CUDA
 
+> [!CAUTION]
+> Since v0.1.23:
+> - Deprecated all services for CUDA 12.4.
+> - Deprecated vLLM `0.11.0`, `0.10.1.1`, `0.10.0`.
+> - Deprecated SGLang `0.5.5`.
+> - Deprecated VoxBox `0.0.20`.
+
 > [!NOTE]
 > - CUDA 12.9 supports Compute Capabilities:
     `7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX`.
@@ -63,16 +68,12 @@ The following table lists the supported accelerated backends and their correspon
 > - CUDA 12.6/12.4 supports Compute Capabilities:
     `7.5 8.0+PTX 8.9 9.0+PTX`.
 
-> [!IMPORTANT]
-> - Applied [Qwen2.5 VL patched](https://github.com/gpustack/gpustack/issues/3606) to vLLM 0.11.2.
-> - Applied [vLLM[audio] packages](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L720-L724) to vLLM 0.11.2.
-
-| CUDA Version <br/> (Variant) | vLLM                                                                                      | SGLang                                                    | VoxBox             |
-|------------------------------|-------------------------------------------------------------------------------------------|-----------------------------------------------------------|--------------------|
-| 12.9                         | `0.13.0`, `0.12.0`, <br/>**`0.11.2`**                                                     | `0.5.6.post2`                                             |                    |
-| 12.8                         | `0.13.0`, `0.12.0`, <br/>**`0.11.2`**, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` | `0.5.6.post2`, `0.5.5.post3`, <br/>`0.5.5`, `0.5.4.post3` | `0.0.21`, `0.0.20` |
-| 12.6                         | `0.13.0`, `0.12.0`, <br/>**`0.11.2`**, `0.11.0`, <br/>`0.10.2`, `0.10.1.1`, <br/>`0.10.0` | `0.5.6.post2`                                             | `0.0.21`, `0.0.20` |
-| 12.4                         | `0.11.0`, `0.10.2`, <br/>`0.10.1.1`, `0.10.0`                                             |                                                           | `0.0.20`           |
+| CUDA Version <br/> (Variant) | vLLM                                                                                              | SGLang                                                        | VoxBox                 |
+|------------------------------|---------------------------------------------------------------------------------------------------|---------------------------------------------------------------|------------------------|
+| 12.9                         | `0.13.0`, `0.12.0`, <br/>`0.11.2`                                                                 | `0.5.6.post2`                                                 |                        |
+| 12.8                         | `0.13.0`, `0.12.0`, <br/>`0.11.2`, ~~`0.11.0`~~, <br/>`0.10.2`, ~~`0.10.1.1`~~, <br/>~~`0.10.0`~~ | `0.5.6.post2`, `0.5.5.post3`, <br/>~~`0.5.5`~~, `0.5.4.post3` | `0.0.21`, ~~`0.0.20`~~ |
+| 12.6                         | `0.13.0`, `0.12.0`, <br/>`0.11.2`, ~~`0.11.0`~~, <br/>`0.10.2`, ~~`0.10.1.1`~~, <br/>~~`0.10.0`~~ | `0.5.6.post2`                                                 | `0.0.21`, ~~`0.0.20`~~ |
+| 12.4                         | ~~`0.11.0`~~, ~~`0.10.2`~~, <br/>~~`0.10.1.1`~~, ~~`0.10.0`~~                                     |                                                               | ~~`0.0.20`~~           |
 
 ### Hygon DTK
 
@@ -89,6 +90,11 @@ The following table lists the supported accelerated backends and their correspon
 
 ### AMD ROCm
 
+> [!CAUTION]
+> Since v0.1.23:
+> Deprecated all services for ROCm 6.3.
+> Deprecated vLLM `0.11.0`.
+
 > [!NOTE]
 > - ROCm 7.0 supports LLVM targets:
     `gfx908 gfx90a gfx942 gfx950 gfx1030 gfx1100 gfx1101 gfx1200 gfx1201 gfx1150 gfx1151`.
@@ -102,15 +108,11 @@ The following table lists the supported accelerated backends and their correspon
 > - ROCm 6.4 SGLang supports `gfx942` only.
 > - ROCm 7.0 SGLang supports `gfx950` only.
 
-> [!IMPORTANT]
-> - Applied [vLLM[audio] packages](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L720-L724) to vLLM 0.11.2.
-> - Applied [petit-kernel package](https://github.com/vllm-project/vllm/blob/275de34170654274616082721348b7edd9741d32/setup.py#L728) to vLLM 0.11.2 and SGLang 0.5.5.post3.
-
-| ROCm Version <br/> (Variant) | vLLM                                            | SGLang                           |
-|------------------------------|-------------------------------------------------|----------------------------------|
-| 7.0                          | `0.13.0`, `0.12.0`, <br/>**`0.11.2`**, `0.11.0` | `0.5.6.post2`                    |
-| 6.4                          | `0.13.0`, `0.12.0`, <br/>**`0.11.2`**, `0.10.2` | `0.5.6.post2`, **`0.5.5.post3`** |
-| 6.3                          | `0.10.1.1`, `0.10.0`                            |                                  |
+| ROCm Version <br/> (Variant) | vLLM                                            | SGLang                       |
+|------------------------------|-------------------------------------------------|------------------------------|
+| 7.0                          | `0.13.0`, `0.12.0`, <br/>`0.11.2`, ~~`0.11.0`~~ | `0.5.6.post2`                |
+| 6.4                          | `0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`     | `0.5.6.post2`, `0.5.5.post3` |
+| 6.3                          | ~~`0.10.1.1`~~, ~~`0.10.0`~~                    |                              |
 
 ## Directory Structure
 
