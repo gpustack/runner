@@ -866,7 +866,7 @@
     "service_version": "0.11.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.8-vllm0.11.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -877,7 +877,7 @@
     "service_version": "0.11.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.8-vllm0.11.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1064,7 +1064,7 @@
     "service_version": "0.11.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.11.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1075,7 +1075,7 @@
     "service_version": "0.11.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.11.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
