@@ -1440,7 +1440,7 @@
         "service_version": "0.11.0",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:rocm7.0-vllm0.11.0",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "rocm",
