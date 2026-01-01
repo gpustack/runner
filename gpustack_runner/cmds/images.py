@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import requests
 from dataclasses_json import dataclass_json
 
-from gpustack_runner import BackendRunners, list_backend_runners
+from gpustack_runner import BackendRunners, envs, list_backend_runners
 
 from .__types__ import SubCommand
 
@@ -1094,6 +1094,9 @@ def list_images(**kwargs) -> list[PlatformedImage]:
             name = img.name
             if not name:
                 continue
+            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_IMAGE_NAMESPACE:
+                name = name.replace("gpustack/", f"{namespace}/")
+                img.name = name
             if name not in image_names_index:
                 image_names_index[name] = len(images)
                 images.append(img)
