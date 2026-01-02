@@ -1360,6 +1360,11 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
     uv pip install --force-reinstall \
         /sglangrouter/workspace/*.whl
 
+    # Uninstall
+    ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
+    uv pip uninstall \
+        runai-model-streamer || true
+
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/*
