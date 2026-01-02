@@ -58,9 +58,9 @@ ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.6.post2
+ARG SGLANG_VERSION=0.5.7
 ARG SGLANG_TORCH_VERSION=2.8.0
-ARG SGLANG_KERNEL_VERSION=20251209
+ARG SGLANG_KERNEL_VERSION=2025.12.31
 ARG SGLANG_VLLM_VERSION=0.9.2
 
 #
@@ -1023,7 +1023,7 @@ EOT
             -r /tmp/requirements.txt
     fi
     uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/torch_npu/torch_npu-2.8.0.post2.dev20251113-cp311-cp311-manylinux_2_28_$(uname -m).whl
+        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/torch_npu/torch_npu-2.8.0.post2.dev20251224-cp311-cp311-manylinux_2_28_$(uname -m).whl
     uv pip install \
         numpy==1.26.4 scipy==1.13.1
 
