@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -317,9 +317,14 @@ class ServiceVersionedRunner:
     """
     The service version, e.g. "0.10.0", "0.4.10", etc.
     """
-    deprecated: bool = False
+    deprecated: bool | None = field(
+        default=None,
+        repr=False,
+        metadata={"dataclasses_json": {"exclude": lambda v: v is None}},
+    )
     """
     Deprecated runner or not.
+    Valued only in BackendVariantRunner context.
     """
     platforms: list[ServicePlatformedRunner] | None = None
     """
@@ -354,6 +359,10 @@ class BackendVariantRunner:
     services: list[ServiceRunner] | None = None
     """
     A list of ServicedRunner objects, each containing service and versions.
+    """
+    deprecated: bool = False
+    """
+    Deprecated runner or not.
     """
     platforms: list[ServicePlatformedRunner] | None = None
     """
@@ -439,7 +448,6 @@ ServiceRunners = list[ServiceRunner]
         "versions": [
             {
                 "version": "0.10.0",
-                "deprecated": false,
                 "backends": [
                     {
                         "backend": "cann",
@@ -450,6 +458,7 @@ ServiceRunners = list[ServiceRunner]
                                 "variants": [
                                     {
                                         "variant": "910b",
+                                        "deprecated": false,
                                         "platforms": [
                                             {
                                                 "platform": "linux/amd64",
@@ -705,7 +714,6 @@ def build_service_runners(
         if not service_version_entry:
             service_version_entry = ServiceVersionedRunner(
                 version=runner.service_version,
-                deprecated=runner.deprecated,
                 backends=[],
             )
             service_entry.versions.append(service_version_entry)
@@ -751,6 +759,7 @@ def build_service_runners(
         if not variant_entry:
             variant_entry = BackendVariantRunner(
                 variant=runner.backend_variant,
+                deprecated=runner.deprecated,
                 platforms=[],
             )
             backend_version_entry.variants.append(variant_entry)

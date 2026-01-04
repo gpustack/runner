@@ -18,7 +18,6 @@
         "versions": [
           {
             "version": "0.13.0",
-            "deprecated": false,
             "backends": [
               {
                 "backend": "cann",
@@ -29,6 +28,7 @@
                     "variants": [
                       {
                         "variant": "910b",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
@@ -42,6 +42,7 @@
                       },
                       {
                         "variant": "a3",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
@@ -66,6 +67,7 @@
                     "variants": [
                       {
                         "variant": "",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
@@ -85,6 +87,7 @@
                     "variants": [
                       {
                         "variant": "",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
@@ -104,6 +107,7 @@
                     "variants": [
                       {
                         "variant": "",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
@@ -128,6 +132,7 @@
                     "variants": [
                       {
                         "variant": "",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
@@ -143,6 +148,7 @@
                     "variants": [
                       {
                         "variant": "",
+                        "deprecated": false,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
