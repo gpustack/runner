@@ -239,7 +239,7 @@ def list_runners(**kwargs) -> Runners | list[dict]:
         json_list = json.load(f)
         runners = []
         for item in json_list:
-            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_IMAGE_NAMESPACE:
+            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE:
                 docker_image = item["docker_image"]
                 docker_image = docker_image.replace("gpustack/", f"{namespace}/")
                 item["docker_image"] = docker_image

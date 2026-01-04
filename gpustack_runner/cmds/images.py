@@ -1094,7 +1094,7 @@ def list_images(**kwargs) -> list[PlatformedImage]:
             name = img.name
             if not name:
                 continue
-            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_IMAGE_NAMESPACE:
+            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE:
                 name = name.replace("gpustack/", f"{namespace}/")
                 img.name = name
             if name not in image_names_index:
