@@ -319,12 +319,11 @@ class ServiceVersionedRunner:
     """
     deprecated: bool | None = field(
         default=None,
-        repr=False,
         metadata={"dataclasses_json": {"exclude": lambda v: v is None}},
     )
     """
     Deprecated runner or not.
-    Valued only in BackendVariantRunner context.
+    Valued only in `list_backend_runners` context.
     """
     platforms: list[ServicePlatformedRunner] | None = None
     """
@@ -360,9 +359,13 @@ class BackendVariantRunner:
     """
     A list of ServicedRunner objects, each containing service and versions.
     """
-    deprecated: bool = False
+    deprecated: bool | None = field(
+        default=None,
+        metadata={"dataclasses_json": {"exclude": lambda v: v is None}},
+    )
     """
     Deprecated runner or not.
+    Valued only in `list_service_runners` context.
     """
     platforms: list[ServicePlatformedRunner] | None = None
     """
