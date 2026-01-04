@@ -1000,13 +1000,13 @@ class CompareImagesSubCommand(SubCommand):
             if img_name not in current_images_mapping
         ]
 
-        green, yellow, red, reset = "\033[32m", "\033[33m", "\033[31m", "\033[0m"
+        green, cyan, red, reset = "\033[32m", "\033[36m", "\033[31m", "\033[0m"
         if not self.color:
-            green, yellow, red, reset = "", "", "", ""
+            green, cyan, red, reset = "", "", "", ""
         for img_name in added_image_names:
             print(f"{green}+ {img_name}{reset}")
         for img_name in deprecated_image_names:
-            print(f"{yellow}~ {img_name}{reset}")
+            print(f"{cyan}~ {img_name}{reset}")
         for img_name in removed_image_names:
             print(f"{red}- {img_name}{reset}")
 
