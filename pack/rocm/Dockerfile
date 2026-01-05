@@ -63,6 +63,8 @@
 #   which is used to build the AITER wheel.
 # - VLLM_LMCACHE_VERSION: Version of LMCache to use.
 # - VLLM_MOONCAKE_VERSION: Version of MoonCake to use.
+# - VLLM_OMNI_COMMIT: Commit of Omni to use,
+#   which is used to build the Omni wheel.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
@@ -82,6 +84,7 @@ ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_AITER_VERSION=0.1.7.post5
 ARG VLLM_LMCACHE_VERSION=0.3.11
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
+ARG VLLM_OMNI_COMMIT
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.7
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -712,6 +715,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
     export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
+    export VLLM_TARGET_DEVICE="rocm"
     echo "Building vLLM with the following environment variables:"
     env
 
@@ -725,7 +729,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         && sed -i "s/\"torchvision==.*\"/\"torchvision\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && sed -i "s/\"triton==.*\"/\"triton\"/g" /tmp/vllm/requirements/rocm-build.txt \
-        && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
+        && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
 
@@ -733,6 +737,82 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     rm -rf /var/tmp/* \
         && rm -rf /tmp/* \
         && ccache --clear --clean
+EOF
+
+# Stage vLLM Build Omni
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm{ROCM_VERSION%.*}-vllm-build-omni-linux-amd64 --target=vllm-build-omni pack/rocm
+#
+
+FROM vllm-build AS vllm-build-omni
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build Omni
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_OMNI_COMMIT
+
+ENV VLLM_OMNI_COMMIT=${VLLM_OMNI_COMMIT}
+
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+    # Omni
+
+    if [[ -z "${VLLM_OMNI_COMMIT}" ]]; then
+        echo "Skipping vLLM Omni build for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+    IFS="." read -r VL_MAJOR VL_MINOR VL_PATCH <<< "${VLLM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    VL_ROCM_ARCHS="${ROCM_ARCHS}"
+    if [[ -z "${VL_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
+            if (( $(echo "${VL_MAJOR}.${VL_MINOR} == 0.13" | bc -l) )); then
+                # TODO(thxCode): Temporarily remove gfx1030 for vLLM ROCm build due to build error in ROCm 6.4.4.
+                # #15 134.9 /tmp/vllm/build/temp.linux-x86_64-cpython-312/csrc/sampler.hip:564:63: error: local memory (66032) exceeds limit (65536) in 'void vllm::topKPerRowDecode<1024, true, false, true>(float const*, int const*, int*, int, int, int, int, float*, int, int const*)'
+                # ##15 134.9   564 | static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
+                # ##15 134.9       |                                                               ^
+                # ##15 134.9 16 warnings and 1 error generated when compiling for gfx1030.
+                VL_ROCM_ARCHS="gfx908;gfx90a;gfx942"
+            fi
+        else
+            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export PYTORCH_ROCM_ARCH="${VL_ROCM_ARCHS}"
+    echo "Building vLLM Omni with the following environment variables:"
+    env
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/vllm-project/vllm-omni vllm_omni \
+        && pushd /tmp/vllm_omni \
+        && git checkout ${VLLM_OMNI_COMMIT} \
+        && git submodule update --init --recursive
+    pushd /tmp/vllm_omni \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/vllm_omni/dist \
+        && mv /tmp/vllm_omni/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
 EOF
 
 # Stage vLLM Build LMCache
@@ -987,6 +1067,25 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
         && rm -rf /tmp/*
 EOF
 
+## Install Omni
+
+RUN --mount=type=bind,from=vllm-build-omni,source=/,target=/omni,rw <<EOF
+    # Omni
+
+    if [[ ! -d /omni/workspace ]]; then
+        echo "Skipping vLLM Omni installation for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /omni/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Install Triton
 
 RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw <<EOF
@@ -1123,6 +1222,7 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
+        --package vllm-omni \
         --package flash-attn \
         --package triton \
         --package aiter \

@@ -85,6 +85,8 @@
 #   which is used to build the FlashInfer wheel.
 # - VLLM_LMCACHE_VERSION: Version of LMCache to use.
 # - VLLM_MOONCAKE_VERSION:  Version of MoonCake to use.
+# - VLLM_OMNI_COMMIT: Commit of Omni to use,
+#   which is used to build the Omni wheel.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
@@ -114,6 +116,7 @@ ARG VLLM_FLASHINFER_VERSION=0.5.3
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_LMCACHE_VERSION=0.3.11
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
+ARG VLLM_OMNI_COMMIT
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.7
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -1009,6 +1012,73 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         && ccache --clear --clean
 EOF
 
+# Stage vLLM Build Omni
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-omni-linux-amd64 --target=vllm-build-omni pack/cuda
+#
+
+FROM vllm-build AS vllm-build-omni
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build Omni
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_OMNI_COMMIT
+
+ENV VLLM_OMNI_COMMIT=${VLLM_OMNI_COMMIT}
+
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+    # Omni
+
+    if [[ -z "${VLLM_OMNI_COMMIT}" ]]; then
+        echo "Skipping vLLM Omni build for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    VL_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${VL_CUDA_ARCHS}" ]]; then
+        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
+            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        else
+            VL_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${VL_CUDA_ARCHS}"
+    export NVCC_THREADS=1
+    echo "Building vLLM Omni with the following environment variables:"
+    env
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/vllm-project/vllm-omni vllm_omni \
+        && pushd /tmp/vllm_omni \
+        && git checkout ${VLLM_OMNI_COMMIT} \
+        && git submodule update --init --recursive
+    pushd /tmp/vllm_omni \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/vllm_omni/dist \
+        && mv /tmp/vllm_omni/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 # Stage vLLM Build LMCache
 #
 # Example build command:
@@ -1269,6 +1339,25 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
         && rm -rf /tmp/*
 EOF
 
+## Install Omni
+
+RUN --mount=type=bind,from=vllm-build-omni,source=/,target=/omni,rw <<EOF
+    # Omni
+
+    if [[ ! -d /omni/workspace ]]; then
+        echo "Skipping vLLM Omni installation for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /omni/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Install EP Kenerls: PPLX
 
 RUN --mount=type=bind,from=vllm-build-epkernels-pplx,source=/,target=/pplx,rw <<EOF
@@ -1438,6 +1527,7 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
+        --package vllm-omni \
         --package flashinfer-python \
         --package flash-attn \
         --package torch \

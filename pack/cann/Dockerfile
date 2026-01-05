@@ -40,6 +40,8 @@
 #   if not specified, it will fetch from the vLLM Ascend PyPi RSS.
 # - VLLM_TORCH_VERSION: Version of Torch for vLLM to use.
 # - VLLM_MOONCAKE_VERSION:  Version of MoonCake to use.
+# - VLLM_OMNI_COMMIT: Commit of Omni to use,
+#   which is used to build the Omni wheel.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
@@ -57,6 +59,7 @@ ARG VLLM_VERSION=0.13.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
+ARG VLLM_OMNI_COMMIT
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.7
 ARG SGLANG_TORCH_VERSION=2.8.0
@@ -744,6 +747,64 @@ EOT
         && rm -rf /tmp/*
 EOF
 
+# Stage vLLM Build Omni
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/cann/Dockerfile --tag=gpustack/runner:cann{CANN_VERSION%.*}-vllm-build-omni-linux-amd64 --target=vllm-build-omni pack/cann
+#
+
+FROM vllm-build AS vllm-build-omni
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build Omni
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_OMNI_COMMIT
+
+ENV VLLM_OMNI_COMMIT=${VLLM_OMNI_COMMIT}
+
+RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+    # Omni
+
+    if [[ -z "${VLLM_OMNI_COMMIT}" ]]; then
+        echo "Skipping vLLM Omni build for ${TARGETARCH}..."
+        exit 0
+    fi
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export COMPILE_CUSTOM_KERNELS=1
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    export VLLM_TARGET_DEVICE="empty"
+    echo "Building vLLM Omni with the following environment variables:"
+    env
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/vllm-project/vllm-omni vllm_omni \
+        && pushd /tmp/vllm_omni \
+        && git checkout ${VLLM_OMNI_COMMIT} \
+        && git submodule update --init --recursive
+    pushd /tmp/vllm_omni \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/vllm_omni/dist \
+        && mv /tmp/vllm_omni/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 # Stage vLLM Build MoonCake
 #
 # Example build command:
@@ -847,6 +908,12 @@ RUN <<EOF
     else
         export SOC_VERSION="ascend910b1"
     fi
+    export VLLM_TARGET_DEVICE="empty"
+    export VLLM_ASCEND_VERSION=${VLLM_ASCEND_VERSION:-}
+    if [[ -z "${VLLM_ASCEND_VERSION}" ]]; then
+        # Fetch the latest version from RSS subscription.
+        export VLLM_ASCEND_VERSION="$(curl -sS https://pypi.org/rss/project/vllm-ascend/releases.xml | grep title | grep "${VLLM_VERSION}" | head -n 1 | awk -F '[<>]' '/<title>/ {print $3}')"
+    fi
     echo "Building vLLM with the following environment variables:"
     env
 
@@ -854,8 +921,7 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm-${VLLM_VERSION}
-    VLLM_TARGET_DEVICE="empty" \
-        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
+    uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
         /tmp/vllm-${VLLM_VERSION}
 
     # Uninstall Triton and install Triton Ascend
@@ -864,17 +930,30 @@ RUN <<EOF
         https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend/triton_ascend-3.2.0.dev2025112116-cp311-cp311-manylinux_2_27_$(uname -m).manylinux_2_28_$(uname -m).whl
 
     # Install vLLM Ascend
-    VLLM_ASCEND_VERSION=${VLLM_ASCEND_VERSION:-}
-    if [[ -z "${VLLM_ASCEND_VERSION}" ]]; then
-        # Fetch the latest version from RSS subscription.
-        VLLM_ASCEND_VERSION="$(curl -sS https://pypi.org/rss/project/vllm-ascend/releases.xml | grep title | grep "${VLLM_VERSION}" | head -n 1 | awk -F '[<>]' '/<title>/ {print $3}')"
-    fi
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_ASCEND_VERSION} --single-branch \
         https://github.com/vllm-project/vllm-ascend.git vllm-ascend-${VLLM_ASCEND_VERSION}
-    VLLM_TARGET_DEVICE="empty" \
-        uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
+    uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
         /tmp/vllm-ascend-${VLLM_ASCEND_VERSION}
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Omni
+
+RUN --mount=type=bind,from=vllm-build-omni,source=/,target=/omni,rw <<EOF
+    # Omni
+
+    if [[ ! -d /omni/workspace ]]; then
+        echo "Skipping vLLM Omni installation for ${CANN_ARCHS} ${TARGETARCH}..."
+        exit 0
+    fi
+
+    # Install
+    uv pip install --no-build-isolation \
+        /omni/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -948,6 +1027,7 @@ EOT
     uv pip tree \
         --package vllm \
         --package vllm-ascend \
+        --package vllm-omni \
         --package torch \
         --package torch-npu \
         --package mooncake-transfer-engine \

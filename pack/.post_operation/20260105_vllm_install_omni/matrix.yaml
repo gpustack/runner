@@ -1,0 +1,78 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.12.0"
+  ## Packed NVIDIA CUDA 12.8.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.8"
+      - "VLLM_VERSION=0.12.0"
+  ## Packed NVIDIA CUDA 12.6.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.6"
+      - "VLLM_VERSION=0.12.0"
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed AMD ROCm 7.0.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.0"
+      - "VLLM_VERSION=0.12.0"
+  ## Packed AMD ROCm 6.4.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "VLLM_VERSION=0.12.0"
+
+  #
+  # Ascend CANN
+  #
+
+  ## Packed Ascend CANN 8.3, using CANN Kernel for A3.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=a3"
+      - "VLLM_VERSION=0.12.0"
+  ## Packed Ascend CANN 8.3, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.12.0"
