@@ -444,14 +444,14 @@ class SaveImagesSubCommand(SubCommand):
 
                 command = [
                     "skopeo",
-                    "--override-os",
-                    override_os,
-                    "--override-arch",
-                    override_arch,
                     "copy",
                     "--src-tls-verify=false",
                     "--retry-times",
                     str(self.max_retries),
+                    "--override-os",
+                    override_os,
+                    "--override-arch",
+                    override_arch,
                 ]
                 if self.source_username and self.source_password:
                     command.extend(
@@ -771,6 +771,10 @@ class CopyImagesSubCommand(SubCommand):
                 print(f"❌ Error syncing image '{img_name}'")
                 failures.append((img_name, img_err))
 
+            override_os, override_arch = None, None
+            if self.platform:
+                override_os, override_arch = self.platform.split("/", maxsplit=1)
+
             # Submit tasks
             for img in images:
                 command = [
@@ -778,10 +782,20 @@ class CopyImagesSubCommand(SubCommand):
                     "copy",
                     "--src-tls-verify=false",
                     "--dest-tls-verify=false",
-                    "--all",
                     "--retry-times",
                     str(self.max_retries),
                 ]
+                if override_os and override_arch:
+                    command.extend(
+                        [
+                            "--override-os",
+                            override_os,
+                            "--override-arch",
+                            override_arch,
+                        ],
+                    )
+                else:
+                    command.append("--all")
                 if self.source_username and self.source_password:
                     command.extend(
                         [
