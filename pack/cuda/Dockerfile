@@ -363,7 +363,8 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1
 
 ## Install Torch
 
@@ -1157,7 +1158,8 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1
 
 ## Install GDRCopy,
 ## See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start-nccl.html#nccl-start-base-gdrcopy.
@@ -1720,7 +1722,8 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1
 
 ## Install SGLang
 
