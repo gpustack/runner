@@ -7,7 +7,10 @@
 #    - Install C buildkit.
 #    - Upgrade Python if needed.
 #    - Install Python buildkit.
-# 2. vllm target:
+# 2.1. vllm-build target:
+#    - Build LMCache.
+# 2.2. vllm target:
+#    - Install LMCache.
 #    - Postprocess, review installation.
 
 # Argument usage:
@@ -19,14 +22,18 @@
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
 # - VLLM_TORCH_VERSION: (PLACEHOLDER) Version of Torch for vLLM to use.
+# - VLLM_BUILD_BASE_IMAGE: Base image for vLLM build.
+# - VLLM_LMCACHE_VERSION: Version of LMCache to use.
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
 ARG DTK_VERSION=25.04.2
+ARG DTK_VERSION_EXTRA="-20251226"
 ARG DTK_ARCHS
-ARG VLLM_BASE_IMAGE=gpustack/runner:dtk${DTK_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.9.2
+ARG VLLM_BASE_IMAGE=gpustack/runner:dtk${DTK_VERSION}${DTK_VERSION_EXTRA}-python${PYTHON_VERSION}
+ARG VLLM_VERSION=0.11.0
 ARG VLLM_TORCH_VERSION=2.5.1
-ARG VLLM_LMCACHE_VERSION=0.3.5
+ARG VLLM_BUILD_BASE_IMAGE=${VLLM_BASE_IMAGE}
+ARG VLLM_LMCACHE_VERSION=0.3.9post2
 
 # Stage Bake Runtime
 #
@@ -34,7 +41,7 @@ ARG VLLM_LMCACHE_VERSION=0.3.5
 #   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk${DTK_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/dtk
 #
 
-FROM gpustack/runner:dtk${DTK_VERSION}-python${PYTHON_VERSION}-vanilla AS runtime
+FROM gpustack/runner:dtk${DTK_VERSION}${DTK_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -229,7 +236,7 @@ RUN <<EOF
 build
 cmake<4
 ninja<1.11
-setuptools<80
+setuptools>=77.0.3,<80.0.0
 setuptools-scm
 packaging<25
 wheel==0.45.1
@@ -254,6 +261,93 @@ ARG DTK_ARCHS
 ENV DTK_HOME="/opt/dtk" \
     DTK_VERSION=${DTK_VERSION} \
     DTK_ARCHS=${DTK_ARCHS}
+
+# Stage vLLM Build
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk{DTK_VERSION%.*}-vllm-build-linux-amd64 --target=vllm-build pack/dtk
+#
+
+FROM ${VLLM_BUILD_BASE_IMAGE} AS vllm-build
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow
+
+# Stage vLLM Build LMCache
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk${DTK_VERSION%.*}-vllm-build-lmcache-linux-amd64 --target=vllm-build-lmcache pack/dtk
+#
+
+FROM vllm-build AS vllm-build-lmcache
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build LMCache
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
+RUN <<EOF
+    # LMCache
+    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
+
+    # Link if needed
+    if [[ ! -d ${DTK_HOME} ]] && [[ -d /opt/dtk-${DTK_VERSION} ]]; then
+        ln -vsf /opt/dtk-${DTK_VERSION} ${DTK_HOME}
+    fi
+    if [[ ! -d /opt/hyhal ]] && [[ -d /opt/dtk-${DTK_VERSION}/.hyhal ]]; then
+        ln -vsf /opt/dtk-${DTK_VERSION}/.hyhal /opt/hyhal
+    fi
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="gfx906;gfx926;gfx928;gfx936"
+    export TORCH_DONT_CHECK_COMPILER_ABI=1
+    export CXX=hipcc
+    export BUILD_WITH_HIP=1
+    echo "Building LMCache with the following environment variables:"
+    env
+
+    rm -rf /opt/dtk/llvm/lib/clang/lib \
+        && ln -vsf /opt/dtk/llvm/lib/clang/$(clang --version | head -n 1 | awk '{print $3}')/lib /opt/dtk/llvm/lib/clang/lib
+    rm -rf /opt/hyhal \
+        && ln -vsf /opt/dtk/.hyhal /opt/hyhal
+    source /opt/dtk/env.sh
+    sed -i 's/"5.1.25085"/"6.1.25085"/g' /opt/dtk/hip/lib/cmake/hip/hip-config-version.cmake
+
+    # Install LMCache
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    pushd /tmp/lmcache \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
+        && cat /tmp/lmcache/pyproject.toml \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/lmcache/dist \
+        && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
 
 # Stage Install vLLM
 #
@@ -289,51 +383,12 @@ ENV VLLM_VERSION=${VLLM_VERSION}
 
 ## Install LMCache
 
-ARG VLLM_LMCACHE_VERSION
-
-ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
-
-RUN <<EOF
+RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
     # LMCache
 
-    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
-
-    # Link if needed
-    if [[ ! -d ${DTK_HOME} ]] && [[ -d /opt/dtk-${DTK_VERSION} ]]; then
-        ln -vsf /opt/dtk-${DTK_VERSION} ${DTK_HOME}
-    fi
-    if [[ ! -d /opt/hyhal ]] && [[ -d /opt/dtk-${DTK_VERSION}/.hyhal ]]; then
-        ln -vsf /opt/dtk-${DTK_VERSION}/.hyhal /opt/hyhal
-    fi
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
-        CMAKE_MAX_JOBS="8"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export PYTORCH_ROCM_ARCH="gfx906;gfx926;gfx928;gfx936"
-    export TORCH_DONT_CHECK_COMPILER_ABI=1
-    export CXX=hipcc
-    export BUILD_WITH_HIP=1
-
-    rm -rf /opt/dtk/llvm/lib/clang/lib \
-        && ln -vsf /opt/dtk/llvm/lib/clang/$(clang --version | head -n 1 | awk '{print $3}')/lib /opt/dtk/llvm/lib/clang/lib
-    rm -rf /opt/hyhal \
-        && ln -vsf /opt/dtk/.hyhal /opt/hyhal
-    source /opt/dtk/env.sh
-    sed -i 's/"5.1.25085"/"6.1.25085"/g' /opt/dtk/hip/lib/cmake/hip/hip-config-version.cmake
-
-    # Install LMCache
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
-        https://github.com/LMCache/LMCache.git lmcache
-    if [[ "${TARGETARCH}" == "arm64" ]]; then
-        sed -i "s/^infinistore$/infinistore; platform_machine == 'x86_64'/" /tmp/lmcache/requirements/common.txt
-    fi
-    pip install -v --no-build-isolation /tmp/lmcache
+    # Install
+    uv pip install --no-build-isolation \
+        /lmcache/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -353,6 +408,11 @@ RUN <<EOF
 EOF
 
 ## Entrypoint
+
+ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
+    RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES=1 \
+    TOKENIZERS_PARALLELISM=false \
+    SAFETENSORS_FAST_GPU=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]

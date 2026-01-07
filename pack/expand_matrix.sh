@@ -85,7 +85,7 @@ EOT
     # Prepare tag prefix/suffix.
     TAG_PREFIX="${BACKEND}\${BACKEND_VERSION}-"
     if [[ "${INPUT_TARGET}" == "runtime" ]]; then
-        TAG_PREFIX="${BACKEND}\${${BACKEND_UPPER}_VERSION}-"
+        TAG_PREFIX="${BACKEND}\${${BACKEND_UPPER}_VERSION}\${${BACKEND_UPPER}_VERSION_EXTRA:-\"\"}-"
     fi
     if [[ "${BACKEND}" == "cann" ]]; then
         TAG_PREFIX="${TAG_PREFIX}\${${BACKEND_UPPER}_ARCHS}-"

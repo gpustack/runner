@@ -24,7 +24,7 @@ on:
         default: 'docker.io'
         type: string
       src-image:
-        description: 'Source Docker image, inform of "namespace/name:tag".'
+        description: 'Source Docker image, inform of "[a/b/c/]namespace/name:tag".'
         required: true
         type: string
       src-username:
@@ -36,7 +36,7 @@ on:
         required: false
         type: string
       dst-image-tag:
-        description: 'Destination Docker image tag, automatically suffixed with "-vanilla".'
+        description: 'Destination Docker image tag, inform of "{backend}{backend_version_vX_Y_Z}[{backend_version_extra}][-{backend_variant}]-python${python_version_vX_Y}", automatically suffixed with "-vanilla".'
         required: true
         type: string
 
