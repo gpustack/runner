@@ -1,7 +1,7 @@
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=12.8
 ARG VLLM_VERSION=0.12.0
-ARG VLLM_OMNI_COMMIT=f9b8bfd
+ARG VLLM_OMNI_COMMIT=75cdf1c
 
 FROM gpustack/runner:cuda${CUDA_VERSION}-vllm${VLLM_VERSION} AS vllm-build-omni
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]

@@ -2,7 +2,7 @@ ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=8.3
 ARG CANN_ARCHS=910b
 ARG VLLM_VERSION=0.12.0
-ARG VLLM_OMNI_COMMIT=f9b8bfd
+ARG VLLM_OMNI_COMMIT=75cdf1c
 
 FROM gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-vllm${VLLM_VERSION} AS vllm-build-omni
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
