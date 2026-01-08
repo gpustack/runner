@@ -1106,7 +1106,6 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
 
-    # Install LMCache
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
@@ -1128,6 +1127,7 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     echo "Building LMCache with the following environment variables:"
     env
 
+    # Build
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache

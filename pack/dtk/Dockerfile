@@ -7,9 +7,7 @@
 #    - Install C buildkit.
 #    - Upgrade Python if needed.
 #    - Install Python buildkit.
-# 2.1. vllm-build target:
-#    - Build LMCache.
-# 2.2. vllm target:
+# 2. vllm target:
 #    - Install LMCache.
 #    - Postprocess, review installation.
 
@@ -18,11 +16,11 @@
 # - CMAKE_MAX_JOBS: (PLACEHOLDER) Maximum number of jobs to use for CMake, default is empty,
 #   which means it will use the number of available CPU cores.
 # - DTK_VERSION: Version of Hygon DTK runtime environment to use.
+# - DTK_VERSION_EXTRA: Extra version string for Hygon DTK runtime environment to use.
 # - DTK_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
 # - VLLM_TORCH_VERSION: (PLACEHOLDER) Version of Torch for vLLM to use.
-# - VLLM_BUILD_BASE_IMAGE: Base image for vLLM build.
 # - VLLM_LMCACHE_VERSION: Version of LMCache to use.
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
@@ -32,7 +30,6 @@ ARG DTK_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:dtk${DTK_VERSION}${DTK_VERSION_EXTRA}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.11.0
 ARG VLLM_TORCH_VERSION=2.5.1
-ARG VLLM_BUILD_BASE_IMAGE=${VLLM_BASE_IMAGE}
 ARG VLLM_LMCACHE_VERSION=0.3.11
 
 # Stage Bake Runtime
@@ -262,13 +259,13 @@ ENV DTK_HOME="/opt/dtk" \
     DTK_VERSION=${DTK_VERSION} \
     DTK_ARCHS=${DTK_ARCHS}
 
-# Stage vLLM Build
+# Stage vLLM
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk{DTK_VERSION%.*}-vllm-build-linux-amd64 --target=vllm-build pack/dtk
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk${DTK_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/dtk
 #
 
-FROM ${VLLM_BUILD_BASE_IMAGE} AS vllm-build
+FROM ${VLLM_BASE_IMAGE} AS vllm
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -276,24 +273,27 @@ ARG TARGETOS
 ARG TARGETARCH
 
 ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1
 
-# Stage vLLM Build LMCache
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk${DTK_VERSION%.*}-vllm-build-lmcache-linux-amd64 --target=vllm-build-lmcache pack/dtk
-#
+## Install Torch
 
-FROM vllm-build AS vllm-build-lmcache
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+ARG VLLM_TORCH_VERSION
 
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
+ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION}
 
-## Build LMCache
+## Nothing to do, as the Torch has installed in global.
 
-ARG CMAKE_MAX_JOBS
+## Install vLLM
+
+ARG VLLM_VERSION
+
+ENV VLLM_VERSION=${VLLM_VERSION}
+
+## Nothing to do, as the vLLM has installed in global.
+
+## Install LMCache
+
 ARG VLLM_LMCACHE_VERSION
 
 ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
@@ -335,65 +335,16 @@ RUN <<EOF
     # Install LMCache
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
-        https://github.com/LMCache/LMCache.git lmcache
-    pushd /tmp/lmcache \
-        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
-        && cat /tmp/lmcache/pyproject.toml \
-        && python -v -m build --no-isolation --wheel \
-        && tree -hs /tmp/lmcache/dist \
-        && mv /tmp/lmcache/dist /workspace
+        https://github.com/LMCache/LMCache.git lmcache-${VLLM_LMCACHE_VERSION}
+    pushd /tmp/lmcache-${VLLM_LMCACHE_VERSION} \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache-${VLLM_LMCACHE_VERSION}/pyproject.toml \
+        && cat /tmp/lmcache-${VLLM_LMCACHE_VERSION}/pyproject.toml \
+        && pip install -v --no-build-isolation /tmp/lmcache-${VLLM_LMCACHE_VERSION}
 
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/* \
         && ccache --clear --clean
-EOF
-
-# Stage Install vLLM
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/dtk/Dockerfile --tag=gpustack/runner:dtk${DTK_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/dtk
-#
-
-FROM ${VLLM_BASE_IMAGE} AS vllm
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow \
-    UV_SKIP_WHEEL_FILENAME_CHECK=1
-
-## Install Torch
-
-ARG VLLM_TORCH_VERSION
-
-ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION}
-
-## Nothing to do, as the Torch has installed in global.
-
-## Install vLLM
-
-ARG VLLM_VERSION
-
-ENV VLLM_VERSION=${VLLM_VERSION}
-
-## Nothing to do, as the vLLM has installed in global.
-
-## Install LMCache
-
-RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
-    # LMCache
-
-    # Install
-    uv pip install --no-build-isolation \
-        /lmcache/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
 EOF
 
 ## Postprocess

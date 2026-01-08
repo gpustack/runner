@@ -864,7 +864,7 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     echo "Building LMCache with the following environment variables:"
     env
 
-    # Install LMCache
+    # Build
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache
