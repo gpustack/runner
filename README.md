@@ -77,9 +77,9 @@ The following table lists the supported accelerated backends and their correspon
 
 ### Hygon DTK
 
-| DTK Version <br/> (Variant) | vLLM             |
-|-----------------------------|------------------|
-| 25.04                       | `0.9.2`, `0.8.5` |
+| DTK Version <br/> (Variant) | vLLM                       |
+|-----------------------------|----------------------------|
+| 25.04                       | `0.11.0`, `0.9.2`, `0.8.5` |
 
 ### MetaX MACA
 
@@ -87,6 +87,13 @@ The following table lists the supported accelerated backends and their correspon
 |------------------------------|----------|
 | 3.2                          | `0.10.2` |
 | 3.0                          | `0.9.1`  |
+
+### MThreads MUSA
+
+| MUSA Version <br/> (Variant) | vLLM    | SGLang  |
+|------------------------------|---------|---------|
+| 4.3.2                        |         | `0.5.2` |
+| 4.1.0                        | `0.9.2` |         |
 
 ### AMD ROCm
 
