@@ -151,6 +151,7 @@ ARG PYTHON_VERSION=...                                 # REQUIRED
 ARG CMAKE_MAX_JOBS=...                                 # REQUIRED
 ARG {OTHERS}                                           # OPTIONAL
 ARG {BACKEND}_VERSION=...                              # REQUIRED
+ARG {BACKEND}_VERSION_EXTRA=...                        # OPTIONAL
 ARG {BACKEND}_ARCHS=...                                # REQUIRED
 ARG {BACKEND}_{OTHERS}=...                             # OPTIONAL
 ARG {SERVICE}_BASE_IMAGE=...                           # REQUIRED

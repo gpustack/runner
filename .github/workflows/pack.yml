@@ -36,6 +36,7 @@ on:
           - cuda
           - dtk
           - maca
+          - musa
           - rocm
       # Control the build stage.
       target:

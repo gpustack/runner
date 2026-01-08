@@ -18,8 +18,16 @@ on:
       # Control how to choice the backend to prune.
       backend:
         description: 'Backend, which accelerated backend to prune'
-        required: false
-        type: string
+        required: true
+        type: choice
+        options:
+          - cann
+          - corex
+          - cuda
+          - dtk
+          - maca
+          - musa
+          - rocm
       backend_version:
         description: 'Backend version, which version of the backend to prune'
         required: false

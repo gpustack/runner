@@ -13,6 +13,7 @@
 # - CMAKE_MAX_JOBS: (PLACEHOLDER) Maximum number of jobs to use for CMake,
 #   if not specified, it will be set automatically based on the number of CPU cores.
 # - COREX_VERSION: Version of Iluvatar CoreX runtime environment to use.
+# - COREX_VERSION_EXTRA: Extra version string for Iluvatar CoreX runtime environment to use.
 # - COREX_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
@@ -20,8 +21,9 @@
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
 ARG COREX_VERSION=4.2.0
+ARG COREX_VERSION_EXTRA
 ARG COREX_ARCHS
-ARG VLLM_BASE_IMAGE=gpustack/runner:corex${COREX_VERSION}-python${PYTHON_VERSION}
+ARG VLLM_BASE_IMAGE=gpustack/runner:corex${COREX_VERSION}${COREX_VERSION_EXTRA}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.8.3
 ARG VLLM_TORCH_VERSION=2.4.1
 
@@ -31,7 +33,7 @@ ARG VLLM_TORCH_VERSION=2.4.1
 #   docker build --progress=plain --platform=linux/amd64 --file=pack/corex/Dockerfile --tag=gpustack/runner:corex${COREX_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/corex
 #
 
-FROM gpustack/runner:corex${COREX_VERSION}-python${PYTHON_VERSION}-vanilla AS runtime
+FROM gpustack/runner:corex${COREX_VERSION}${COREX_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM

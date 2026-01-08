@@ -13,6 +13,7 @@
 # - CMAKE_MAX_JOBS: (PLACEHOLDER) Maximum number of jobs to use for CMake, default is empty,
 #   which means it will use the number of available CPU cores.
 # - MACA_VERSION: Version of MetaX MACA runtime environment to use.
+# - MACA_VERSION_EXTRA: Extra version string for MetaX MUSA runtime environment to use.
 # - MACA_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
@@ -20,18 +21,19 @@
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
 ARG MACA_VERSION=3.2.1
+ARG MACA_VERSION_EXTRA
 ARG MACA_ARCHS
-ARG VLLM_BASE_IMAGE=gpustack/runner:maca${MACA_VERSION}-python${PYTHON_VERSION}
+ARG VLLM_BASE_IMAGE=gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.10.2
 ARG VLLM_TORCH_VERSION=2.6.0
 
 # Stage Bake Runtime
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${DTK_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/maca
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${MACA_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/maca
 #
 
-FROM gpustack/runner:maca${MACA_VERSION}-python${PYTHON_VERSION}-vanilla AS runtime
+FROM gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -257,7 +259,7 @@ ENV MACA_HOME="/opt/maca" \
 # Stage Install vLLM
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${DTK_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/maca
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${MACA_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/maca
 #
 
 FROM ${VLLM_BASE_IMAGE} AS vllm
@@ -294,7 +296,7 @@ RUN <<EOF
 
     # Link if needed
     if [[ ! -d ${MACA_HOME} ]] && [[ -d /opt/maca-${MACA_VERSION} ]]; then
-        ln -vsf /opt/dtk-${MACA_VERSION} ${MACA_HOME}
+        ln -vsf /opt/maca-${MACA_VERSION} ${MACA_HOME}
     fi
 
     # Review
