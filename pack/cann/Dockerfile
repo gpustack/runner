@@ -1274,6 +1274,8 @@ ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:
     TASK_QUEUE_ENABLE=1 \
     CPU_AFFINITY_CONF=1 \
     PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_MOE_PADDING=1 \
     SGLANG_SET_CPU_AFFINITY=1
 
 WORKDIR /

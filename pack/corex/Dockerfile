@@ -254,7 +254,7 @@ ENV COREX_HOME="/usr/local/corex" \
     COREX_VERSION=${COREX_VERSION} \
     COREX_ARCHS=${COREX_ARCHS}
 
-# Stage Install vLLM
+# Stage vLLM
 #
 # Example build command:
 #   docker build --progress=plain --platform=linux/amd64 --file=pack/corex/Dockerfile --tag=gpustack/runner:corex${COREX_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/corex

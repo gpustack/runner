@@ -1777,6 +1777,7 @@ RUN <<EOF
         --package vllm \
         --package torch \
         --package deep-ep \
+        --package deep-gemm \
         --package diffusers \
         --package opencv-python \
         --package ipython \

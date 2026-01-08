@@ -256,7 +256,7 @@ ENV MACA_HOME="/opt/maca" \
     MACA_VERSION=${MACA_VERSION} \
     MACA_ARCHS=${MACA_ARCHS}
 
-# Stage Install vLLM
+# Stage vLLM
 #
 # Example build command:
 #   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${MACA_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/maca
