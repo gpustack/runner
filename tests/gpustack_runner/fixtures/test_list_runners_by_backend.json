@@ -1459,6 +1459,36 @@
     ]
   ],
   [
+    "musa",
+    {
+      "backend": "musa"
+    },
+    [
+      {
+        "backend": "musa",
+        "backend_version": "4.3",
+        "original_backend_version": "4.3.2",
+        "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.7",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:musa4.3-sglang0.5.7",
+        "deprecated": false
+      },
+      {
+        "backend": "musa",
+        "backend_version": "4.1",
+        "original_backend_version": "4.1.0",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.9.2",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:musa4.1-vllm0.9.2",
+        "deprecated": false
+      }
+    ]
+  ],
+  [
     "rocm",
     {
       "backend": "rocm"
