@@ -227,15 +227,15 @@ RUN <<EOF
 build
 cmake<4
 ninja<1.11
-setuptools<80
+setuptools>=77.0.3,<80.0.0
 setuptools-scm
 packaging<25
 wheel==0.45.1
 pybind11<3
 Cython
 psutil
-pipx
-uv
+pipx<=1.8.0
+uv<=0.9.11
 EOT
     pip install -r /tmp/requirements.txt
 

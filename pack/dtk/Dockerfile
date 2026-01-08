@@ -243,8 +243,8 @@ wheel==0.45.1
 pybind11<3
 Cython
 psutil
-pipx
-uv
+pipx<=1.8.0
+uv<=0.9.11
 EOT
     pip install -r /tmp/requirements.txt
 
