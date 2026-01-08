@@ -138,6 +138,30 @@ rules:
       - "MACA_VERSION=3.2.1"
 
   #
+  # MThreads MUSA
+  #
+
+  ## MThreads MUSA 4.1.0
+  ##
+  - backend: "musa"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "MUSA_VERSION=4.1.0"
+  ## MThreads MUSA 4.3.2
+  ##
+  - backend: "musa"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "MUSA_VERSION=4.3.2"
+      - "MUSA_VERSION_EXTRA=-kuae2.1-1201"
+
+  #
   # AMD ROCm
   #
 
