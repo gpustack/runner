@@ -25,6 +25,7 @@ on:
           - corex
           - cuda
           - dtk
+          - hggc
           - maca
           - musa
           - rocm

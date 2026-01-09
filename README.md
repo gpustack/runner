@@ -231,7 +231,7 @@ To add support for a new accelerated backend:
 
 1. Create a new directory under `pack/` named with the new backend.
 2. Add a `Dockerfile` in the new directory following the [Dockerfile Convention](#dockerfile-convention).
-3. Update [pack.yml](.github/workflows/pack.yml) to include the new backend in the build matrix.
+3. Update [pack.yml](.github/workflows/pack.yml), [discard.yml](.github/workflows/discard.yml) and [prune.yml](.github/workflows/prune.yml) to include the new backend in the build matrix.
 4. Update [matrix.yml](pack/matrix.yaml) to include the new backend and its variants.
 5. Update `_RE_DOCKER_IMAGE` in [runner.py](gpustack_runner/runner.py) to recognize the new backend.
 6. [Optional] Update [tests](tests/gpustack_runner) if necessary.

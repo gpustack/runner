@@ -14,34 +14,34 @@
 # - PYTHON_VERSION: Version of Python to use.
 # - CMAKE_MAX_JOBS: (PLACEHOLDER) Maximum number of jobs to use for CMake, default is empty,
 #   which means it will use the number of available CPU cores.
-# - MUSA_VERSION: Version of MThreads MUSA runtime environment to use.
-# - MUSA_VERSION_EXTRA: Extra version string for MThreads MUSA runtime environment to use.
-# - MUSA_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
+# - HGGC_VERSION: Version of T-Head HGGC runtime environment to use.
+# - HGGC_VERSION_EXTRA: Extra version string for T-Head HGGC runtime environment to use.
+# - HGGC_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
 # - VLLM_BASE_IMAGE: Base image for vLLM.
 # - VLLM_VERSION: Version of vLLM to use.
 # - VLLM_TORCH_VERSION: (PLACEHOLDER) Version of Torch for vLLM to use.
 # - SGLANG_BASE_IMAGE: Base image for SGLang.
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_TORCH_VERSION: (PLACEHOLDER) Version of Torch for SGLang to use.
-ARG PYTHON_VERSION=3.10
+ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
-ARG MUSA_VERSION=4.1.0
-ARG MUSA_VERSION_EXTRA
-ARG MUSA_ARCHS
-ARG VLLM_BASE_IMAGE=gpustack/runner:musa${MUSA_VERSION}${MUSA_VERSION_EXTRA}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.9.2
-ARG VLLM_TORCH_VERSION=2.5.0
-ARG SGLANG_BASE_IMAGE=gpustack/runner:musa${MUSA_VERSION}${MUSA_VERSION_EXTRA}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.7
-ARG SGLANG_TORCH_VERSION=2.5.0
+ARG HGGC_VERSION=12.9
+ARG HGGC_VERSION_EXTRA="-20260105.vllm"
+ARG HGGC_ARCHS
+ARG VLLM_BASE_IMAGE=gpustack/runner:hggc${HGGC_VERSION}${HGGC_VERSION_EXTRA}-python${PYTHON_VERSION}
+ARG VLLM_VERSION=0.11.1
+ARG VLLM_TORCH_VERSION=2.8.0
+ARG SGLANG_BASE_IMAGE=gpustack/runner:hggc${HGGC_VERSION}${HGGC_VERSION_EXTRA}-python${PYTHON_VERSION}
+ARG SGLANG_VERSION=0.5.5
+ARG SGLANG_TORCH_VERSION=2.8.0
 
 # Stage Bake Runtime
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/musa/Dockerfile --tag=gpustack/runner:musa${MUSA_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/musa
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/hggc/Dockerfile --tag=gpustack/runner:hggc${HGGC_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/hggc
 #
 
-FROM gpustack/runner:musa${MUSA_VERSION}${MUSA_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
+FROM gpustack/runner:hggc${HGGC_VERSION}${HGGC_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -57,6 +57,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN <<EOF
     # Tools
+
+    sed -i 's/mirrors.cloud.aliyuncs/mirrors.aliyun/g' \
+        /etc/apt/sources.list.d/ubuntu.sources || true
 
     # Refresh
     apt-get update -y && apt-get install -y --no-install-recommends \
@@ -74,7 +77,6 @@ RUN <<EOF
         unzip xz-utils \
         tzdata locales \
         iproute2 iputils-ping ifstat net-tools dnsutils pciutils ipmitool \
-        rdma-core rdmacm-utils infiniband-diags \
         procps sysstat htop \
         tini vim jq bc tree
 
@@ -144,18 +146,17 @@ RUN <<EOF
         zlib1g zlib1g-dev libbz2-dev libffi-dev libgdbm-dev libgdbm-compat-dev \
         openssl libssl-dev libsqlite3-dev lcov libomp-dev \
         libblas-dev liblapack-dev libopenblas-dev libblas3 liblapack3 libhdf5-dev \
-        libxml2 libxslt1-dev libgl1-mesa-glx libgmpxx4ldbl \
+        libxml2 libxslt1-dev libgmpxx4ldbl \
         libncurses5-dev libreadline6-dev libsqlite3-dev \
-        liblzma-dev lzma lzma-dev tk-dev uuid-dev libmpdec-dev \
+        liblzma-dev lzma lzma-dev tk-dev uuid-dev \
         ffmpeg libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
         libnuma1 libnuma-dev libjemalloc-dev \
         libgrpc-dev libgrpc++-dev libprotobuf-dev protobuf-compiler protobuf-compiler-grpc \
         libnl-route-3-200 libnl-3-200 libnl-3-dev  libnl-route-3-dev \
         libibverbs1 libibverbs-dev \
-        librdmacm1 librdmacm-dev \
         libibumad3 libibumad-dev \
         libtool \
-        ibverbs-utils ibverbs-providers libibverbs-dev \
+        ibverbs-providers libibverbs-dev \
         openmpi-bin openmpi-common libopenmpi-dev
 
     # Cleanup
@@ -232,6 +233,15 @@ ENV PIP_NO_CACHE_DIR=1 \
 RUN <<EOF
     # Buildkit
 
+    rm -rf /root/.pip/pip.conf
+    cat <<EOT >/root/.pip/pip.conf
+[global]
+index-url = https://mirrors.aliyun.com/pypi/simple/
+
+[install]
+trusted-host = mirrors.aliyun.com
+EOT
+
     cat <<EOT >/tmp/requirements.txt
 build
 cmake<4
@@ -255,18 +265,18 @@ EOF
 
 ## Declare Environment
 
-ARG MUSA_VERSION
-ARG MUSA_ARCHS
+ARG HGGC_VERSION
+ARG HGGC_ARCHS
 
-ENV MUSA_HOME="/usr/local/musa" \
-    MUSA_PATH="/usr/local/musa" \
-    MUSA_VERSION=${MUSA_VERSION} \
-    MUSA_ARCHS=${MUSA_ARCHS}
+ENV HGGC_HOME="/usr/local/PPU_SDK" \
+    HGGC_PATH="/usr/local/PPU_SDK" \
+    HGGC_VERSION=${HGGC_VERSION} \
+    HGGC_ARCHS=${HGGC_ARCHS}
 
 # Stage vLLM
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/musa/Dockerfile --tag=gpustack/runner:musa{MUSA_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/musa
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/hggc/Dockerfile --tag=gpustack/runner:hggc{HGGC_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/hggc
 #
 
 FROM ${VLLM_BASE_IMAGE} AS vllm
@@ -301,24 +311,16 @@ ENV VLLM_VERSION=${VLLM_VERSION}
 RUN <<EOF
     # Postprocess
 
-    # Link if needed
-    if [[ ! -d ${MUSA_HOME} ]] && [[ -d /usr/local/musa-${MUSA_VERSION} ]]; then
-        ln -vsf /usr/local/musa-${MUSA_VERSION} ${MUSA_HOME}
-    fi
-
     # Review
     uv pip tree \
         --package vllm \
-        --package vllm-musa \
         --package flash-attn \
-        --package torch \
-        --package torch-musa
+        --package torch
 EOF
 
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
-    RAY_EXPERIMENTAL_NOSET_MUSA_VISIBLE_DEVICES=1 \
     MACA_SMALL_PAGESIZE_ENABLE=1 \
     VLLM_USE_V1=0
 
@@ -328,7 +330,7 @@ ENTRYPOINT [ "tini", "--" ]
 # Stage SGLang
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/arm64 --file=pack/musa/Dockerfile --tag=gpustack/runner:musa{MUSA_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/musa
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/hggc/Dockerfile --tag=gpustack/runner:hggc{HGGC_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/hggc
 #
 
 FROM ${SGLANG_BASE_IMAGE} AS sglang
@@ -363,11 +365,6 @@ ENV SGLANG_VERSION=${SGLANG_VERSION}
 RUN <<EOF
     # Postprocess
 
-    # Link if needed
-    if [[ ! -d ${MUSA_HOME} ]] && [[ -d /usr/local/musa-${MUSA_VERSION} ]]; then
-        ln -vsf /usr/local/musa-${MUSA_VERSION} ${MUSA_HOME}
-    fi
-
     # Review
     uv pip tree \
         --package sglang \
@@ -377,7 +374,6 @@ RUN <<EOF
         --package triton \
         --package vllm \
         --package torch \
-        --package torch-musa \
         --package deep-ep \
         --package deep-gemm \
         --package ipython
@@ -386,7 +382,6 @@ EOF
 ## Entrypoint
 
 ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
-    SGLANG_USE_MUSA_FUSED_KERNEL=1 \
     SGLANG_MOE_PADDING=1 \
     SGLANG_SET_CPU_AFFINITY=1
 
