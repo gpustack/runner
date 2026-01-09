@@ -1429,6 +1429,13 @@
     ]
   ],
   [
+    "hggc",
+    {
+      "backend": "hggc"
+    },
+    []
+  ],
+  [
     "maca",
     {
       "backend": "maca"
