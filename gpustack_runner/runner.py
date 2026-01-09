@@ -13,7 +13,7 @@ from dataclasses_json import dataclass_json
 from . import envs
 
 _RE_DOCKER_IMAGE = re.compile(
-    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?runner:(?P<backend>(Host|cann|corex|cuda|dtk|maca|musa|rocm))(?P<backend_version>[XY\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie|sglang))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
+    r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?runner:(?P<backend>(Host|cann|corex|cuda|dtk|hggc|maca|musa|rocm))(?P<backend_version>[XY\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie|sglang))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
 )
 """
 Regex for Docker image parsing,

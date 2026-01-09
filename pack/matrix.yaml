@@ -77,7 +77,7 @@ rules:
   # NVIDIA CUDA
   #
 
-  ## NVIDIA CUDA 12.6.3, using PyTorch +cu128.
+  ## NVIDIA CUDA 12.6.3
   ##
   - backend: "cuda"
     services:
@@ -87,7 +87,7 @@ rules:
       - "CUDA_VERSION=12.6.3"
       - "VOXBOX_TORCH_CUDA_VERSION=12.8.1"
       - "VLLM_TORCH_CUDA_VERSION=12.8.1"
-  ## NVIDIA CUDA 12.8.1, using PyTorch +cu128.
+  ## NVIDIA CUDA 12.8.1
   ##
   - backend: "cuda"
     services:
@@ -98,7 +98,7 @@ rules:
       - "CUDA_VERSION=12.8.1"
       - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.13.0"
       - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.13.0"
-  ## NVIDIA CUDA 12.9.1, using PyTorch +cu129.
+  ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
     services:
@@ -124,6 +124,28 @@ rules:
       - "DTK_VERSION=25.04.2"
 
   #
+  # T-Head HGGC
+  #
+
+  ## T-Head HGGC 12.9
+  - backend: "hggc"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "HGGC_VERSION=12.9"
+      - "HGGC_VERSION_EXTRA=-20260105.vllm"
+  - backend: "hggc"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "HGGC_VERSION=12.9"
+      - "HGGC_VERSION_EXTRA=-20251216.sglang"
+
+  #
   # MateX MACA
   #
 
@@ -141,15 +163,6 @@ rules:
   # MThreads MUSA
   #
 
-  ## MThreads MUSA 4.1.0
-  ##
-  - backend: "musa"
-    services:
-      - "vllm"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "MUSA_VERSION=4.1.0"
   ## MThreads MUSA 4.3.2
   ##
   - backend: "musa"
@@ -160,12 +173,21 @@ rules:
     args:
       - "MUSA_VERSION=4.3.2"
       - "MUSA_VERSION_EXTRA=-kuae2.1-1201"
+  ## MThreads MUSA 4.1.0
+  ##
+  - backend: "musa"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "MUSA_VERSION=4.1.0"
 
   #
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.0.2, using PyTorch +rocm7.0.
+  ## AMD ROCm 7.0.2
   ##
   - backend: "rocm"
     services:
@@ -178,6 +200,7 @@ rules:
       - "VLLM_TORCH_SOURCE=radeon"
       - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.13.0"
       - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.13.0"
+  ## AMD ROCm 6.4.4
   ##
   - backend: "rocm"
     services:
