@@ -127,23 +127,25 @@ rules:
   # T-Head HGGC
   #
 
-  ## T-Head HGGC 12.9
+  ## T-Head HGGC 12.3
+  ##
+  ## Get HGGC version via `VERSION=$(cat /usr/local/PPU_SDK/include/hggc.h | grep HGGC_VERSION | grep define | cut -d' ' -f3); echo "$(( ${VERSION} / 1000 )).$(( ${VERSION} % 1000 / 10 )).$(( ${VERSION} % 10 ))"`
   - backend: "hggc"
     services:
       - "vllm"
     platforms:
       - "linux/amd64"
     args:
-      - "HGGC_VERSION=12.9"
-      - "HGGC_VERSION_EXTRA=-20260105.vllm"
+      - "HGGC_VERSION=12.3"
+      - "HGGC_VERSION_EXTRA=-20260111-vllm"
   - backend: "hggc"
     services:
       - "sglang"
     platforms:
       - "linux/amd64"
     args:
-      - "HGGC_VERSION=12.9"
-      - "HGGC_VERSION_EXTRA=-20251216.sglang"
+      - "HGGC_VERSION=12.3"
+      - "HGGC_VERSION_EXTRA=-20260111-sglang"
 
   #
   # MateX MACA
