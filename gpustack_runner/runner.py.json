@@ -1397,6 +1397,28 @@
     "deprecated": false
   },
   {
+    "backend": "hggc",
+    "backend_version": "12.3",
+    "original_backend_version": "12.3",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.5",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:hggc12.3-sglang0.5.5",
+    "deprecated": false
+  },
+  {
+    "backend": "hggc",
+    "backend_version": "12.3",
+    "original_backend_version": "12.3",
+    "backend_variant": "",
+    "service": "vllm",
+    "service_version": "0.11.1",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:hggc12.3-vllm0.11.1",
+    "deprecated": false
+  },
+  {
     "backend": "maca",
     "backend_version": "3.2",
     "original_backend_version": "3.2.1",
