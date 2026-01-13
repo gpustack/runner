@@ -1,0 +1,58 @@
+[
+  [
+    "1: empty",
+    {
+      "image": ""
+    },
+    ""
+  ],
+  [
+    "2: empty",
+    {
+      "image": "nginx"
+    },
+    "nginx"
+  ],
+  [
+    "nginx",
+    {
+      "image": "nginx",
+      "registry": "quay.io"
+    },
+    "quay.io/library/nginx"
+  ],
+  [
+    "nginxx:latest",
+    {
+      "image": "nginxx:latest",
+      "registry": "quay.io",
+      "repository": "nginx"
+    },
+    "quay.io/library/nginx:latest"
+  ],
+  [
+    "xyz/nginx@sha256:abcdef1234567890",
+    {
+      "image": "xyz/nginx@sha256:abcdef1234567890",
+      "namespace": "lmn"
+    },
+    "lmn/nginx@sha256:abcdef1234567890"
+  ],
+  [
+    "docker.io/library/redis:6.0",
+    {
+      "image": "docker.io/library/redis:6.0",
+      "registry": "myregistry.com/mysuperrepo",
+      "repository": "myredis"
+    },
+    "myregistry.com/mysuperrepo/library/myredis:6.0"
+  ],
+  [
+    "docker.io/abc/xyz/redis:6.0",
+    {
+      "image": "docker.io/abc/xyz/redis:6.0",
+      "namespace": "lmn"
+    },
+    "docker.io/abc/lmn/redis:6.0"
+  ]
+]

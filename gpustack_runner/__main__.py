@@ -11,6 +11,7 @@ from .cmds import (
     CompareImagesSubCommand,
     CopyImagesSubCommand,
     ListImagesSubCommand,
+    LoadImagesSubCommand,
     SaveImagesSubCommand,
 )
 
@@ -35,6 +36,7 @@ def main():
     SaveImagesSubCommand.register(subcommand_parser)
     CopyImagesSubCommand.register(subcommand_parser)
     CompareImagesSubCommand.register(subcommand_parser)
+    LoadImagesSubCommand.register(subcommand_parser)
 
     # Autocomplete
     argcomplete.autocomplete(parser)

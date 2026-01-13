@@ -33,7 +33,6 @@ variables: dict[str, Callable[[], Any]] = {
                 # Compatible with gpustack/gpustack.
                 "GPUSTACK_SYSTEM_DEFAULT_CONTAINER_REGISTRY",
             ],
-            default="docker.io",
         ),
     ),
     "GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE": lambda: trim_str(

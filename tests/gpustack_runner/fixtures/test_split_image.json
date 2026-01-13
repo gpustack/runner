@@ -1,0 +1,43 @@
+[
+  [
+    "nginx:1.29-alpine",
+    {
+      "image": "nginx:1.29-alpine"
+    },
+    [
+      "nginx",
+      "1.29-alpine"
+    ]
+  ],
+  [
+    "website.com/abc/library/nginx",
+    {
+      "image": "website.com/abc/library/nginx"
+    },
+    [
+      "website.com/abc/library/nginx",
+      null
+    ]
+  ],
+  [
+    "2: website.com/abc/library/nginx",
+    {
+      "image": "website.com/abc/library/nginx",
+      "fill_blank_tag": true
+    },
+    [
+      "website.com/abc/library/nginx",
+      "latest"
+    ]
+  ],
+  [
+    "xyz/nginx@sha256:abcdef1234567890",
+    {
+      "image": "xyz/nginx@sha256:abcdef1234567890"
+    },
+    [
+      "xyz/nginx",
+      "sha256:abcdef1234567890"
+    ]
+  ]
+]

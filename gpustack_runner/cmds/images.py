@@ -17,7 +17,14 @@ from typing import TYPE_CHECKING
 import requests
 from dataclasses_json import dataclass_json
 
-from gpustack_runner import BackendRunners, envs, list_backend_runners
+from gpustack_runner import (
+    BackendRunners,
+    envs,
+    list_backend_runners,
+    merge_image,
+    replace_image_with,
+    split_image,
+)
 
 from .__types__ import SubCommand
 
@@ -184,7 +191,7 @@ class ListImagesSubCommand(SubCommand):
 
 class SaveImagesSubCommand(SubCommand):
     """
-    Command to save images to local that matched Docker Archive.
+    Command to save images to local that matched Docker/OCI archive.
     """
 
     backend: str
@@ -203,13 +210,14 @@ class SaveImagesSubCommand(SubCommand):
     source_namespace: str
     source_username: str
     source_password: str
+    archive_format: str
     output: Path
 
     @staticmethod
     def register(parser: _SubParsersAction):
         save_parser = parser.add_parser(
             "save-images",
-            help="Save images as Docker Archive to local path, "
+            help="Save images as OCI/Docker Archive to local path, "
             "powered by https://github.com/containers/skopeo",
         )
 
@@ -321,6 +329,14 @@ class SaveImagesSubCommand(SubCommand):
         )
 
         save_parser.add_argument(
+            "--archive-format",
+            type=str,
+            choices=["oci", "docker"],
+            default="oci",
+            help="Archive format to save (default: oci)",
+        )
+
+        save_parser.add_argument(
             "output",
             nargs=OPTIONAL,
             help="Output directory to save images (default: current working directory)",
@@ -347,16 +363,21 @@ class SaveImagesSubCommand(SubCommand):
         self.source_namespace = args.source_namespace
         self.source_username = args.source_username or os.getenv("SOURCE_USERNAME")
         self.source_password = args.source_password or os.getenv("SOURCE_PASSWORD")
+        self.archive_format = args.archive_format
         self.output = Path(args.output or Path.cwd())
 
         try:
             if not self.output.exists():
                 self.output.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            msg = f"Failed to create output directory '{self.output}'"
-            raise RuntimeError(
-                msg,
-            ) from e
+            msg = (
+                f"Failed to prepare output directory '{self.output}' for saving images"
+            )
+            raise RuntimeError(msg) from e
+
+        if not self.output.is_dir():
+            msg = f"Output path '{self.output}' is not a directory"
+            raise RuntimeError(msg)
 
     def run(self):
         images = list_images(
@@ -384,20 +405,23 @@ class SaveImagesSubCommand(SubCommand):
 
         print("\033[2J\033[H", end="")
 
-        saving_tasks: list[tuple[str, str, Path]] = []
-        print(f"Output Directory: {self.output}")
-        print(f"Image Platform: {self.platform} ")
-        print(f"Saving Images ({len(images)}): ")
+        saving_tasks: list[tuple[str, str, Path, Path]] = []
+        print(
+            f"Output: {self.output} | Archive: {self.archive_format} | Platform: {self.platform}",
+        )
+        print(f"Saving Images ({len(images)}):")
         for task_idx, img in enumerate(images):
             task_name = f"task-{task_idx:0>2d}"
             src_img = f"{self.source}/{img.name}"
-            dst_img_name = f"{img.name}-{self.platform}"
-            dst_img_name = dst_img_name.replace("/", "-").replace(":", "_")
-            dst_file = self.output / f"{dst_img_name}.tar"
+            img_name, img_tag = split_image(src_img, fill_blank_tag=True)
+            dst_file = self.output / img_name / f"{img_tag}.tar"
+            dst_file_relative = dst_file.relative_to(self.output)
             saving_tasks.append(
-                (task_name, src_img, dst_file),
+                (task_name, src_img, dst_file, dst_file_relative),
             )
-            print(f"  - [{task_name}]: {src_img} -> {dst_file.name}")
+            print(
+                f"  - [{task_name}]: {src_img} -> {dst_file_relative}",
+            )
         print()
 
         for i in range(5, 0, -1):
@@ -414,15 +438,15 @@ class SaveImagesSubCommand(SubCommand):
             max_workers=self.max_workers,
             thread_name_prefix="gpustack-saving-image",
         ) as executor:
-            futures: dict[Future, tuple[str, str, Path]] = {}
+            futures: dict[Future, tuple[str, str, Path, Path]] = {}
             failures: list[tuple[str, str, Path, str]] = []
 
             def check_result(f):
-                _task_name, _src_img, _dst_file = futures[f]
+                _task_name, _src_img, _dst_file, _dst_file_relative = futures[f]
                 try:
                     result = f.result()
                     if result.returncode == 0:
-                        print(f"✅ Saved {_src_img} -> {_dst_file.name}")
+                        print(f"✅ Saved {_src_img} -> {_dst_file_relative}")
                         return
                     _save_err = result.stderr
                 except subprocess.CalledProcessError as cpe:
@@ -431,17 +455,18 @@ class SaveImagesSubCommand(SubCommand):
                     return
                 except Exception as e:
                     _save_err = str(e)
-                print(f"❌ Error saving {_src_img} -> {_dst_file.name}")
+                print(f"❌ Error saving {_src_img} -> {_dst_file_relative}")
                 _dst_file.unlink(missing_ok=True)
-                failures.append((_task_name, _src_img, _dst_file, _save_err))
+                failures.append((_task_name, _src_img, _dst_file_relative, _save_err))
 
             override_os, override_arch = self.platform.split("/", maxsplit=1)
 
             # Submit tasks
-            for task_name, src_img, dst_file in saving_tasks:
+            for task_name, src_img, dst_file, dst_file_relative in saving_tasks:
                 if dst_file.exists():
                     print(f"{dst_file.name} already exists, skipping save {src_img}.")
                     continue
+                dst_file.parent.mkdir(parents=True, exist_ok=True, mode=0o744)
 
                 command = [
                     "skopeo",
@@ -464,18 +489,18 @@ class SaveImagesSubCommand(SubCommand):
                 command.extend(
                     [
                         f"docker://{src_img}",
-                        f"docker-archive:{dst_file.name}",
+                        f"{self.archive_format}-archive:{dst_file}:{src_img}",
                     ],
                 )
 
                 future = executor.submit(
                     _execute_command,
                     title=task_name,
-                    description=f"⏳ Saving {src_img} -> {dst_file.name}...",
+                    description=f"⏳ Saving {src_img} -> {dst_file_relative}...",
                     command=command,
                 )
                 future.add_done_callback(check_result)
-                futures[future] = (task_name, src_img, dst_file)
+                futures[future] = (task_name, src_img, dst_file, dst_file_relative)
 
             # Wait
             try:
@@ -490,8 +515,8 @@ class SaveImagesSubCommand(SubCommand):
             print()
             if failures:
                 print(f"⚠️ Error saving {len(failures)} images:")
-                for task_name, src_img, dst_file_path, save_err in failures:
-                    print(f"  - [{task_name}]: {src_img} -> {dst_file_path.name}")
+                for task_name, src_img, dst_file_relative, save_err in failures:
+                    print(f"  - [{task_name}]: {src_img} -> {dst_file_relative}")
                     if save_err:
                         for line in save_err.splitlines():
                             print(f"      {line}")
@@ -645,7 +670,7 @@ class CopyImagesSubCommand(SubCommand):
             "--destination",
             "--dest",
             type=str,
-            help="Destination registry "
+            help="Destination registry (default: docker.io) "
             "(env: GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY, GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_REGISTRY, GPUSTACK_SYSTEM_DEFAULT_CONTAINER_REGISTRY)",
         )
 
@@ -695,7 +720,9 @@ class CopyImagesSubCommand(SubCommand):
         self.source_username = args.source_username or os.getenv("SOURCE_USERNAME")
         self.source_password = args.source_password or os.getenv("SOURCE_PASSWORD")
         self.destination = (
-            args.destination or envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY
+            args.destination
+            or envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY
+            or "docker.io"
         )
         self.destination_namespace = (
             args.destination_namespace
@@ -735,9 +762,7 @@ class CopyImagesSubCommand(SubCommand):
         print("\033[2J\033[H", end="")
 
         copying_tasks: list[tuple[str, str, str]] = []
-        print(f"Destination: {self.destination}")
-        print(f"Source: {self.source} ")
-        print(f"Copying Images ({len(images)}): ")
+        print(f"Copying Images ({len(images)}):")
         for task_idx, img in enumerate(images):
             task_name = f"task-{task_idx:0>2d}"
             src_img = f"{self.source}/{img.name}"
@@ -858,6 +883,250 @@ class CopyImagesSubCommand(SubCommand):
                     print(f"  - [{task_name}]: {src_img} -> {dst_img}:")
                     if copy_err:
                         for line in copy_err.splitlines():
+                            print(f"      {line}")
+                    else:
+                        print("      (no error message)")
+                sys.exit(1)
+
+
+class LoadImagesSubCommand(SubCommand):
+    """
+    Command to load images to local container image storage that matched Docker/OCI archive.
+
+    """
+
+    repository: str
+    platform: str
+    max_workers: int
+    max_retries: int
+    destination: str
+    destination_namespace: str
+    archive_format: str
+    storage: str
+    input: Path
+    archives: list[Path]
+
+    @staticmethod
+    def register(parser: _SubParsersAction):
+        load_parser = parser.add_parser(
+            "load-images",
+            help="Load images from OCI/Docker Archive to local container image storage, "
+            "powered by https://github.com/containers/skopeo",
+        )
+
+        load_parser.add_argument(
+            "--repository",
+            type=str,
+            help="Filter images by repository name",
+        )
+
+        load_parser.add_argument(
+            "--platform",
+            type=str,
+            help="Filter images by platform (default: current platform)",
+            choices=_AVAILABLE_PLATFORMS,
+        )
+
+        load_parser.add_argument(
+            "--max-workers",
+            type=int,
+            default=1,
+            help="Maximum number of worker threads to use for loading images concurrently (default: 1)",
+        )
+
+        load_parser.add_argument(
+            "--max-retries",
+            type=int,
+            default=1,
+            help="Maximum number of retries for loading an image (default: 1)",
+        )
+
+        load_parser.add_argument(
+            "--destination",
+            "--dest",
+            type=str,
+            help="Override destination registry "
+            "(env: GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY, GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_REGISTRY, GPUSTACK_SYSTEM_DEFAULT_CONTAINER_REGISTRY)",
+        )
+
+        load_parser.add_argument(
+            "--destination-namespace",
+            "--dest-namespace",
+            type=str,
+            help="Override namespace in the destination registry "
+            "(env: GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE, GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_NAMESPACE)",
+        )
+
+        load_parser.add_argument(
+            "--archive-format",
+            type=str,
+            choices=["oci", "docker"],
+            default="oci",
+            help="Archive format to load (default: oci)",
+        )
+
+        load_parser.add_argument(
+            "--storage",
+            type=str,
+            choices=["docker", "podman"],
+            default="docker",
+            help="Container image storage to load images into (default: docker)",
+        )
+
+        load_parser.add_argument(
+            "input",
+            nargs=OPTIONAL,
+            help="Input directory to load images (default: current working directory)",
+        )
+
+        load_parser.set_defaults(func=LoadImagesSubCommand)
+
+    def __init__(self, args: Namespace):
+        _ensure_required_tools()
+
+        self.repository = args.repository
+        self.platform = args.platform or _get_current_platform()
+        self.max_workers = args.max_workers
+        self.max_retries = args.max_retries
+        self.destination = (
+            args.destination or envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY
+        )
+        self.destination_namespace = (
+            args.destination_namespace
+            or envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE
+        )
+        self.archive_format = args.archive_format
+        self.storage = args.storage
+        self.input = Path(args.input)
+        self.archives = []
+
+        if not self.input.exists() or not self.input.is_dir():
+            msg = f"Input path '{self.input}' is not a valid directory"
+            raise RuntimeError(msg)
+
+        if self.input.exists() and self.input.is_dir():
+            for archive_path in self.input.rglob("*.tar"):
+                if not archive_path.is_file():
+                    continue
+                if self.repository and archive_path.parent.name != self.repository:
+                    continue
+                self.archives.append(archive_path)
+
+    def run(self):
+        if not self.archives:
+            print("No matching image archives found.")
+            return
+
+        print("\033[2J\033[H", end="")
+
+        loading_tasks: list[tuple[str, Path, Path, str]] = []
+        print(
+            f"Input: {self.input} | Archive: {self.archive_format} | Storage: {self.storage}",
+        )
+        print(f"Loading Images ({len(self.archives)}):")
+        for task_idx, src_file in enumerate(self.archives):
+            task_name = f"task-{task_idx:0>2d}"
+            src_file_relative = src_file.relative_to(self.input)
+            dst_img_repo = str(src_file.parent.relative_to(self.input))
+            dst_img_tag = src_file.name.removesuffix(src_file.suffix)
+            dst_img = replace_image_with(
+                merge_image(dst_img_repo, dst_img_tag),
+                registry=self.destination,
+                namespace=self.destination_namespace,
+            )
+            loading_tasks.append(
+                (task_name, src_file, src_file_relative, dst_img),
+            )
+            print(f"  - [{task_name}]: {src_file_relative} -> {dst_img}")
+        print()
+
+        for i in range(5, 0, -1):
+            if sys.stdout.isatty():
+                print(f"\rStarting in {i} seconds...   ", end="", flush=True)
+            else:
+                print(f"Starting in {i} seconds...")
+            time.sleep(1)
+        if sys.stdout.isatty():
+            print("\rStarting now...              ", end="", flush=True)
+        print()
+
+        with ThreadPoolExecutor(
+            max_workers=self.max_workers,
+            thread_name_prefix="gpustack-loading-image",
+        ) as executor:
+            futures: dict[Future, tuple[str, Path, str]] = {}
+            failures: list[tuple[str, Path, str, str]] = []
+
+            def check_result(f):
+                _task_name, _src_file_relative, _dst_img = futures[f]
+                try:
+                    result = f.result()
+                    if result.returncode == 0:
+                        print(
+                            f"✅ Loaded {_src_file_relative} -> {_dst_img}",
+                        )
+                        return
+                    _load_err = result.stderr
+                except subprocess.CalledProcessError as cpe:
+                    _load_err = cpe.stderr if cpe.stderr else str(cpe)
+                except CancelledError:
+                    return
+                except Exception as e:
+                    _load_err = str(e)
+                print(f"❌ Error loading {_src_file_relative} -> {_dst_img}")
+                failures.append((_task_name, _src_file_relative, _dst_img, _load_err))
+
+            override_os, override_arch = self.platform.split("/", maxsplit=1)
+
+            # Submit tasks
+            for task_name, src_file, src_file_relative, dst_img in loading_tasks:
+                command = [
+                    "skopeo",
+                    "copy",
+                    "--dest-tls-verify=false",
+                    "--retry-times",
+                    str(self.max_retries),
+                    "--override-os",
+                    override_os,
+                    "--override-arch",
+                    override_arch,
+                    f"{self.archive_format}-archive:{src_file}",
+                ]
+                if self.storage == "docker":
+                    command.append(
+                        f"docker-daemon:{dst_img}",
+                    )
+                else:
+                    command.append(
+                        f"containers-storage:{dst_img}",
+                    )
+
+                future = executor.submit(
+                    _execute_command,
+                    title=task_name,
+                    description=f"⏳ Loading {src_file_relative} -> {dst_img}...",
+                    command=command,
+                )
+                future.add_done_callback(check_result)
+                futures[future] = (task_name, src_file_relative, dst_img)
+
+            # Wait
+            try:
+                for _ in as_completed(futures):
+                    pass
+            except Exception:
+                for future in futures:
+                    future.cancel()
+                raise
+
+            # Review
+            print()
+            if failures:
+                print(f"⚠️ Error loading {len(failures)} images:")
+                for task_name, src_file_relative, dst_img, load_err in failures:
+                    print(f"  - [{task_name}]: {src_file_relative} -> {dst_img}:")
+                    if load_err:
+                        for line in load_err.splitlines():
                             print(f"      {line}")
                     else:
                         print("      (no error message)")
@@ -1228,3 +1497,8 @@ def _execute_command(
             args=command,
             returncode=returncode,
         )
+
+
+append_images(
+    "gpustack/runtime:pause",
+)

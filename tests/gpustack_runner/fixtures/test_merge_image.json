@@ -1,0 +1,25 @@
+[
+  [
+    "nginx:1.29-alpine",
+    {
+      "image_name": "nginx",
+      "image_tag": "1.29-alpine"
+    },
+    "nginx:1.29-alpine"
+  ],
+  [
+    "website.com/abc/library/nginx",
+    {
+      "image_name": "website.com/abc/library/nginx"
+    },
+    "website.com/abc/library/nginx"
+  ],
+  [
+    "xyz/nginx@sha256:abcdef1234567890",
+    {
+      "image_name": "xyz/nginx",
+      "image_tag": "sha256:abcdef1234567890"
+    },
+    "xyz/nginx@sha256:abcdef1234567890"
+  ]
+]
