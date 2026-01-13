@@ -9,6 +9,11 @@ if TYPE_CHECKING:
 
     # Global
 
+    GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY: str | None = None
+    """
+    Default container registry for copying images.
+    If not set, it should be "docker.io".
+    """
     GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE: str | None = None
     """
     Namespace for default runner container images.
@@ -19,13 +24,25 @@ if TYPE_CHECKING:
 
 variables: dict[str, Callable[[], Any]] = {
     # Global
+    "GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY": lambda: trim_str(
+        getenvs(
+            [
+                "GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY",
+                # Compatible with gpustack/gpustack_runtime.
+                "GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_REGISTRY",
+                # Compatible with gpustack/gpustack.
+                "GPUSTACK_SYSTEM_DEFAULT_CONTAINER_REGISTRY",
+            ],
+            default="docker.io",
+        ),
+    ),
     "GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE": lambda: trim_str(
         getenvs(
-            keys=[
+            [
                 "GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE",
-                ## Compatible with gpustack/gpustack_runtime.
+                # Compatible with gpustack/gpustack_runtime.
                 "GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_NAMESPACE",
-                ## Legacy compatibility.
+                # Legacy compatibility.
                 "GPUSTACK_RUNNER_DEFAULT_IMAGE_NAMESPACE",
                 "GPUSTACK_RUNTIME_DEPLOY_DEFAULT_IMAGE_NAMESPACE",
             ],

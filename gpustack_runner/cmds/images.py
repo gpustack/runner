@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 from argparse import OPTIONAL
-from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -29,6 +29,7 @@ _AVAILABLE_BACKENDS = [
     "corex",
     "cuda",
     "dtk",
+    "hggc",
     "maca",
     "musa",
     "neuware",
@@ -44,10 +45,6 @@ _AVAILABLE_PLATFORMS = [
     "linux/amd64",
     "linux/arm64",
 ]
-
-
-# Disable overriding default namespace at images operations.
-os.environ["GPUSTACK_RUNNER_DEFAULT_NAMESPACE"] = "gpustack"
 
 
 class ListImagesSubCommand(SubCommand):
@@ -305,10 +302,7 @@ class SaveImagesSubCommand(SubCommand):
             "--source-namespace",
             "--src-namespace",
             type=str,
-            help="Source namespace in the source registry, "
-            "if the namespace has multiple levels, "
-            "please specify the parent levels to --source, "
-            "e.g --source my.registry.com/a/b --source-namespace c",
+            help="Namespace in the source registry",
         )
 
         save_parser.add_argument(
@@ -322,7 +316,8 @@ class SaveImagesSubCommand(SubCommand):
             "--source-password",
             "--src-passwd",
             type=str,
-            help="Password/Token for source registry authentication (env: SOURCE_PASSWORD)",
+            help="Password/Token for source registry authentication "
+            "(env: SOURCE_PASSWORD)",
         )
 
         save_parser.add_argument(
@@ -389,11 +384,20 @@ class SaveImagesSubCommand(SubCommand):
 
         print("\033[2J\033[H", end="")
 
+        saving_tasks: list[tuple[str, str, Path]] = []
         print(f"Output Directory: {self.output}")
         print(f"Image Platform: {self.platform} ")
-        print(f"Total Images ({len(images)}): ")
-        for img in images:
-            print("  -", img.name)
+        print(f"Saving Images ({len(images)}): ")
+        for task_idx, img in enumerate(images):
+            task_name = f"task-{task_idx:0>2d}"
+            src_img = f"{self.source}/{img.name}"
+            dst_img_name = f"{img.name}-{self.platform}"
+            dst_img_name = dst_img_name.replace("/", "-").replace(":", "_")
+            dst_file = self.output / f"{dst_img_name}.tar"
+            saving_tasks.append(
+                (task_name, src_img, dst_file),
+            )
+            print(f"  - [{task_name}]: {src_img} -> {dst_file.name}")
         print()
 
         for i in range(5, 0, -1):
@@ -410,36 +414,33 @@ class SaveImagesSubCommand(SubCommand):
             max_workers=self.max_workers,
             thread_name_prefix="gpustack-saving-image",
         ) as executor:
-            futures = {}
-            failures = []
+            futures: dict[Future, tuple[str, str, Path]] = {}
+            failures: list[tuple[str, str, Path, str]] = []
 
             def check_result(f):
-                img_name, img_output = futures[f]
+                _task_name, _src_img, _dst_file = futures[f]
                 try:
                     result = f.result()
                     if result.returncode == 0:
-                        print(f"✅ Downloaded image '{img_name}'")
+                        print(f"✅ Saved {_src_img} -> {_dst_file.name}")
                         return
-                    img_err = result.stderr
+                    _save_err = result.stderr
                 except subprocess.CalledProcessError as cpe:
-                    img_err = cpe.stderr if cpe.stderr else str(cpe)
+                    _save_err = cpe.stderr if cpe.stderr else str(cpe)
                 except CancelledError:
                     return
                 except Exception as e:
-                    img_err = str(e)
-                print(f"❌ Error downloading image '{img_name}'")
-                failures.append((img_name, img_err))
-                img_output.unlink(missing_ok=True)
+                    _save_err = str(e)
+                print(f"❌ Error saving {_src_img} -> {_dst_file.name}")
+                _dst_file.unlink(missing_ok=True)
+                failures.append((_task_name, _src_img, _dst_file, _save_err))
 
             override_os, override_arch = self.platform.split("/", maxsplit=1)
 
             # Submit tasks
-            for img in images:
-                output_path = (
-                    self.output / f"{img.name.replace('/', '-').replace(':', '_')}.tar"
-                )
-                if output_path.exists():
-                    print(f"Image {img.name} already exists, skipping download.")
+            for task_name, src_img, dst_file in saving_tasks:
+                if dst_file.exists():
+                    print(f"{dst_file.name} already exists, skipping save {src_img}.")
                     continue
 
                 command = [
@@ -462,19 +463,19 @@ class SaveImagesSubCommand(SubCommand):
                     )
                 command.extend(
                     [
-                        f"docker://{self.source}/{img.name}",
-                        f"docker-archive:{output_path}",
+                        f"docker://{src_img}",
+                        f"docker-archive:{dst_file.name}",
                     ],
                 )
 
                 future = executor.submit(
                     _execute_command,
-                    title=img.name,
-                    description=f"⏳ Downloading image '{img.name}'...",
+                    title=task_name,
+                    description=f"⏳ Saving {src_img} -> {dst_file.name}...",
                     command=command,
                 )
                 future.add_done_callback(check_result)
-                futures[future] = (img.name, output_path)
+                futures[future] = (task_name, src_img, dst_file)
 
             # Wait
             try:
@@ -488,11 +489,11 @@ class SaveImagesSubCommand(SubCommand):
             # Review
             print()
             if failures:
-                print(f"⚠️ Error downloading {len(failures)} images:")
-                for name, err in failures:
-                    print(f"  - {name}:")
-                    if err:
-                        for line in err.splitlines():
+                print(f"⚠️ Error saving {len(failures)} images:")
+                for task_name, src_img, dst_file_path, save_err in failures:
+                    print(f"  - [{task_name}]: {src_img} -> {dst_file_path.name}")
+                    if save_err:
+                        for line in save_err.splitlines():
                             print(f"      {line}")
                     else:
                         print("      (no error message)")
@@ -622,10 +623,7 @@ class CopyImagesSubCommand(SubCommand):
             "--source-namespace",
             "--src-namespace",
             type=str,
-            help="Source namespace in the source registry, "
-            "if the namespace has multiple levels, "
-            "please specify the parent levels to --source, "
-            "e.g --source my.registry.com/a/b --source-namespace c",
+            help="Namespace in the source registry",
         )
 
         copy_parser.add_argument(
@@ -639,39 +637,40 @@ class CopyImagesSubCommand(SubCommand):
             "--source-password",
             "--src-passwd",
             type=str,
-            help="Password/Token for source registry authentication (env: SOURCE_PASSWORD)",
+            help="Password/Token for source registry authentication "
+            "(env: SOURCE_PASSWORD)",
         )
 
         copy_parser.add_argument(
             "--destination",
             "--dest",
             type=str,
-            default="docker.io",
-            help="Destination registry (default: docker.io)",
+            help="Destination registry "
+            "(env: GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY, GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_REGISTRY, GPUSTACK_SYSTEM_DEFAULT_CONTAINER_REGISTRY)",
         )
 
         copy_parser.add_argument(
             "--destination-namespace",
             "--dest-namespace",
             type=str,
-            help="Source namespace in the destination registry, "
-            "if the namespace has multiple levels, "
-            "please specify the parent levels to --destination, "
-            "e.g --destination my.registry.com/a/b --destination-namespace c",
+            help="Namespace in the destination registry "
+            "(env: GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE, GPUSTACK_RUNTIME_DEPLOY_DEFAULT_CONTAINER_NAMESPACE)",
         )
 
         copy_parser.add_argument(
             "--destination-username",
             "--dest-user",
             type=str,
-            help="Username for destination registry authentication (env: DESTINATION_USERNAME)",
+            help="Username for destination registry authentication "
+            "(env: DESTINATION_USERNAME)",
         )
 
         copy_parser.add_argument(
             "--destination-password",
             "--dest-passwd",
             type=str,
-            help="Password/Token for destination registry authentication (env: DESTINATION_PASSWORD)",
+            help="Password/Token for destination registry authentication "
+            "(env: DESTINATION_PASSWORD)",
         )
 
         copy_parser.set_defaults(func=CopyImagesSubCommand)
@@ -695,8 +694,13 @@ class CopyImagesSubCommand(SubCommand):
         self.source_namespace = args.source_namespace
         self.source_username = args.source_username or os.getenv("SOURCE_USERNAME")
         self.source_password = args.source_password or os.getenv("SOURCE_PASSWORD")
-        self.destination = args.destination
-        self.destination_namespace = args.destination_namespace
+        self.destination = (
+            args.destination or envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_REGISTRY
+        )
+        self.destination_namespace = (
+            args.destination_namespace
+            or envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE
+        )
         self.destination_username = args.destination_username or os.getenv(
             "DESTINATION_USERNAME",
         )
@@ -730,11 +734,22 @@ class CopyImagesSubCommand(SubCommand):
 
         print("\033[2J\033[H", end="")
 
+        copying_tasks: list[tuple[str, str, str]] = []
         print(f"Destination: {self.destination}")
         print(f"Source: {self.source} ")
-        print(f"Total Images ({len(images)}): ")
-        for img in images:
-            print("  -", img.name)
+        print(f"Copying Images ({len(images)}): ")
+        for task_idx, img in enumerate(images):
+            task_name = f"task-{task_idx:0>2d}"
+            src_img = f"{self.source}/{img.name}"
+            dst_img_name = img.name
+            if self.destination_namespace:
+                _, suffix = img.name.split("/", maxsplit=1)
+                dst_img_name = f"{self.destination_namespace}/{suffix}"
+            dst_img = f"{self.destination}/{dst_img_name}"
+            copying_tasks.append(
+                (task_name, src_img, dst_img),
+            )
+            print(f"  - [{task_name}]: {src_img} -> {dst_img}")
         print()
 
         for i in range(5, 0, -1):
@@ -751,32 +766,32 @@ class CopyImagesSubCommand(SubCommand):
             max_workers=self.max_workers,
             thread_name_prefix="gpustack-copying-image",
         ) as executor:
-            futures = {}
-            failures = []
+            futures: dict[Future, tuple[str, str, str]] = {}
+            failures: list[tuple[str, str, str, str]] = []
 
             def check_result(f):
-                img_name = futures[f]
+                _task_name, _src_img, _dst_img = futures[f]
                 try:
                     result = f.result()
                     if result.returncode == 0:
-                        print(f"✅ Synced image '{img_name}'")
+                        print(f"✅ Copied {_src_img} -> {_dst_img}")
                         return
-                    img_err = result.stderr
+                    _copy_err = result.stderr
                 except subprocess.CalledProcessError as cpe:
-                    img_err = cpe.stderr if cpe.stderr else str(cpe)
+                    _copy_err = cpe.stderr if cpe.stderr else str(cpe)
                 except CancelledError:
                     return
                 except Exception as e:
-                    img_err = str(e)
-                print(f"❌ Error syncing image '{img_name}'")
-                failures.append((img_name, img_err))
+                    _copy_err = str(e)
+                print(f"❌ Error copying {_src_img} -> {_dst_img}")
+                failures.append((_task_name, _src_img, _dst_img, _copy_err))
 
             override_os, override_arch = None, None
             if self.platform:
                 override_os, override_arch = self.platform.split("/", maxsplit=1)
 
             # Submit tasks
-            for img in images:
+            for task_name, src_img, dst_img in copying_tasks:
                 command = [
                     "skopeo",
                     "copy",
@@ -810,29 +825,21 @@ class CopyImagesSubCommand(SubCommand):
                             f"{self.destination_username}:{self.destination_password}",
                         ],
                     )
-                dest_img_name = img.name
-                if self.destination_namespace:
-                    _, suffix = img.name.split("/", maxsplit=1)
-                    dest_img_name = f"{self.destination_namespace}/{suffix}"
                 command.extend(
                     [
-                        f"docker://{self.source}/{img.name}",
-                        f"docker://{self.destination}/{dest_img_name}",
+                        f"docker://{src_img}",
+                        f"docker://{dst_img}",
                     ],
                 )
 
                 future = executor.submit(
                     _execute_command,
-                    title=img.name,
-                    description=(
-                        f"⏳ Syncing image '{img.name}' to '{dest_img_name}'..."
-                        if img.name != dest_img_name
-                        else f"⏳ Syncing image '{img.name}'..."
-                    ),
+                    title=task_name,
+                    description=f"⏳ Copying {src_img} -> {dst_img}...",
                     command=command,
                 )
                 future.add_done_callback(check_result)
-                futures[future] = img.name
+                futures[future] = (task_name, src_img, dst_img)
 
             # Wait
             try:
@@ -846,11 +853,11 @@ class CopyImagesSubCommand(SubCommand):
             # Review
             print()
             if failures:
-                print(f"⚠️ Error syncing {len(failures)} images:")
-                for name, err in failures:
-                    print(f"  - {name}:")
-                    if err:
-                        for line in err.splitlines():
+                print(f"⚠️ Error copying {len(failures)} images:")
+                for task_name, src_img, dst_img, copy_err in failures:
+                    print(f"  - [{task_name}]: {src_img} -> {dst_img}:")
+                    if copy_err:
+                        for line in copy_err.splitlines():
                             print(f"      {line}")
                     else:
                         print("      (no error message)")
@@ -1072,6 +1079,10 @@ def list_images(**kwargs) -> list[PlatformedImage]:
         A list of platformed images.
 
     """
+    # Reset to default for listing images,
+    # in case the env is set to other value.
+    envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE = None
+
     platform = kwargs.pop("platform", None)
     repository = kwargs.pop("repository", None)
 
@@ -1108,9 +1119,6 @@ def list_images(**kwargs) -> list[PlatformedImage]:
             name = img.name
             if not name:
                 continue
-            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE:
-                name = name.replace("gpustack/", f"{namespace}/")
-                img.name = name
             if name not in image_names_index:
                 image_names_index[name] = len(images)
                 images.append(img)
