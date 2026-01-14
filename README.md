@@ -69,7 +69,7 @@ The following table lists the supported accelerated backends and their correspon
 |-----------------------------|----------------------------|
 | 25.04                       | `0.11.0`, `0.9.2`, `0.8.5` |
 
-### THead HGGC
+### T-Head HGGC
 
 | HGGC Version <br/> (Variant) | vLLM     | SGLang  |
 |------------------------------|----------|---------|
@@ -98,7 +98,7 @@ The following table lists the supported accelerated backends and their correspon
     `gfx908 gfx90a gfx942 gfx1030 gfx1100`.
 
 > [!WARNING]
-> - ROCm 7.0 vLLM `0.11.2/0.11.0` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
+> - ROCm 7.0 vLLM `0.11.2` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
     7.0 specific PyTorch build. Although supports ROCm 7.0 in vLLM `0.11.2`, `gfx1150/gfx1151` are not supported yet.
 > - ROCm 6.4 vLLM `0.13.0` supports `gfx903 gfx90a gfx942` only.
 > - ROCm 6.4 SGLang supports `gfx942` only.
