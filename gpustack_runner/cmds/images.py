@@ -464,7 +464,7 @@ class SaveImagesSubCommand(SubCommand):
             # Submit tasks
             for task_name, src_img, dst_file, dst_file_relative in saving_tasks:
                 if dst_file.exists():
-                    print(f"{dst_file.name} already exists, skipping save {src_img}.")
+                    print(f"✅ {dst_file} already exists, skipping save {src_img}.")
                     continue
                 dst_file.parent.mkdir(parents=True, exist_ok=True, mode=0o744)
 
