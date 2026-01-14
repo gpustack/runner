@@ -1348,10 +1348,6 @@ def list_images(**kwargs) -> list[PlatformedImage]:
         A list of platformed images.
 
     """
-    # Reset to default for listing images,
-    # in case the env is set to other value.
-    envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE = None
-
     platform = kwargs.pop("platform", None)
     repository = kwargs.pop("repository", None)
 
@@ -1497,8 +1493,3 @@ def _execute_command(
             args=command,
             returncode=returncode,
         )
-
-
-append_images(
-    "gpustack/runtime:pause",
-)

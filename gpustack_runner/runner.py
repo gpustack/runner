@@ -10,8 +10,6 @@ from typing import Any
 
 from dataclasses_json import dataclass_json
 
-from . import envs
-
 _RE_DOCKER_IMAGE = re.compile(
     r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?runner:(?P<backend>(Host|cann|corex|cuda|dtk|hggc|maca|musa|rocm))(?P<backend_version>[XY\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie|sglang))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
 )
@@ -239,10 +237,6 @@ def list_runners(**kwargs) -> Runners | list[dict]:
         json_list = json.load(f)
         runners = []
         for item in json_list:
-            if namespace := envs.GPUSTACK_RUNNER_DEFAULT_CONTAINER_NAMESPACE:
-                docker_image = item["docker_image"]
-                docker_image = docker_image.replace("gpustack/", f"{namespace}/")
-                item["docker_image"] = docker_image
             runners.append(Runner.from_dict(item))
 
     todict = kwargs.pop("todict", False)
