@@ -976,7 +976,7 @@ class LoadImagesSubCommand(SubCommand):
         load_parser.add_argument(
             "input",
             nargs=OPTIONAL,
-            help="Input directory to load images (default: current working directory)",
+            help="Input directory to load images from (default: current working directory)",
         )
 
         load_parser.set_defaults(func=LoadImagesSubCommand)
