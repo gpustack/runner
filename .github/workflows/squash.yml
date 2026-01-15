@@ -1,0 +1,100 @@
+name: squash
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Image to squash.
+      image:
+        description: 'Docker image to squash, inform of "namespace/name:tag".'
+        required: true
+        type: string
+      # Optional architecture of the image.
+      image-arch:
+        description: 'Architecture of the image if the image is not manifest list, e.g. "amd64", "arm64", etc.'
+        required: false
+        type: string
+      # Choice large GitHub hosted runner.
+      runner_profile:
+        description: 'Runner profile, which profile to use for the runner.'
+        required: false
+        type: choice
+        default: normal
+        options:
+          - normal
+          - 8x
+          - 16x
+          - 32x
+      # Clean the runner before squashing.
+      runner_clean:
+        description: 'Runner clean before squashing, which means to clean the runner before squashing.'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  INPUT_USERNAME: gpustack
+  INPUT_PASSWORD: ${{ secrets.CI_DOCKERHUB_PASSWORD }}
+
+jobs:
+  # Expand the matrix based on the input parameters.
+  expand-matrix:
+    runs-on: ubuntu-22.04
+    outputs:
+      squash_jobs: ${{ steps.expand-matrix.outputs.squash_jobs }}
+      manifest_jobs: ${{ steps.expand-matrix.outputs.manifest_jobs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Expand Matrix
+        id: expand-matrix
+        env:
+          INPUT_IMAGE: ${{ github.event.inputs.image }}
+          INPUT_IMAGE_ARCH: ${{ github.event.inputs.image-arch || '' }}
+          INPUT_RUNNER_PROFILE: ${{ github.event.inputs.runner_profile }}
+        run: ${{ github.workspace }}/pack/squash_expand_matrix.sh
+
+  # Squash the Docker images per OS/ARCH.
+  squash:
+    timeout-minutes: 360
+    needs:
+        - expand-matrix
+    strategy:
+      fail-fast: true
+      matrix:
+        include: ${{ fromJson(needs.expand-matrix.outputs.squash_jobs) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Maximize Docker Build Space
+        if: ${{ github.event.inputs.runner_clean == 'true' || github.event.inputs.runner_profile == 'normal' }}
+        uses: gpustack/.github/.github/actions/maximize-docker-build-space@main
+        with:
+          deep-clean: true
+          root-reserve-mb: 20480
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.INPUT_USERNAME }}
+          password: ${{ env.INPUT_PASSWORD }}
+      - name: Squash
+        env:
+          INPUT_SRC_IMAGE: ${{ matrix.src_image }}
+          INPUT_DST_IMAGE: ${{ matrix.dst_image }}
+          INPUT_PLATFORM: ${{ matrix.platform }}
+        run: ${{ github.workspace }}/pack/squash_image.sh
