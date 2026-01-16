@@ -246,7 +246,7 @@ jobs:
           cache-to: |
             ${{ steps.metadata.outputs.cache_to }}
 
-  # Pack the Docker images into manifest lists.
+  # Merge all architecture images into manifest list.
   manifest:
     if: ${{ github.event.inputs.dry_run == 'false' }}
     needs:

@@ -1,3 +1,7 @@
+# This workflow squashes Docker images' layers to reduce the image size.
+# It supports squashing images for multiple OS/ARCH and creating manifest list.
+# The workflow is triggered manually via GitHub Actions UI.
+
 name: squash
 
 permissions:
@@ -98,3 +102,35 @@ jobs:
           INPUT_DST_IMAGE: ${{ matrix.dst_image }}
           INPUT_PLATFORM: ${{ matrix.platform }}
         run: ${{ github.workspace }}/pack/squash_image.sh
+
+  # Merge all architecture images into manifest list.
+  manifest:
+    needs:
+      - expand-matrix
+      - squash
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.INPUT_USERNAME }}
+          password: ${{ env.INPUT_PASSWORD }}
+      - name: Manifest
+        env:
+          INPUT_MANIFEST_JOBS: ${{ needs.expand-matrix.outputs.manifest_jobs }}
+        run: |
+          #!/usr/bin/env bash
+
+          set -eo pipefail
+
+          # Iterate all items of manifest jobs.
+          for IMAGE in $(echo "${INPUT_MANIFEST_JOBS}" | jq -r 'keys[]'); do
+              PLATFORM_IMAGES="$(echo "${INPUT_MANIFEST_JOBS}" | jq -r \
+                --arg image "${IMAGE}" \
+                '.[$image] | join(" ")')"
+              echo "[INFO]: Creating manifest '${IMAGE}' with '${PLATFORM_IMAGES}'"
+              docker manifest create --amend "${IMAGE}" ${PLATFORM_IMAGES}
+              docker manifest inspect "${IMAGE}"
+              echo "[INFO]: Pushing manifest '${IMAGE}'"
+              docker manifest push --purge "${IMAGE}"
+          done
