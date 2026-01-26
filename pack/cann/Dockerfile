@@ -49,10 +49,10 @@
 # - SGLANG_VLLM_VERSION: Version of vLLM for SGLang to use.
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
-ARG CANN_VERSION=8.3.rc2
+ARG CANN_VERSION=8.5.0
 ARG CANN_ARCHS=910b
 ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG MINDIE_VERSION=2.2.rc1
+ARG MINDIE_VERSION=2.3.0
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG VLLM_VERSION=0.13.0
@@ -153,6 +153,30 @@ RUN <<EOF
     if [[ -f /etc/alternatives/gcov-tool ]]; then update-alternatives --remove-all gcov-tool; fi; update-alternatives --install /usr/bin/gcov-tool gcov-tool /usr/bin/gcov-tool-11 10
     if [[ -f /etc/alternatives/gcc-ranlib ]]; then update-alternatives --remove-all gcc-ranlib; fi; update-alternatives --install /usr/bin/gcc-ranlib gcc-ranlib /usr/bin/gcc-ranlib-11 10
     if [[ -f /etc/alternatives/gfortran ]]; then update-alternatives --remove-all gfortran; fi; update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-11 10
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Install Clang
+
+RUN <<EOF
+    # Clang
+
+    # Install default clang for Ubuntu versions higher than 22.04,
+    # Otherwise, install clang-15.
+    source /etc/os-release
+    if (( $(echo "${VERSION_ID} > 22.04" | bc -l) )); then
+        apt-get install -y --no-install-recommends \
+            clang
+    else
+        apt-get install -y --no-install-recommends \
+            clang-15
+        if [[ -f /etc/alternatives/clang ]]; then update-alternatives --remove-all clang; fi; update-alternatives --install /usr/bin/clang clang /usr/bin/clang-15 20
+        if [[ -f /etc/alternatives/clang++ ]]; then update-alternatives --remove-all clang++; fi; update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-15 20
+    fi
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -294,122 +318,6 @@ ENV CANN_HOME="/usr/local/Ascend" \
     CANN_VERSION=${CANN_VERSION} \
     CANN_ARCHS=${CANN_ARCHS}
 
-RUN <<EOF
-    # CANN Toolkit
-
-    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    ARCH="$(uname -m)"
-    DOWNLOAD_VERSION="$(echo ${CANN_VERSION%\.beta1} | tr '[:lower:]' '[:upper:]')"
-    URL_PREFIX="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${DOWNLOAD_VERSION}"
-    URL_SUFFIX="response-content-type=application/octet-stream"
-
-    if [[ -d "${CANN_HOME}/ascend-toolkit/${DOWNLOAD_VERSION}" ]]; then
-        echo "Skipping CANN Toolkit upgrade for ${DOWNLOAD_VERSION}..."
-        exit 0
-    fi
-
-    # Install dependencies
-    cat <<EOT >/tmp/requirements.txt
-attrs==24.3.0
-numpy==1.26.4
-decorator==5.2.1
-sympy==1.14.0
-cffi==1.17.1
-PyYAML==6.0.2
-pathlib2==2.3.7.post1
-protobuf==6.31.0
-scipy==1.15.3
-requests==2.32.3
-absl-py==2.2.2
-EOT
-    pip install -r /tmp/requirements.txt
-
-    # Install toolkit
-    TOOLKIT_FILE="Ascend-cann-toolkit_${DOWNLOAD_VERSION}_${OS}-${ARCH}.run"
-    TOOLKIT_PATH="/tmp/${TOOLKIT_FILE}"
-    TOOLKIT_URL="${URL_PREFIX}/${TOOLKIT_FILE}?${URL_SUFFIX}"
-    curl -H 'Referer: https://www.hiascend.com/' --retry 3 --retry-connrefused -fL -o "${TOOLKIT_PATH}" "${TOOLKIT_URL}"
-    chmod a+x "${TOOLKIT_PATH}"
-    printf "Y\n" | "${TOOLKIT_PATH}" --install --install-for-all --install-path="${CANN_HOME}"
-
-    # Cleanup
-   rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /var/cache/apt \
-        && rm -rf /var/log/ascend \
-        && rm -rf /var/log/ascend_seclog
-EOF
-
-RUN <<EOF
-    # CANN Kernels
-
-    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    ARCH="$(uname -m)"
-    DOWNLOAD_VERSION="$(echo ${CANN_VERSION%\.beta1} | tr '[:lower:]' '[:upper:]')"
-    URL_PREFIX="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${DOWNLOAD_VERSION}"
-    URL_SUFFIX="response-content-type=application/octet-stream"
-
-    if [[ -d "${CANN_HOME}/ascend-toolkit/${DOWNLOAD_VERSION}" ]]; then
-        echo "Skipping CANN Kernels upgrade for ${DOWNLOAD_VERSION}..."
-        exit 0
-    fi
-
-    # Prepare environment
-    source ${CANN_HOME}/ascend-toolkit/set_env.sh
-
-    # Install kernels
-    KERNELS_FILE="Ascend-cann-kernels-${CANN_ARCHS}_${DOWNLOAD_VERSION}_${OS}-${ARCH}.run"
-    if ! curl -H 'Referer: https://www.hiascend.com/' --retry 3 --retry-connrefused -fsSIL "${URL_PREFIX}/${KERNELS_FILE}?${URL_SUFFIX}" >/dev/null 2>&1; then
-        # Fallback to generic kernels
-        KERNELS_FILE="Ascend-cann-kernels-${CANN_ARCHS}_${DOWNLOAD_VERSION}_${OS}.run"
-    fi
-    KERNELS_PATH="/tmp/${KERNELS_FILE}"
-    KERNELS_URL="${URL_PREFIX}/${KERNELS_FILE}?${URL_SUFFIX}"
-    curl -H 'Referer: https://www.hiascend.com/' --retry 3 --retry-connrefused -fL -o "${KERNELS_PATH}" "${KERNELS_URL}"
-    chmod a+x "${KERNELS_PATH}"
-    printf "Y\n" |"${KERNELS_PATH}" --install --install-for-all --install-path="${CANN_HOME}"
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /var/cache/apt \
-        && rm -rf /var/log/ascend \
-        && rm -rf /var/log/ascend_seclog
-EOF
-
-RUN <<EOF
-    # CANN NNAL
-
-    OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
-    ARCH="$(uname -m)"
-    DOWNLOAD_VERSION="$(echo ${CANN_VERSION%\.beta1} | tr '[:lower:]' '[:upper:]')"
-    URL_PREFIX="https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%20${DOWNLOAD_VERSION}"
-    URL_SUFFIX="response-content-type=application/octet-stream"
-
-    if [[ -d "${CANN_HOME}/ascend-toolkit/${DOWNLOAD_VERSION}" ]] && [[ -d "${CANN_HOME}/nnal" ]]; then
-        echo "Skipping CANN NNAL upgrade for ${DOWNLOAD_VERSION}..."
-        exit 0
-    fi
-
-    # Prepare environment
-    source ${CANN_HOME}/ascend-toolkit/set_env.sh
-
-    # Install NNAL
-    NNAL_FILE="Ascend-cann-nnal_${DOWNLOAD_VERSION}_${OS}-${ARCH}.run"
-    NNAL_PATH="/tmp/${NNAL_FILE}"
-    NNAL_URL="${URL_PREFIX}/${NNAL_FILE}?${URL_SUFFIX}"
-    curl -H 'Referer: https://www.hiascend.com/' --retry 3 --retry-connrefused -fL -o "${NNAL_PATH}" "${NNAL_URL}"
-    chmod a+x "${NNAL_PATH}"
-    printf "Y\n" | "${NNAL_PATH}" --install --install-path="${CANN_HOME}"
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /var/cache/apt \
-        && rm -rf /var/log/ascend_seclog \
-        && rm -rf /var/log/cann_atb_log
-EOF
-
 ## Declare Environment
 
 ENV PATH="${CANN_HOME}/driver/tools:${PATH}"
@@ -453,7 +361,7 @@ EOT
         uv pip install \
             -r /tmp/requirements.txt
     fi
-    uv pip install \
+    uv pip install --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
         torch-npu==${MINDIE_TORCH_VERSION}.*
 
     # Cleanup
@@ -477,29 +385,30 @@ av==16.0.1
 absl-py==2.2.2
 accelerate==0.34.2
 aiohappyeyeballs==2.6.1
-aiohttp==3.12.15
+aiohttp==3.13.3
 aiosignal==1.4.0
 attrs==24.3.0
 certifi==2024.8.30
+cffi==1.17.1
 cloudpickle==3.0.0
 cpm-kernels==1.0.11
 decorator==5.2.1
 easydict==1.13
 einops==0.8.1
 et-xmlfile==1.1.0
-frozenlist==1.7.0
+frozenlist==1.8.0
 fuzzywuzzy==0.18.0
 gevent==24.2.1
 geventhttpclient==2.3.1
 greenlet==3.2.1
 grpcio==1.71.0
 icetk==0.0.4
-idna==2.8
+idna==3.10
 jieba==0.42.1
 Jinja2==3.1.6
-jiter==0.11.0
+jiter==0.12.0
 joblib==1.4.2
-json5==0.12.1
+json5==0.13.0
 jsonlines==4.0.0
 jsonschema==4.23.0
 latex2mathml==3.77.0
@@ -508,30 +417,34 @@ Markdown==3.7
 matplotlib==3.9.2
 mdtex2html==1.3.0
 ml_dtypes==0.5.0
-multidict==6.4.3
+multidict==6.7.0
 nltk==3.9.1
 numba==0.61.2
 numpy==1.26.4
-onnx==1.19.0
-openai==1.108.1
+onnx==1.20.1
+openai==2.15.0
 opencv-python-headless==4.11.0.86
 openpyxl==3.1.5
 orjson==3.11.3
-pandas==2.2.3
+pandas==1.5.3
 pillow==11.2.1
 prettytable==3.11.0
-propcache==0.3.1
-psutil==7.0.0
+propcache==0.4.1
+psutil==6.0.0
 pyarrow==19.0.1
-pydantic_core==2.23.4
-pydantic==2.9.2
+pydantic_core==2.41.5
+pydantic==2.12.5
 python-rapidjson==1.20
 posix_ipc==1.2.0
+PyYAML==6.0.2
+pathlib2==2.3.7.post1
+protobuf==6.33.4
 requests==2.32.3
 rouge-score==0.1.2
 rouge==1.0.1
 sacrebleu==2.4.3
 scipy==1.15.3
+sympy==1.14.0
 text-generation==0.7.0
 thefuzz==0.22.1
 tiktoken==0.7.0
@@ -539,11 +452,12 @@ tornado==6.4.2
 tqdm==4.67.1
 transformers==4.51.3
 safetensors==0.5.3
+scipy==1.15.3
 tritonclient==2.49.0
-typing_extensions==4.13.2
+typing_extensions==4.15.0
 tzdata==2024.2
 urllib3==2.4.0
-yarl==1.20.1
+yarl==1.22.0
 zope.event==5.0
 zope.interface==7.0.3
 EOT
@@ -618,14 +532,9 @@ ASDOPS_LOG_LEVEL=\${ASDOPS_LOG_LEVEL:-ERROR}
 OCK_LOG_LEVEL=\${OCK_LOG_LEVEL:-ERROR}
 LOG_LEVEL=\${LOG_LEVEL:-ERROR}
 TORCH_AIE_LOG_LEVEL=\${TORCH_AIE_LOG_LEVEL:-3}
-PYPI_PACKAGES_INSTALL=\${PYPI_PACKAGES_INSTALL:-}
 
 # Prepare
 #
-if [[ -n "\${PYPI_PACKAGES_INSTALL}" ]]; then
-    echo "Installing extra PyPi packages: \${PYPI_PACKAGES_INSTALL} ..."
-    uv pip install \${PYPI_PACKAGES_INSTALL}
-fi
 export LD_LIBRARY_PATH=${PYTHON_LIB_PREFIX}/lib:${PYTHON_LIB_PREFIX}/lib64:\${LD_LIBRARY_PATH}
 source \${CANN_HOME}/ascend-toolkit/set_env.sh
 source \${CANN_HOME}/nnal/atb/set_env.sh
