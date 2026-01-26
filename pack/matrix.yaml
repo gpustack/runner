@@ -159,7 +159,16 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "MACA_VERSION=3.2.1"
+      - "MACA_VERSION=3.3.0"
+      - "MACA_VERSION_EXTRA=-20260105-vllm"
+  - backend: "maca"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "MACA_VERSION=3.3.0"
+      - "MACA_VERSION_EXTRA=-20251231-sglang"
 
   #
   # MThreads MUSA

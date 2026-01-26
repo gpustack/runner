@@ -20,12 +20,15 @@
 # - VLLM_TORCH_VERSION: (PLACEHOLDER) Version of Torch for vLLM to use.
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
-ARG MACA_VERSION=3.2.1
+ARG MACA_VERSION=3.3.0
 ARG MACA_VERSION_EXTRA
 ARG MACA_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.10.2
-ARG VLLM_TORCH_VERSION=2.6.0
+ARG VLLM_VERSION=0.11.2
+ARG VLLM_TORCH_VERSION=2.8.0
+ARG SGLANG_BASE_IMAGE=gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}
+ARG SGLANG_VERSION=0.5.6
+ARG SGLANG_TORCH_VERSION=2.6.0
 
 # Stage Bake Runtime
 #
@@ -302,6 +305,11 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
+        --package vllm-metax \
+        --package flash-attn \
+        --package flashinfer \
+        --package triton \
+        --package deep_gemm \
         --package torch
 EOF
 
@@ -310,6 +318,65 @@ EOF
 ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
     MACA_SMALL_PAGESIZE_ENABLE=1 \
     VLLM_USE_V1=0
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+# Stage SGLang
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca{MACA_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/maca
+#
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1
+
+## Install Torch
+
+ARG SGLANG_TORCH_VERSION
+
+ENV SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION}
+
+## Nothing to do, as the Torch has installed in global.
+
+## Install SGLang
+
+ARG SGLANG_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION}
+
+## Nothing to do, as the vLLM has installed in global.
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sgl-kernel \
+        --package flash-attn \
+        --package flashinfer \
+        --package triton \
+        --package torch \
+        --package deep-gemm \
+        --package ipython
+EOF
+
+## Entrypoint
+
+ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_SET_CPU_AFFINITY=1
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
