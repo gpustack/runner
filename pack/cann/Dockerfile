@@ -677,7 +677,7 @@ ARG VLLM_OMNI_COMMIT
 
 ENV VLLM_OMNI_COMMIT=${VLLM_OMNI_COMMIT}
 
-RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
+RUN <<EOF
     # Omni
 
     if [[ -z "${VLLM_OMNI_COMMIT}" ]]; then
