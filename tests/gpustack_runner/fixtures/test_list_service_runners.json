@@ -23,8 +23,8 @@
                 "backend": "cann",
                 "versions": [
                   {
-                    "version": "8.3",
-                    "original_version": "8.3.rc2",
+                    "version": "8.5",
+                    "original_version": "8.5.0",
                     "variants": [
                       {
                         "variant": "910b",
@@ -32,11 +32,11 @@
                         "platforms": [
                           {
                             "platform": "linux/amd64",
-                            "docker_image": "gpustack/runner:cann8.3-910b-vllm0.13.0"
+                            "docker_image": "gpustack/runner:cann8.5-910b-vllm0.13.0"
                           },
                           {
                             "platform": "linux/arm64",
-                            "docker_image": "gpustack/runner:cann8.3-910b-vllm0.13.0"
+                            "docker_image": "gpustack/runner:cann8.5-910b-vllm0.13.0"
                           }
                         ]
                       },
@@ -46,11 +46,11 @@
                         "platforms": [
                           {
                             "platform": "linux/amd64",
-                            "docker_image": "gpustack/runner:cann8.3-a3-vllm0.13.0"
+                            "docker_image": "gpustack/runner:cann8.5-a3-vllm0.13.0"
                           },
                           {
                             "platform": "linux/arm64",
-                            "docker_image": "gpustack/runner:cann8.3-a3-vllm0.13.0"
+                            "docker_image": "gpustack/runner:cann8.5-a3-vllm0.13.0"
                           }
                         ]
                       }
