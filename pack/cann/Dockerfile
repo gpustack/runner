@@ -59,7 +59,7 @@ ARG VLLM_VERSION=0.13.0
 ARG VLLM_ASCEND_VERSION
 ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
-ARG VLLM_OMNI_COMMIT
+ARG VLLM_OMNI_COMMIT=a578a37
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.7
 ARG SGLANG_TORCH_VERSION=2.8.0
@@ -835,10 +835,8 @@ RUN <<EOF
     uv pip install --verbose --extra-index-url https://download.pytorch.org/whl/cpu/ \
         /tmp/vllm-${VLLM_VERSION}
 
-    # Uninstall Triton and install Triton Ascend
-    uv pip uninstall triton || true
-    uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend/triton_ascend-3.2.0.dev2025112116-cp311-cp311-manylinux_2_27_$(uname -m).manylinux_2_28_$(uname -m).whl
+    # Uninstall Triton and install Triton Ascend later with vLLM Ascend
+    uv pip uninstall triton
 
     # Install vLLM Ascend
     git -C /tmp clone --recursive --shallow-submodules \
