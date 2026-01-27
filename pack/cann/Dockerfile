@@ -61,10 +61,10 @@ ARG VLLM_TORCH_VERSION=2.8.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG VLLM_OMNI_COMMIT=a578a37
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.7
+ARG SGLANG_VERSION=0.5.8
 ARG SGLANG_TORCH_VERSION=2.8.0
-ARG SGLANG_KERNEL_VERSION=2025.12.31
-ARG SGLANG_VLLM_VERSION=0.9.2
+ARG SGLANG_KERNEL_VERSION=2026.01.21
+ARG SGLANG_VLLM_VERSION=0.10.2
 
 #
 # Stage Bake Runtime
@@ -971,25 +971,6 @@ ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow \
     UV_SKIP_WHEEL_FILENAME_CHECK=1
 
-## Install Tools
-
-RUN <<EOF
-    # Tools
-
-    # Install
-    apt-get update -y && apt-get install -y --no-install-recommends \
-        libgrpc-dev \
-        libgrpc++-dev \
-        libprotobuf-dev \
-        protobuf-compiler \
-        protobuf-compiler-grpc
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && rm -rf /var/cache/apt
-EOF
-
 ## Install Torch
 
 ARG SGLANG_TORCH_VERSION
@@ -1012,10 +993,10 @@ EOT
         uv pip install \
             -r /tmp/requirements.txt
     fi
-    uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/torch_npu/torch_npu-2.8.0.post2.dev20251224-cp311-cp311-manylinux_2_28_$(uname -m).whl
+    uv pip install --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
+        torch-npu==${SGLANG_TORCH_VERSION}.*
     uv pip install \
-        numpy==1.26.4 scipy==1.13.1
+        numpy spicy
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1061,17 +1042,15 @@ RUN <<EOF
 
     # Install Dependencies
     cat <<EOT >/tmp/requirements.txt
-attrs==24.2.0
-decorator==5.1.1
-psutil==6.0.0
-pytest==8.3.2
-pytest-xdist==3.6.1
-pyyaml
+attrs==25.4.0
+decorator==5.2.1
+psutil==7.1.3
+pyyaml==6.0.3
+memfabric-hybrid==1.0.0
+triton-ascend==3.2.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
-    uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/sglang/triton_ascend/triton_ascend-3.2.0.dev2025112116-cp311-cp311-manylinux_2_27_$(uname -m).manylinux_2_28_$(uname -m).whl
 
     # Build and Install SGLang
     git -C /tmp clone --recursive --shallow-submodules \
@@ -1139,10 +1118,6 @@ EOF
 
 RUN <<EOF
     # Dependencies
-
-    # Install Custom Ops
-    UV_SKIP_WHEEL_FILENAME_CHECK=1 uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/ops/custom_ops-2.0.${CANN_ARCHS}-cp311-cp311-linux_$(uname -m).whl
 
     # Install BiSheng
     BISHENG_FILE="Ascend-BiSheng-toolkit_aarch64_20251121.run"

@@ -25,14 +25,14 @@ rules:
     args:
       - "CANN_VERSION=8.5.0"
       - "CANN_ARCHS=a3"
-#  - backend: "cann"
-#    services:
-#      - "sglang"
-#    platforms:
-#      - "linux/arm64"
-#    args:
-#      - "CANN_VERSION=8.3.rc2"
-#      - "CANN_ARCHS=a3"
+  - backend: "cann"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/arm64"
+    args:
+      - "CANN_VERSION=8.5.0"
+      - "CANN_ARCHS=a3"
   ## Ascend CANN 8.5.0, using CANN Kernel for 910B.
   ##
   - backend: "cann"
@@ -42,14 +42,14 @@ rules:
     args:
       - "CANN_VERSION=8.5.0"
       - "CANN_ARCHS=910b"
-#  - backend: "cann"
-#    services:
-#      - "sglang"
-#    platforms:
-#      - "linux/arm64"
-#    args:
-#      - "CANN_VERSION=8.3.rc2"
-#      - "CANN_ARCHS=910b"
+  - backend: "cann"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/arm64"
+    args:
+      - "CANN_VERSION=8.5.0"
+      - "CANN_ARCHS=910b"
   ## Ascend CANN 8.5.0, using CANN Kernel for 310P.
   ##
   - backend: "cann"
