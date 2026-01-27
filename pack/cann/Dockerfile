@@ -898,10 +898,15 @@ RUN <<EOF
 accelerate
 hf_transfer
 modelscope
+# ray extras
 ray[client]>=2.47.1,<=2.48.0
 ray[default]>=2.47.1,<=2.48.0
 protobuf>3.20.0
 grpcio==1.71.0
+# audio extras
+librosa
+soundfile
+mistral_common[audio]
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -1118,6 +1123,16 @@ EOF
 
 RUN <<EOF
     # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+# audio extras
+librosa
+soundfile
+mistral_common[audio]
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
 
     # Install BiSheng
     BISHENG_FILE="Ascend-BiSheng-toolkit_aarch64_20251121.run"
