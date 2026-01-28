@@ -59,7 +59,7 @@ ARG VLLM_VERSION=0.14.1
 ARG VLLM_ASCEND_VERSION=0.14.0rc1
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
-ARG VLLM_OMNI_COMMIT=77ff875
+ARG VLLM_OMNI_COMMIT=e8aa32b
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.8
 ARG SGLANG_TORCH_VERSION=2.8.0
@@ -706,7 +706,7 @@ RUN <<EOF
         && git checkout ${VLLM_OMNI_COMMIT} \
         && git submodule update --init --recursive
     pushd /tmp/vllm_omni \
-        && sed -i "s/\"fa3-fwd.*\"/d" /tmp/vllm_omni/pyproject.toml \
+        && sed -i "/\"fa3-fwd.*\"/d" /tmp/vllm_omni/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm_omni/dist \
         && mv /tmp/vllm_omni/dist /workspace
