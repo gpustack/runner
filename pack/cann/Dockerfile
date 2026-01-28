@@ -949,6 +949,16 @@ EOT
         --package triton-ascend
 EOF
 
+## Patch
+
+RUN --mount=type=bind,target=/workspace,rw <<EOF
+    # Patch
+
+    tree -hs /workspace/patches
+    pushd $(pip show vllm | grep Location: | cut -d" " -f 2) \
+        && patch -p1 < /workspace/patches/vllm_*.patch
+EOF
+
 ## Entrypoint
 
 ENV PATH="/usr/local/Ascend/ascend-toolkit/latest/bisheng_toolkit/bishengir/bin:${PATH}" \

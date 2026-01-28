@@ -1,0 +1,41 @@
+diff --git a/vllm/utils/network_utils.py b/vllm/utils/network_utils.py
+index 7d01533cb..311ed44df 100644
+--- a/vllm/utils/network_utils.py
++++ b/vllm/utils/network_utils.py
+@@ -147,6 +147,9 @@ def get_open_zmq_inproc_path() -> str:
+     return f"inproc://{uuid4()}"
+ 
+ 
++_next_port: int | None = None
++
++
+ def get_open_port() -> int:
+     """
+     Get an open port for the vLLM process to listen on.
+@@ -163,7 +166,7 @@ def get_open_port() -> int:
+             candidate_port = _get_open_port()
+             if candidate_port not in reserved_port_range:
+                 return candidate_port
+-    return _get_open_port()
++    return _get_open_port(_next_port)
+ 
+ 
+ def get_open_ports_list(count: int = 5) -> list[int]:
+@@ -174,13 +177,15 @@ def get_open_ports_list(count: int = 5) -> list[int]:
+     return list(ports)
+ 
+ 
+-def _get_open_port() -> int:
+-    port = envs.VLLM_PORT
++def _get_open_port(start: int | None = None) -> int:
++    port = start or envs.VLLM_PORT
+     if port is not None:
++        global _next_port
+         while True:
+             try:
+                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                     s.bind(("", port))
++                    _next_port = port + 1
+                     return port
+             except OSError:
+                 port += 1  # Increment port number if already in use
