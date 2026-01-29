@@ -802,6 +802,7 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
         && git checkout ${VLLM_OMNI_COMMIT} \
         && git submodule update --init --recursive
     pushd /tmp/vllm_omni \
+        && sed -i "/\"fa3-fwd.*\"/d" /tmp/vllm_omni/pyproject.toml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm_omni/dist \
         && mv /tmp/vllm_omni/dist /workspace
