@@ -63,7 +63,7 @@ ARG VLLM_OMNI_COMMIT=e8aa32b
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.8
 ARG SGLANG_TORCH_VERSION=2.8.0
-ARG SGLANG_KERNEL_VERSION=2026.01.21
+ARG SGLANG_KERNEL_VERSION=2026.01.28
 ARG SGLANG_VLLM_VERSION=0.10.2
 
 #
@@ -1080,6 +1080,7 @@ EOT
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch ${SGLANG_KERNEL_VERSION} --single-branch \
         https://github.com/sgl-project/sgl-kernel-npu.git sgl-kernel-npu
+    unset ASCEND_HOME_PATH
     pushd /tmp/sgl-kernel-npu \
         && ./build.sh \
         && tree -hs /tmp/sgl-kernel-npu/output \
