@@ -86,7 +86,7 @@ ARG VLLM_LMCACHE_VERSION=0.3.12
 ARG VLLM_MOONCAKE_VERSION=0.3.8.post1
 ARG VLLM_OMNI_COMMIT=e8aa32b
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.7
+ARG SGLANG_VERSION=0.5.8
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
 
 # Stage Bake Runtime
@@ -1462,7 +1462,7 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
     if [[ "${TARGETARCH}" == "amd64" ]]; then
         # Install SGLang Diffusion Extension
         uv pip install \
-            "$(ls /sglang/workspace/sglang-*.whl)[diffusion]"
+            "$(ls /sglang/workspace/sglang-*.whl)[diffusion_hip]"
     fi
     uv pip install \
         "$(ls /sglang/workspace/sgl_kernel-*.whl)"

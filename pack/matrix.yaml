@@ -78,6 +78,27 @@ rules:
   # NVIDIA CUDA
   #
 
+  ## NVIDIA CUDA 12.9.1
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.9.1"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.14.1"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.14.1"
+  ## NVIDIA CUDA 12.8.1
+  ##
+  - backend: "cuda"
+    services:
+      - "voxbox"
+      - "vllm"
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.8.1"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.14.1"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.14.1"
   ## NVIDIA CUDA 12.6.3
   ##
   - backend: "cuda"
@@ -88,27 +109,6 @@ rules:
       - "CUDA_VERSION=12.6.3"
       - "VOXBOX_TORCH_CUDA_VERSION=12.8.1"
       - "VLLM_TORCH_CUDA_VERSION=12.8.1"
-  ## NVIDIA CUDA 12.8.1
-  ##
-  - backend: "cuda"
-    services:
-      - "voxbox"
-      - "vllm"
-      - "sglang"
-    args:
-      - "CUDA_VERSION=12.8.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.13.0"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.13.0"
-  ## NVIDIA CUDA 12.9.1
-  ##
-  - backend: "cuda"
-    services:
-      - "vllm"
-      - "sglang"
-    args:
-      - "CUDA_VERSION=12.9.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.13.0"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.13.0"
 
   #
   # Hygon DTK
@@ -152,7 +152,7 @@ rules:
   # MateX MACA
   #
 
-  ## MateX MACA 3.2.1
+  ## MateX MACA 3.3.0
   ##
   - backend: "maca"
     services:
@@ -210,8 +210,8 @@ rules:
     args:
       - "ROCM_VERSION=7.0.2"
       - "VLLM_TORCH_SOURCE=radeon"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.13.0"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.13.0"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.14.1"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.14.1"
   ## AMD ROCm 6.4.4
   ##
   - backend: "rocm"
@@ -223,5 +223,5 @@ rules:
     args:
       - "ROCM_VERSION=6.4.4"
       - "VLLM_AITER_VERSION=0.1.7.post2"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.13.0"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.13.0"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.14.1"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm6.4-vllm0.14.1"
