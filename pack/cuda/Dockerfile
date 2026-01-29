@@ -998,11 +998,12 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     echo "Building vLLM with the following environment variables:"
     env
 
-    # Install
+    # Build
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
     pushd /tmp/vllm \
+        && uv pip install protobuf>=6.33.2 grpcio-tools>=1.76.0 \
         && VLLM_TARGET_DEVICE="cuda" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
