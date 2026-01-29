@@ -1232,6 +1232,16 @@ RUN <<EOF
         --package mooncake-transfer-engine
 EOF
 
+## Patch
+
+RUN --mount=type=bind,target=/workspace,rw <<EOF
+    # Patch
+
+    tree -hs /workspace/patches
+    pushd $(pip show vllm | grep Location: | cut -d" " -f 2) \
+        && patch -p1 < /workspace/patches/vllm_*.patch
+EOF
+
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
