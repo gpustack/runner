@@ -34,4 +34,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2025-12-24: Apply ATB config patches to MindIE 2.2.rc1 for CANN released images.
 - [ ] 2026-01-05: Install `vllm-omni` packages for vLLM 0.12.0 of CUDA/ROCm/CANN released images.
 - [x] 2026-01-29: Apply DP deployment patches to vLLM 0.13.0 for CUDA/ROCm released images.
-- [ ] 2026-01-29: Reinstall SGLang Kernel for SGLang 0.5.7 of CANN released images.
+- [x] 2026-01-29: Reinstall SGLang Kernel for SGLang 0.5.7 of CANN released images.
