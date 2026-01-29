@@ -81,7 +81,7 @@ ARG VLLM_TORCH_SOURCE=pytorch
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_TRITON_COMMIT=57c693b6
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_AITER_VERSION=0.1.9.post1
+ARG VLLM_AITER_VERSION=0.1.8
 ARG VLLM_LMCACHE_VERSION=0.3.12
 ARG VLLM_MOONCAKE_VERSION=0.3.8.post1
 ARG VLLM_OMNI_COMMIT=e8aa32b
@@ -700,7 +700,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
         if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
             VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
-            if (( $(echo "${VL_MAJOR}.${VL_MINOR} == 0.13" | bc -l) )); then
+            if (( $(echo "${VL_MAJOR}.${VL_MINOR} >= 0.13" | bc -l) )); then
                 # TODO(thxCode): Temporarily remove gfx1030 for vLLM ROCm build due to build error in ROCm 6.4.4.
                 # #15 134.9 /tmp/vllm/build/temp.linux-x86_64-cpython-312/csrc/sampler.hip:564:63: error: local memory (66032) exceeds limit (65536) in 'void vllm::topKPerRowDecode<1024, true, false, true>(float const*, int const*, int*, int, int, int, int, float*, int, int const*)'
                 # ##15 134.9   564 | static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
