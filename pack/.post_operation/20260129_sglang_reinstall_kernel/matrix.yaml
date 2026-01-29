@@ -1,0 +1,28 @@
+rules:
+
+  #
+  # Ascend CANN
+  #
+
+  ## Packed Ascend CANN 8.3, using CANN Kernel for A3.
+  ##
+  - backend: "cann"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/arm64"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=a3"
+      - "SGLANG_VERSION=0.5.7"
+  ## Packed Ascend CANN 8.3, using CANN Kernel for 910B.
+  ##
+  - backend: "cann"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/arm64"
+    args:
+      - "CANN_VERSION=8.3"
+      - "CANN_ARCHS=910b"
+      - "SGLANG_VERSION=0.5.7"
