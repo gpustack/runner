@@ -724,6 +724,11 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
     pushd /tmp/vllm \
+        && sed -i "s/\"torch ==.*\"/\"torch\"/g" /tmp/vllm/pyproject.toml \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"torchvision==.*\"/\"torchvision\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && sed -i "s/\"triton==.*\"/\"triton\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && uv pip install protobuf>=6.33.2 grpcio-tools>=1.76.0 \
         && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
