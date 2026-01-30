@@ -1352,6 +1352,7 @@ RUN <<EOF
          /tmp/sglang/python/sglang/srt/layers/moe/fused_moe_triton/configs/ \
          -type f -name '*MI300X*' | xargs -I {} sh -c 'vf_config=$(echo "$1" | sed "s/MI300X/MI300X_VF/"); cp "$1" "$vf_config"' -- {}
     pushd /tmp/sglang/python \
+        && uv pip install grpcio-tools==1.75.1 \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
         && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/python/pyproject.toml \

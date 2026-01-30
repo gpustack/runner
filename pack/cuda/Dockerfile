@@ -1637,8 +1637,9 @@ RUN <<EOF
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang
 
-    # Build SGLang
+    # Build
     pushd /tmp/sglang/python \
+        && uv pip install grpcio-tools==1.75.1 \
         && cp /tmp/sglang/README.md /tmp/sglang/LICENSE . \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/sglang/python/pyproject.toml \
         && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/sglang/python/pyproject.toml \
