@@ -1353,6 +1353,10 @@ RUN --mount=type=bind,from=vllm-build-omni,source=/,target=/omni,rw <<EOF
         exit 0
     fi
 
+    # Install
+    uv pip install --no-build-isolation \
+        /omni/workspace/*.whl
+
     # Dependencies
     cat <<EOT >/tmp/requirements.txt
 onnxruntime
@@ -1360,10 +1364,6 @@ sox
 EOT
     uv pip install \
         -r /tmp/requirements.txt
-
-    # Install
-    uv pip install --no-build-isolation \
-        /omni/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
