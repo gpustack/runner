@@ -630,7 +630,7 @@
         "service_version": "0.9.1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.1",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "cann",
@@ -641,7 +641,7 @@
         "service_version": "0.9.1",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.1",
-        "deprecated": false
+        "deprecated": true
       },
       {
         "backend": "cann",
