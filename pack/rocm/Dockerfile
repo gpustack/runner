@@ -84,7 +84,7 @@ ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_AITER_VERSION=0.1.8
 ARG VLLM_LMCACHE_VERSION=0.3.12
 ARG VLLM_MOONCAKE_VERSION=0.3.8.post1
-ARG VLLM_OMNI_COMMIT=e8aa32b
+ARG VLLM_OMNI_COMMIT=2c294a7
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.8
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -1075,6 +1075,14 @@ RUN --mount=type=bind,from=vllm-build-omni,source=/,target=/omni,rw <<EOF
         exit 0
     fi
 
+    # Dependencies
+    cat <<EOT >/tmp/requirements.txt
+onnxruntime-rocm
+sox
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
     # Install
     uv pip install --no-build-isolation \
         /omni/workspace/*.whl
@@ -1236,7 +1244,11 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd $(pip show vllm | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/vllm_*.patch
+        && patch -p1 < /workspace/patches/vllm/*.patch
+    if pip show vllm_omni > /dev/null 2>&1; then \
+        pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
+            && patch -p1 < /workspace/patches/vllm_omni/*.patch; \
+    fi
 EOF
 
 ## Entrypoint
@@ -1537,7 +1549,7 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd $(pip show sglang | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/sglang_*.patch
+        && patch -p1 < /workspace/patches/sglang/*.patch
 EOF
 
 ## Entrypoint

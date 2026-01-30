@@ -1,0 +1,13 @@
+diff --git a/vllm_omni/patch.py b/vllm_omni/patch.py
+index 687ff51..6b67924 100644
+--- a/vllm_omni/patch.py
++++ b/vllm_omni/patch.py
+@@ -19,6 +19,8 @@ for module_name, module in sys.modules.items():
+     # only do patch on module of vllm, pass others
+     if "vllm" not in module_name:
+         continue
++    if "--omni" not in sys.argv:
++        continue
+     if hasattr(module, "EngineCoreOutput") and module.EngineCoreOutput == _OriginalEngineCoreOutput:
+         module.EngineCoreOutput = OmniEngineCoreOutput
+     if hasattr(module, "EngineCoreOutputs") and module.EngineCoreOutputs == _OriginalEngineCoreOutputs:

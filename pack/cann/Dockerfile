@@ -59,7 +59,7 @@ ARG VLLM_VERSION=0.14.1
 ARG VLLM_ASCEND_VERSION=0.14.0rc1
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
-ARG VLLM_OMNI_COMMIT=e8aa32b
+ARG VLLM_OMNI_COMMIT=2c294a7
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.8
 ARG SGLANG_TORCH_VERSION=2.8.0
@@ -861,6 +861,14 @@ RUN --mount=type=bind,from=vllm-build-omni,source=/,target=/omni,rw <<EOF
         exit 0
     fi
 
+    # Dependencies
+    cat <<EOT >/tmp/requirements.txt
+onnxruntime-cann
+sox
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
     # Install
     uv pip install --no-build-isolation \
         /omni/workspace/*.whl
@@ -956,7 +964,11 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd $(pip show vllm | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/vllm_*.patch
+        && patch -p1 < /workspace/patches/vllm/*.patch
+    if pip show vllm_omni > /dev/null 2>&1; then \
+        pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
+            && patch -p1 < /workspace/patches/vllm_omni/*.patch; \
+    fi
 EOF
 
 ## Entrypoint
