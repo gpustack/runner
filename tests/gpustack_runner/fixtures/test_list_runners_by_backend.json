@@ -1882,6 +1882,17 @@
         "original_backend_version": "6.4.4",
         "backend_variant": "",
         "service": "sglang",
+        "service_version": "0.5.8",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:rocm6.4-sglang0.5.8",
+        "deprecated": false
+      },
+      {
+        "backend": "rocm",
+        "backend_version": "6.4",
+        "original_backend_version": "6.4.4",
+        "backend_variant": "",
+        "service": "sglang",
         "service_version": "0.5.7",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:rocm6.4-sglang0.5.7",
