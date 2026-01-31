@@ -74,12 +74,13 @@ ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.14.1
+ARG VLLM_VERSION=0.15.0
 ARG VLLM_TORCH_VERSION=2.9.1
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_TRITON_COMMIT=57c693b6
+ARG VLLM_MORI_COMMIT=c0108eb
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_AITER_VERSION=0.1.8
 ARG VLLM_LMCACHE_VERSION=0.3.12
@@ -489,7 +490,8 @@ EOT
     git -C /tmp clone --recursive --shallow-submodules \
         https://github.com/ROCm/triton.git triton \
         && pushd /tmp/triton \
-        && git checkout ${VLLM_TRITON_COMMIT}
+        && git checkout ${VLLM_TRITON_COMMIT} \
+        && git submodule update --init --recursive
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -656,6 +658,75 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
       && python setup.py bdist_wheel --dist-dir=dist \
       && tree -hs /tmp/aiter/dist \
       && mv /tmp/aiter/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+# Stage vLLM Build MORI
+#
+# Example build command:
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/rocm/Dockerfile --tag=gpustack/runner:rocm${ROCM_VERSION%.*}-vllm-build-epkernels-mori-linux-amd64 --target=vllm-build-epkernels-mori pack/rocm
+#
+
+FROM vllm-build AS vllm-build-epkernels-mori
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build MORI
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_MORI_COMMIT
+
+ENV VLLM_MORI_COMMIT=${VLLM_MORI_COMMIT}
+
+RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashattention,rw <<EOF
+    # MORI
+
+    IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
+
+    # Prepare
+    TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
+    echo "${TORCH_LIB_PREFIX}/torch/lib" >> /etc/ld.so.conf.d/python3.conf
+
+    # Download
+    git -C /tmp clone --recursive --shallow-submodules \
+        https://github.com/ROCm/mori.git mori \
+        && pushd /tmp/mori \
+        && git checkout ${VLLM_MORI_COMMIT} \
+        && git submodule update --init --recursive
+
+    # Build
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    MR_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
+    if [[ -z "${MR_ROCM_ARCHS}" ]]; then
+        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
+            MR_ROCM_ARCHS="gfx942"
+        else
+            MR_ROCM_ARCHS="gfx942;gfx950"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="${MR_ROCM_ARCHS}"
+    export GPU_ARCH="${MR_ROCM_ARCHS}"
+    export LD_LIBRARY_PATH="/opt/rocm/lib:/usr/local/lib:${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
+    echo "Building MORI with the following environment variables:"
+    env
+    pushd /tmp/mori \
+      && python setup.py bdist_wheel --dist-dir=dist \
+      && tree -hs /tmp/mori/dist \
+      && mv /tmp/mori/dist /workspace
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1139,6 +1210,20 @@ RUN --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # Install
     uv pip install --no-build-isolation \
         /aiter/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install EP Kenerls: MORI
+
+RUN --mount=type=bind,from=vllm-build-epkernels-mori,source=/,target=/mori,rw <<EOF
+    # MORI
+
+    # Install
+    uv pip install --no-build-isolation \
+        /mori/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \

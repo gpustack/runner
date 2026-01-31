@@ -101,7 +101,7 @@ ARG VOXBOX_VERSION=0.0.21
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.14.1
+ARG VLLM_VERSION=0.15.0
 ARG VLLM_TORCH_VERSION=2.9.1
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
@@ -111,7 +111,7 @@ ARG VLLM_NVIDIA_NVSHMEM_VERSION=3.4.5
 ARG VLLM_AWS_EFA_VERSION=1.44.0
 ARG VLLM_PPLX_KERNEL_COMMIT=12cecfda
 ARG VLLM_DEEPEP_COMMIT=b57e5e21
-ARG VLLM_DEEPGEMM_COMMIT=9b680f42
+ARG VLLM_DEEPGEMM_COMMIT=0f5f266
 ARG VLLM_FLASHINFER_VERSION=0.6.1
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_LMCACHE_VERSION=0.3.12
@@ -844,7 +844,8 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         https://github.com/deepseek-ai/DeepEP.git deep_ep \
         && pushd /tmp/deep_ep \
-        && git checkout ${VLLM_DEEPEP_COMMIT}
+        && git checkout ${VLLM_DEEPEP_COMMIT} \
+        && git submodule update --init --recursive
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
@@ -914,7 +915,8 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         https://github.com/ppl-ai/pplx-kernels.git pplx-kernels \
         && pushd /tmp/pplx-kernels \
-        && git checkout ${VLLM_PPLX_KERNEL_COMMIT}
+        && git checkout ${VLLM_PPLX_KERNEL_COMMIT} \
+        && git submodule update --init --recursive
 
     # Build
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
