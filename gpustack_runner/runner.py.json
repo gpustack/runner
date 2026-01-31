@@ -1776,6 +1776,17 @@
     "original_backend_version": "7.0.2",
     "backend_variant": "",
     "service": "vllm",
+    "service_version": "0.14.1",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:rocm7.0-vllm0.14.1",
+    "deprecated": false
+  },
+  {
+    "backend": "rocm",
+    "backend_version": "7.0",
+    "original_backend_version": "7.0.2",
+    "backend_variant": "",
+    "service": "vllm",
     "service_version": "0.13.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm7.0-vllm0.13.0",
