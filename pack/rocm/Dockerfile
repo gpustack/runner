@@ -690,6 +690,10 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${VLLM_TORCH_ROCM_VERSION}"
 
+    # Dependencies
+    apt-get install -y --no-install-recommends \
+        libpci-dev
+
     # Prepare
     TORCH_LIB_PREFIX=$(pip show torch | grep Location: | cut -d' ' -f 2)
     echo "${TORCH_LIB_PREFIX}/torch/lib" >> /etc/ld.so.conf.d/python3.conf
@@ -1169,6 +1173,25 @@ EOT
         && rm -rf /tmp/*
 EOF
 
+## Install EP Kenerls: MORI
+
+RUN --mount=type=bind,from=vllm-build-epkernels-mori,source=/,target=/mori,rw <<EOF
+    # MORI
+
+    # Install
+    uv pip install --no-build-isolation \
+        /mori/workspace/*.whl
+
+    # Dependencies
+    apt-get install -y --no-install-recommends \
+        libpci-dev
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
 ## Install Triton
 
 RUN --mount=type=bind,from=vllm-build-triton,source=/,target=/triton,rw <<EOF
@@ -1210,20 +1233,6 @@ RUN --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # Install
     uv pip install --no-build-isolation \
         /aiter/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
-## Install EP Kenerls: MORI
-
-RUN --mount=type=bind,from=vllm-build-epkernels-mori,source=/,target=/mori,rw <<EOF
-    # MORI
-
-    # Install
-    uv pip install --no-build-isolation \
-        /mori/workspace/*.whl
 
     # Cleanup
     rm -rf /var/tmp/* \
