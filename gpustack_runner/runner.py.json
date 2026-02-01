@@ -1787,6 +1787,17 @@
     "original_backend_version": "7.0.2",
     "backend_variant": "",
     "service": "vllm",
+    "service_version": "0.15.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:rocm7.0-vllm0.15.0",
+    "deprecated": false
+  },
+  {
+    "backend": "rocm",
+    "backend_version": "7.0",
+    "original_backend_version": "7.0.2",
+    "backend_variant": "",
+    "service": "vllm",
     "service_version": "0.14.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm7.0-vllm0.14.1",
@@ -1878,6 +1889,17 @@
     "service_version": "0.5.5.post3",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-sglang0.5.5.post3",
+    "deprecated": false
+  },
+  {
+    "backend": "rocm",
+    "backend_version": "6.4",
+    "original_backend_version": "6.4.4",
+    "backend_variant": "",
+    "service": "vllm",
+    "service_version": "0.15.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:rocm6.4-vllm0.15.0",
     "deprecated": false
   },
   {
