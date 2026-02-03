@@ -35,3 +35,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [ ] 2026-01-05: Install `vllm-omni` packages for vLLM 0.12.0 of CUDA/ROCm/CANN released images.
 - [x] 2026-01-29: Apply DP deployment patches to vLLM 0.13.0 for CUDA/ROCm released images.
 - [x] 2026-01-29: Reinstall SGLang Kernel for SGLang 0.5.7 of CANN released images.
+- [ ] 2026-02-03: Apply several patches to vLLM 0.14.1/0.15.0 and SGLang 0.5.8 for CUDA 12.9 released images.

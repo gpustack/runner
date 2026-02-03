@@ -1,0 +1,22 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.15.0"
+  - backend: "cuda"
+    services:
+      - "vllm"
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.14.1"
+      - "SGLANG_VERSION=0.5.8"
