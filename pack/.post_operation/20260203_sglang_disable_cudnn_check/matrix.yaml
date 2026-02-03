@@ -1,0 +1,56 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.14.1"
+      - "SGLANG_VERSION=0.5.8"
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed ROCm 7.0.
+  ##
+  - backend: "rocm"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.0"
+      - "SGLANG_VERSION=0.5.8"
+  - backend: "rocm"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.0"
+      - "SGLANG_VERSION=0.5.7"
+  ## Packed ROCm 6.4.
+  ##
+  - backend: "rocm"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "SGLANG_VERSION=0.5.8"
+  - backend: "rocm"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "SGLANG_VERSION=0.5.7"

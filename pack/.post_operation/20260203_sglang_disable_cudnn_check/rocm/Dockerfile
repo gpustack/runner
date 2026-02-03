@@ -1,0 +1,17 @@
+ARG CMAKE_MAX_JOBS
+ARG ROCM_VERSION=7.0
+ARG SGLANG_VERSION=0.5.8
+
+FROM gpustack/runner:rocm${ROCM_VERSION}-sglang${SGLANG_VERSION} AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Entrypoint
+
+ENV SGLANG_DISABLE_CUDNN_CHECK=1
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
