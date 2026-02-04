@@ -1770,9 +1770,31 @@
         "original_backend_version": "12.3",
         "backend_variant": "",
         "service": "sglang",
+        "service_version": "0.5.6",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:hggc12.3-sglang0.5.6",
+        "deprecated": false
+      },
+      {
+        "backend": "hggc",
+        "backend_version": "12.3",
+        "original_backend_version": "12.3",
+        "backend_variant": "",
+        "service": "sglang",
         "service_version": "0.5.5",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:hggc12.3-sglang0.5.5",
+        "deprecated": false
+      },
+      {
+        "backend": "hggc",
+        "backend_version": "12.3",
+        "original_backend_version": "12.3",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.12.0",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:hggc12.3-vllm0.12.0",
         "deprecated": false
       },
       {
