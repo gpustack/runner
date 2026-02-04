@@ -803,7 +803,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && sed -i "s/\"torchvision==.*\"/\"torchvision\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
-        && sed -i "s/\"triton==.*\"/\"triton\"/g" /tmp/vllm/requirements/rocm-build.txt \
+        && if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then sed -i "s/\"triton==.*\"/\"triton\"/g" /tmp/vllm/requirements/rocm-build.txt; fi \
         && uv pip install protobuf>=6.33.2 grpcio-tools>=1.76.0 \
         && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \

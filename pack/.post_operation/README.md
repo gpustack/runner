@@ -37,3 +37,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2026-01-29: Reinstall SGLang Kernel for SGLang 0.5.7 of CANN released images.
 - [x] 2026-02-03: Apply several patches to vLLM 0.14.1/0.15.0 and SGLang 0.5.8 for CUDA 12.9 released images.
 - [x] 2026-02-03: Patch SGLang 0.5.8/0.5.7 of CUDA/ROCm released images to disable CuDNN version check.
+- [ ] 2026-02-04: Reinstall `triton` package for vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for ROCm released images.

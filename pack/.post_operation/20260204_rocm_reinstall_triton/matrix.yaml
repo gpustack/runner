@@ -1,0 +1,32 @@
+rules:
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed ROCm 6.4.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "VLLM_VERSION=0.15.0"
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "VLLM_VERSION=0.14.1"
+  - backend: "rocm"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4"
+      - "SGLANG_VERSION=0.5.8"
