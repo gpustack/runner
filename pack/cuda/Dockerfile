@@ -1319,7 +1319,6 @@ nvidia-nvshmem-cu${CUDA_MAJOR}
 nvshmem4py-cu${CUDA_MAJOR}
 nvidia-cudnn-cu${CUDA_MAJOR}>=9.16.0.29
 nvidia-cudnn-frontend>=1.17.0
-nvidia-nccl-cu${CUDA_MAJOR}>=2.28.3
 EOT
     uv pip install \
         -r /tmp/requirements.txt

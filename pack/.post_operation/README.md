@@ -35,7 +35,8 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [ ] 2026-01-05: Install `vllm-omni` packages for vLLM 0.12.0 of CUDA/ROCm/CANN released images.
 - [x] 2026-01-29: Apply DP deployment patches to vLLM 0.13.0 for CUDA/ROCm released images.
 - [x] 2026-01-29: Reinstall SGLang Kernel for SGLang 0.5.7 of CANN released images.
-- [x] 2026-02-03: Apply several patches to vLLM 0.14.1/0.15.0 and SGLang 0.5.8 for CUDA 12.9 released images.
+- [x] 2026-02-03: Apply several patches to vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for CUDA 12.9 released images.
 - [x] 2026-02-03: Patch SGLang 0.5.8/0.5.7 of CUDA/ROCm released images to disable CuDNN version check.
 - [x] 2026-02-04: Reinstall `triton` package for vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for ROCm released images.
-- [x] 2026-02-04: Apply several patches to vLLM 0.14.1/0.15.0 and SGLang 0.5.8 for CUDA 12.8/12.6 released images.
+- [x] 2026-02-04: Apply several patches to vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for CUDA 12.8/12.6 released images.
+- [ ] 2026-02-05: Reinstall `nvidia-nccl-cu12` package to vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for CUDA 12.9/12.8/12.6 released images.
