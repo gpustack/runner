@@ -74,9 +74,9 @@ The following table lists the supported accelerated backends and their correspon
 
 ### T-Head HGGC
 
-| HGGC Version <br/> (Variant) | vLLM     | SGLang  |
-|------------------------------|----------|---------|
-| 12.3                         | `0.11.1` | `0.5.5` |
+| HGGC Version <br/> (Variant) | vLLM               | SGLang           |
+|------------------------------|--------------------|------------------|
+| 12.3                         | `0.12.0`, `0.11.1` | `0.5.6`, `0.5.5` |
 
 ### MetaX MACA
 
