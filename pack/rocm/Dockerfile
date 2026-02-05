@@ -74,7 +74,7 @@ ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.15.0
+ARG VLLM_VERSION=0.15.1
 ARG VLLM_TORCH_VERSION=2.9.1
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
@@ -804,7 +804,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         && sed -i "s/\"torchvision==.*\"/\"torchvision\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && sed -i "s/\"torchaudio==.*\"/\"torchaudio\"/g" /tmp/vllm/requirements/rocm-build.txt \
         && if [[ "${VLLM_TORCH_SOURCE}" == "radeon" ]]; then sed -i "s/\"triton==.*\"/\"triton\"/g" /tmp/vllm/requirements/rocm-build.txt; fi \
-        && uv pip install protobuf>=6.33.2 grpcio-tools>=1.76.0 \
+        && uv pip install protobuf>=6.33.5 grpcio-tools>=1.76.0 \
         && VLLM_TARGET_DEVICE="rocm" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
