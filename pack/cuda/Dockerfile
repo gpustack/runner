@@ -1317,8 +1317,6 @@ cuda-python==${CUDA_MAJOR}.${CUDA_MINOR}
 pynvml==${CUDA_MAJOR}
 nvidia-nvshmem-cu${CUDA_MAJOR}
 nvshmem4py-cu${CUDA_MAJOR}
-nvidia-cudnn-cu${CUDA_MAJOR}>=9.16.0.29
-nvidia-cudnn-frontend>=1.17.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
@@ -1526,6 +1524,26 @@ mooncake-transfer-engine==${VLLM_MOONCAKE_VERSION}
 librosa
 soundfile
 mistral_common[audio]
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Enhance CuDNN
+
+RUN <<EOF
+    # CuDNN
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+nvidia-cudnn-cu${CUDA_MAJOR}>=9.16.0.29
+nvidia-cudnn-frontend>=1.17.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
