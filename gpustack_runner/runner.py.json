@@ -602,7 +602,7 @@
     "service_version": "0.9.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -613,7 +613,7 @@
     "service_version": "0.9.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -778,7 +778,7 @@
     "service_version": "0.9.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -789,7 +789,7 @@
     "service_version": "0.9.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-310p-vllm0.9.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "corex",
