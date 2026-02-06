@@ -650,7 +650,7 @@ EOT
     uv pip install --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
         torch-npu==${VLLM_TORCH_VERSION}.*
     uv pip install \
-        numpy spicy
+        numpy scipy
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -1025,7 +1025,7 @@ EOT
     uv pip install --extra-index-url https://mirrors.huaweicloud.com/ascend/repos/pypi \
         torch-npu==${SGLANG_TORCH_VERSION}.*
     uv pip install \
-        numpy spicy
+        numpy scipy
 
     # Cleanup
     rm -rf /var/tmp/* \
