@@ -118,7 +118,7 @@ ARG VLLM_LMCACHE_VERSION=0.3.12
 ARG VLLM_MOONCAKE_VERSION=0.3.8.post1
 ARG VLLM_OMNI_COMMIT=d6f93b0
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.8
+ARG SGLANG_VERSION=0.5.8.post1
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
 ARG SGLANG_KERNEL_VERSION=0.3.21
 
@@ -874,6 +874,7 @@ RUN <<EOF
     env
     pushd /tmp/deep_ep \
         && sed -i 's/#define NUM_CPU_TIMEOUT_SECS 100/#define NUM_CPU_TIMEOUT_SECS 1000/' csrc/kernels/configs.cuh \
+        && sed -i 's/#define NUM_TIMEOUT_CYCLES 200000000000ull/#define NUM_TIMEOUT_CYCLES 2000000000000ull/' csrc/kernels/configs.cuh \
         && if (( $(echo "${CUDA_MAJOR} > 12" | bc -l) )); then \
             sed -i "/^    include_dirs = \['csrc\/'\]/a\    include_dirs.append('${CUDA_HOME}/include/cccl')" setup.py; \
         fi \
