@@ -43,6 +43,17 @@
         "backend_version": "8.5",
         "original_backend_version": "8.5.0",
         "backend_variant": "a3",
+        "service": "sglang",
+        "service_version": "0.5.8.post1",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cann8.5-a3-sglang0.5.8.post1",
+        "deprecated": false
+      },
+      {
+        "backend": "cann",
+        "backend_version": "8.5",
+        "original_backend_version": "8.5.0",
+        "backend_variant": "a3",
         "service": "vllm",
         "service_version": "0.14.1",
         "platform": "linux/amd64",
@@ -311,6 +322,17 @@
         "service_version": "0.5.8",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann8.5-910b-sglang0.5.8",
+        "deprecated": false
+      },
+      {
+        "backend": "cann",
+        "backend_version": "8.5",
+        "original_backend_version": "8.5.0",
+        "backend_variant": "910b",
+        "service": "sglang",
+        "service_version": "0.5.8.post1",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cann8.5-910b-sglang0.5.8.post1",
         "deprecated": false
       },
       {
