@@ -1159,10 +1159,6 @@ EOT
     uv pip install \
         -r /tmp/requirements.txt
 
-    # Install Custom Ops
-    UV_SKIP_WHEEL_FILENAME_CHECK=1 uv pip install --verbose \
-        https://sglang-ascend.obs.cn-east-3.myhuaweicloud.com/ops/custom_ops-2.0.${CANN_ARCHS}-cp311-cp311-linux_$(uname -m).whl
-
     # Install BiSheng
     BISHENG_FILE="Ascend-BiSheng-toolkit_aarch64_20251121.run"
     BISHENG_PATH="/tmp/${BISHENG_FILE}"
@@ -1188,7 +1184,6 @@ RUN <<EOF
         --package sgl-kernel-npu \
         --package deep-ep \
         --package triton-ascend \
-        --package custom-ops \
         --package vllm \
         --package torch \
         --package torch-npu
