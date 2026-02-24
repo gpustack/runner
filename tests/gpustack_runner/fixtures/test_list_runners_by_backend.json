@@ -33,6 +33,17 @@
         "original_backend_version": "8.5.0",
         "backend_variant": "a3",
         "service": "sglang",
+        "service_version": "0.5.9",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cann8.5-a3-sglang0.5.9",
+        "deprecated": false
+      },
+      {
+        "backend": "cann",
+        "backend_version": "8.5",
+        "original_backend_version": "8.5.0",
+        "backend_variant": "a3",
+        "service": "sglang",
         "service_version": "0.5.8.post1",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann8.5-a3-sglang0.5.8.post1",
@@ -300,6 +311,17 @@
         "service_version": "2.3.0",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann8.5-910b-mindie2.3.0",
+        "deprecated": false
+      },
+      {
+        "backend": "cann",
+        "backend_version": "8.5",
+        "original_backend_version": "8.5.0",
+        "backend_variant": "910b",
+        "service": "sglang",
+        "service_version": "0.5.9",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cann8.5-910b-sglang0.5.9",
         "deprecated": false
       },
       {
