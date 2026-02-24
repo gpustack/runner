@@ -148,7 +148,7 @@
                     "variants": [
                       {
                         "variant": "",
-                        "deprecated": false,
+                        "deprecated": true,
                         "platforms": [
                           {
                             "platform": "linux/amd64",
