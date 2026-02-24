@@ -69,6 +69,8 @@
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_BUILD_BASE_IMAGE: Base image for SGLang build,
 #   which is used to build the SGLang from source.
+# - SGLANG_ROUTER_COMMIT: Commit of SGLang Router to use,
+#   which is used to build the SGLang Router wheel.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
@@ -87,8 +89,9 @@ ARG VLLM_LMCACHE_VERSION=0.3.12
 ARG VLLM_MOONCAKE_VERSION=0.3.9
 ARG VLLM_OMNI_COMMIT=630e84ef
 ARG SGLANG_BASE_IMAGE=vllm
-ARG SGLANG_VERSION=0.5.8.post1
+ARG SGLANG_VERSION=0.5.9
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
+ARG SGLANG_ROUTER_COMMIT=c1f2241a
 
 # Stage Bake Runtime
 #
@@ -1503,9 +1506,9 @@ ARG TARGETARCH
 ## Build SGLang Router
 
 ARG CMAKE_MAX_JOBS
-ARG SGLANG_VERSION
+ARG SGLANG_ROUTER_COMMIT
 
-ENV SGLANG_VERSION=${SGLANG_VERSION}
+ENV SGLANG_ROUTER_COMMIT=${SGLANG_ROUTER_COMMIT}
 
 RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
     # SGlang Router
@@ -1522,8 +1525,10 @@ RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw <<EOF
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
-        https://github.com/sgl-project/sglang.git sglang
+        https://github.com/sgl-project/sglang.git sglang \
+        && pushd /tmp/sglang \
+        && git checkout ${SGLANG_ROUTER_COMMIT} \
+        && git submodule update --init --recursive
 
     # Build
     pushd /tmp/sglang/sgl-model-gateway/bindings/python \
@@ -1562,8 +1567,10 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ARG CMAKE_MAX_JOBS
 ARG SGLANG_VERSION
+ARG SGLANG_ROUTER_COMMIT
 
-ENV SGLANG_VERSION=${SGLANG_VERSION}
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_ROUTER_COMMIT=${SGLANG_ROUTER_COMMIT}
 
 RUN --mount=type=bind,from=sglang-build-sglang,source=/,target=/sglang,rw \
     --mount=type=bind,from=sglang-build-sglangrouter,source=/,target=/sglangrouter,rw <<EOF
@@ -1640,16 +1647,6 @@ RUN <<EOF
         --package deep-ep \
         --package ipython \
         --package mooncake-transfer-engine
-EOF
-
-## Patch
-
-RUN --mount=type=bind,target=/workspace,rw <<EOF
-    # Patch
-
-    tree -hs /workspace/patches
-    pushd $(pip show sglang | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/sglang/*.patch
 EOF
 
 ## Entrypoint

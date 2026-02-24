@@ -46,6 +46,8 @@
 # - SGLANG_VERSION: Version of SGLang to use.
 # - SGLANG_TORCH_VERSION: Version of Torch for SGLang to use.
 # - SGLANG_KERNEL_VERSION: Version of SGLang Kernel to use.
+# - SGLANG_ROUTER_COMMIT: Commit of SGLang Router to use,
+#   which is used to build the SGLang Router wheel.
 # - SGLANG_VLLM_VERSION: Version of vLLM for SGLang to use.
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
@@ -61,9 +63,10 @@ ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
 ARG VLLM_OMNI_COMMIT=de2cac9
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.8.post1
+ARG SGLANG_VERSION=0.5.9
 ARG SGLANG_TORCH_VERSION=2.8.0
-ARG SGLANG_KERNEL_VERSION=2026.02.01
+ARG SGLANG_KERNEL_VERSION=2026.02.01.post2
+ARG SGLANG_ROUTER_COMMIT=c1f2241a
 ARG SGLANG_VLLM_VERSION=0.10.2
 
 #
@@ -1075,7 +1078,7 @@ attrs==25.4.0
 decorator==5.2.1
 psutil==7.1.3
 pyyaml==6.0.3
-memfabric-hybrid==1.0.0
+memfabric-hybrid==1.0.5
 triton-ascend==3.2.0
 EOT
     uv pip install \
@@ -1086,8 +1089,8 @@ EOT
         --depth 1 --branch v${SGLANG_VERSION} --single-branch \
         https://github.com/sgl-project/sglang.git sglang-${SGLANG_VERSION}
     pushd /tmp/sglang-${SGLANG_VERSION}/python \
-        && if [[ -f pyproject_other.toml ]]; then mv pyproject_other.toml pyproject.toml; fi \
-        && uv pip install --verbose .[srt_npu]
+        && if [[ -f pyproject_npu.toml ]]; then mv pyproject_npu.toml pyproject.toml; fi \
+        && uv pip install --verbose .[all_npu]
 
     # Build and Install SGLang Kernel
     git -C /tmp clone --recursive --shallow-submodules \
@@ -1110,6 +1113,9 @@ EOF
 
 ## Install SGLang Router
 
+ARG SGLANG_ROUTER_COMMIT
+ENV SGLANG_ROUTER_COMMIT=${SGLANG_ROUTER_COMMIT}
+
 RUN <<EOF
     # SGlang Router
 
@@ -1125,8 +1131,10 @@ RUN <<EOF
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_VERSION} --single-branch \
-        https://github.com/sgl-project/sglang.git sglang
+        https://github.com/sgl-project/sglang.git sglang \
+        && pushd /tmp/sglang \
+        && git checkout ${SGLANG_ROUTER_COMMIT} \
+        && git submodule update --init --recursive
 
     # Build
     pushd /tmp/sglang/sgl-model-gateway/bindings/python \
