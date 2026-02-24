@@ -112,11 +112,11 @@ ARG VLLM_AWS_EFA_VERSION=1.44.0
 ARG VLLM_PPLX_KERNEL_COMMIT=12cecfda
 ARG VLLM_DEEPEP_COMMIT=b57e5e21
 ARG VLLM_DEEPGEMM_COMMIT=0f5f266
-ARG VLLM_FLASHINFER_VERSION=0.6.1
+ARG VLLM_FLASHINFER_VERSION=0.6.3
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
 ARG VLLM_LMCACHE_VERSION=0.3.12
-ARG VLLM_MOONCAKE_VERSION=0.3.8.post1
-ARG VLLM_OMNI_COMMIT=d6f93b0
+ARG VLLM_MOONCAKE_VERSION=0.3.9
+ARG VLLM_OMNI_COMMIT=630e84ef
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.8.post1
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -655,10 +655,10 @@ RUN <<EOF
     IFS="." read -r TORCH_MAJOR TORCH_MINOR TORCH_PATCH <<< "${VLLM_TORCH_VERSION}"
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
 
-    PREBUILD_URL="https://github.com/flashinfer-ai/flashinfer/releases/download/v${VLLM_FLASHINFER_VERSION}/flashinfer_jit_cache-${VLLM_FLASHINFER_VERSION}+cu128-cp39-abi3-manylinux_2_28_$(uname -m).whl"
+    PREBUILD_URL="https://github.com/flashinfer-ai/flashinfer/releases/download/v${VLLM_FLASHINFER_VERSION}/flashinfer_jit_cache-${VLLM_FLASHINFER_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR}-cp39-abi3-manylinux_2_28_$(uname -m).whl"
     if curl --retry 3 --retry-connrefused -fsSIL "${PREBUILD_URL}" >/dev/null 2>&1; then
         echo "Downloading prebuilt FlashInfer wheel from ${PREBUILD_URL}..."
-        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flashinfer_jit_cache-${VLLM_FLASHINFER_VERSION}+cu128-cp39-abi3-manylinux_2_28_$(uname -m).whl"
+        curl --retry 3 --retry-connrefused -fL "${PREBUILD_URL}" -o "/tmp/flashinfer_jit_cache-${VLLM_FLASHINFER_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR}-cp39-abi3-manylinux_2_28_$(uname -m).whl"
         curl --retry 3 --retry-connrefused -fL "https://github.com/flashinfer-ai/flashinfer/releases/download/v${VLLM_FLASHINFER_VERSION}/flashinfer_python-${VLLM_FLASHINFER_VERSION}-py3-none-any.whl" -o "/tmp/flashinfer_python-${VLLM_FLASHINFER_VERSION}-py3-none-any.whl"
         mkdir -p /workspace \
             && mv /tmp/*.whl /workspace \
