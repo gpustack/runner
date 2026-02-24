@@ -195,7 +195,7 @@
     "service_version": "0.5.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-a3-sglang0.5.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -206,7 +206,7 @@
     "service_version": "0.5.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-a3-sglang0.5.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -217,7 +217,7 @@
     "service_version": "0.5.1.post3",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-a3-sglang0.5.1.post3",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -228,7 +228,7 @@
     "service_version": "0.5.1.post3",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-a3-sglang0.5.1.post3",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -492,7 +492,7 @@
     "service_version": "0.5.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-sglang0.5.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -503,7 +503,7 @@
     "service_version": "0.5.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-sglang0.5.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -514,7 +514,7 @@
     "service_version": "0.5.1.post3",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann8.2-910b-sglang0.5.1.post3",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
@@ -525,7 +525,7 @@
     "service_version": "0.5.1.post3",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-sglang0.5.1.post3",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cann",
