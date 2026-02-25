@@ -1649,16 +1649,6 @@ RUN <<EOF
         --package mooncake-transfer-engine
 EOF
 
-## Patch
-
-RUN --mount=type=bind,target=/workspace,rw <<EOF
-    # Patch
-
-    tree -hs /workspace/patches
-    pushd $(pip show sglang | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/sglang/*.patch
-EOF
-
 ## Entrypoint
 
 ENV SGLANG_DISABLE_CUDNN_CHECK=1 \
