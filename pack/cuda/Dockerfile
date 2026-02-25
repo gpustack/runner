@@ -103,7 +103,7 @@ ARG VOXBOX_VERSION=0.0.21
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.15.1
+ARG VLLM_VERSION=0.16.0
 ARG VLLM_TORCH_VERSION=2.9.1
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
@@ -113,12 +113,12 @@ ARG VLLM_NVIDIA_NVSHMEM_VERSION=3.4.5
 ARG VLLM_AWS_EFA_VERSION=1.44.0
 ARG VLLM_PPLX_KERNEL_COMMIT=12cecfda
 ARG VLLM_DEEPEP_COMMIT=b57e5e21
-ARG VLLM_DEEPGEMM_COMMIT=0f5f266
+ARG VLLM_DEEPGEMM_COMMIT=477618cd
 ARG VLLM_FLASHINFER_VERSION=0.6.3
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_LMCACHE_VERSION=0.3.12
+ARG VLLM_LMCACHE_VERSION=0.3.14
 ARG VLLM_MOONCAKE_VERSION=0.3.9
-ARG VLLM_OMNI_COMMIT=630e84ef
+ARG VLLM_OMNI_COMMIT=d6a3551a
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.9
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -1009,7 +1009,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
     pushd /tmp/vllm \
-        && uv pip install protobuf>=6.33.5 grpcio-tools>=1.76.0 \
+        && uv pip install grpcio-tools==1.78.0 \
         && VLLM_TARGET_DEVICE="cuda" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
