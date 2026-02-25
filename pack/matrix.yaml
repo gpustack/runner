@@ -202,3 +202,13 @@ rules:
       - "VLLM_TORCH_SOURCE=radeon"
       - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
       - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
+  ## AMD ROCm 6.4.4
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=6.4.4"
+      - "VLLM_AITER_VERSION=0.1.7.post2"
