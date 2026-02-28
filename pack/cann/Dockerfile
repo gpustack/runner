@@ -57,11 +57,11 @@ ARG MINDIE_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${
 ARG MINDIE_VERSION=2.3.0
 ARG MINDIE_TORCH_VERSION=2.1.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.14.1
-ARG VLLM_ASCEND_VERSION=0.14.0rc1
+ARG VLLM_VERSION=0.15.0
+ARG VLLM_ASCEND_VERSION=0.15.0rc1
 ARG VLLM_TORCH_VERSION=2.9.0
-ARG VLLM_MOONCAKE_VERSION=0.3.7.post2
-ARG VLLM_OMNI_COMMIT=de2cac9
+ARG VLLM_MOONCAKE_VERSION=0.3.8.post1
+ARG VLLM_OMNI_COMMIT=630e84ef
 ARG SGLANG_BASE_IMAGE=gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-python${PYTHON_VERSION}
 ARG SGLANG_VERSION=0.5.9
 ARG SGLANG_TORCH_VERSION=2.8.0
@@ -968,10 +968,10 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd $(pip show vllm | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/vllm/*.patch
+        && (for f in /workspace/patches/vllm/*; do patch -p1 < $f; done)
     if pip show vllm_omni > /dev/null 2>&1; then \
         pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
-            && patch -p1 < /workspace/patches/vllm_omni/*.patch; \
+            && (for f in /workspace/patches/vllm_omni/*; do patch -p1 < $f; done)
     fi
 EOF
 
