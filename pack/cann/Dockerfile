@@ -710,6 +710,7 @@ RUN <<EOF
         && git submodule update --init --recursive
     pushd /tmp/vllm_omni \
         && sed -i "/\"fa3-fwd.*\"/d" /tmp/vllm_omni/pyproject.toml \
+        && uv pip install pyyaml \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm_omni/dist \
         && mv /tmp/vllm_omni/dist /workspace
