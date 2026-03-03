@@ -43,4 +43,4 @@ We leverage the matrix expansion feature of GPUStack Runner to achieve this, and
 - [x] 2026-02-12: Reinstall `triton` package for vLLM 0.15.1 for ROCm released images.
 - [ ] 2026-02-14: Patch SGLang 0.5.8.post1 of CANN/CUDA/ROCm released images to reduce Z-Image loading memory occupation.
 - [x] 2026-02-28: Reinstall `vllm-omni` packages for vLLM 0.16.0 of CUDA released images.
-- [ ] 2026-03-03: Fix malformed ARM64 image for vLLM 0.15.1 of CUDA released images.
+- [x] 2026-03-03: Fix malformed ARM64 image for vLLM 0.15.1 of CUDA released images.
