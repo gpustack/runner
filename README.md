@@ -90,7 +90,7 @@ The following table lists the supported accelerated backends and their correspon
 
 | MUSA Version <br/> (Variant) | vLLM    | SGLang  |
 |------------------------------|---------|---------|
-| 4.3.2                        |         | `0.5.2` |
+| 4.3.2                        |         | `0.5.7` |
 | 4.1.0                        | `0.9.2` |         |
 
 ### AMD ROCm
