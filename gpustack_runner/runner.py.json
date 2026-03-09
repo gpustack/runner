@@ -2142,7 +2142,7 @@
     "service_version": "0.5.8.post1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-sglang0.5.8.post1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2153,7 +2153,7 @@
     "service_version": "0.5.7",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-sglang0.5.7",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2164,7 +2164,7 @@
     "service_version": "0.5.6.post2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-sglang0.5.6.post2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2175,7 +2175,7 @@
     "service_version": "0.5.5.post3",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-sglang0.5.5.post3",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2186,7 +2186,7 @@
     "service_version": "0.16.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.16.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2197,7 +2197,7 @@
     "service_version": "0.15.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.15.1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2208,7 +2208,7 @@
     "service_version": "0.14.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.14.1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2219,7 +2219,7 @@
     "service_version": "0.13.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.13.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2230,7 +2230,7 @@
     "service_version": "0.12.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.12.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2241,7 +2241,7 @@
     "service_version": "0.11.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.11.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
@@ -2252,7 +2252,7 @@
     "service_version": "0.10.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:rocm6.4-vllm0.10.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "rocm",
