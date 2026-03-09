@@ -17,7 +17,6 @@
 #    - Build FlashInfer.
 #    - Build DeepGEMM.
 #    - Build DeepEP.
-#    - Build PPLX kernels.
 #    - Build vLLM.
 #    - Build LMCache.
 # 3.2. vllm target.
@@ -28,7 +27,6 @@
 #    - Install Torch.
 #    - Install FlashInfer.
 #    - Install FlashAttention if exists.
-#    - Install PPLX kernels.
 #    - Install DeepEP.
 #    - Install DeepGEMM.
 #    - Install vLLM.
@@ -75,8 +73,6 @@
 #   which is used to build the GDRCopy deb.
 # - VLLM_NVIDIA_HPCX_VERSION: Version of NVIDIA HPC-X to use.
 # - VLLM_NVIDIA_NVSHMEM_VERSION: Version of NVIDIA NVSHMEM to use.
-# - VLLM_PPLX_KERNEL_COMMIT: Commit hash of PPLX kernel to use,
-#   which is used to build the pplx kernels wheel.
 # - VLLM_DEEPEP_COMMIT: Commit of DeepEP to use,
 #   which is used to build the DeepEP wheel.
 # - VLLM_DEEPGEMM_COMMIT: Commit of DeepGEMM to use,
@@ -103,22 +99,21 @@ ARG VOXBOX_VERSION=0.0.21
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.16.0
-ARG VLLM_TORCH_VERSION=2.9.1
+ARG VLLM_VERSION=0.17.0
+ARG VLLM_TORCH_VERSION=2.10.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
 ARG VLLM_NVIDIA_GDRCOPY_VERSION=2.5.1
 ARG VLLM_NVIDIA_HPCX_VERSION=2.24.1_cuda12
 ARG VLLM_NVIDIA_NVSHMEM_VERSION=3.4.5
 ARG VLLM_AWS_EFA_VERSION=1.44.0
-ARG VLLM_PPLX_KERNEL_COMMIT=12cecfda
 ARG VLLM_DEEPEP_COMMIT=b57e5e21
 ARG VLLM_DEEPGEMM_COMMIT=477618cd
-ARG VLLM_FLASHINFER_VERSION=0.6.3
+ARG VLLM_FLASHINFER_VERSION=0.6.4
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_LMCACHE_VERSION=0.3.14
+ARG VLLM_LMCACHE_VERSION=0.3.15
 ARG VLLM_MOONCAKE_VERSION=0.3.9
-ARG VLLM_OMNI_COMMIT=3d9fa8d5
+ARG VLLM_OMNI_COMMIT=155856ff
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.9
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -890,73 +885,6 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
-# Stage vLLM Build EP Kenerls: PPLX
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/cuda/Dockerfile --tag=gpustack/runner:cuda${CUDA_VERSION%.*}-vllm-build-epkernels-pplx-linux-amd64 --target=vllm-build-epkernels-pplx pack/cuda
-#
-
-FROM vllm-build-epkernels AS vllm-build-epkernels-pplx
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build PPLX Kernels
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_PPLXKERNELS_COMMIT
-
-ENV VLLM_PPLXKERNELS_COMMIT=${VLLM_PPLXKERNELS_COMMIT}
-
-RUN <<EOF
-    # PPLX Kernels
-
-    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
-
-    # Download
-    git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/ppl-ai/pplx-kernels.git pplx-kernels \
-        && pushd /tmp/pplx-kernels \
-        && git checkout ${VLLM_PPLX_KERNEL_COMMIT} \
-        && git submodule update --init --recursive
-
-    # Build
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    PP_CUDA_ARCHS="${CUDA_ARCHS}"
-    if [[ -z "${PP_CUDA_ARCHS}" ]]; then
-        if (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.8" | bc -l) )); then
-            PP_CUDA_ARCHS="9.0a+PTX"
-        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} < 12.9" | bc -l) )); then
-            PP_CUDA_ARCHS="9.0a 10.0a+PTX"
-        else
-            PP_CUDA_ARCHS="9.0a 10.0a+PTX 10.3"
-        fi
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export TORCH_CUDA_ARCH_LIST="${PP_CUDA_ARCHS}"
-    export CMAKE_PREFIX_PATH="${VLLM_NVIDIA_NVSHMEM_DIR}/lib/cmake:${CMAKE_PREFIX_PATH}"
-    export NVSHMEM_DIR="${VLLM_NVIDIA_NVSHMEM_DIR}"
-    export NVCC_THREADS=2
-    echo "Building PPLX Kernels with the following environment variables:"
-    env
-    pushd /tmp/pplx-kernels \
-        && python -v -m build --no-isolation --wheel \
-        && tree -hs /tmp/pplx-kernels/dist \
-        && mv /tmp/pplx-kernels/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 # Stage vLLM Build vLLM
 #
 # Example build command:
@@ -1377,20 +1305,6 @@ EOT
         && rm -rf /tmp/*
 EOF
 
-## Install EP Kenerls: PPLX
-
-RUN --mount=type=bind,from=vllm-build-epkernels-pplx,source=/,target=/pplx,rw <<EOF
-    # PPLX
-
-    # Install
-    uv pip install --no-build-isolation \
-        /pplx/workspace/*.whl
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install EP Kenerls: DeepEP
 
 RUN --mount=type=bind,from=vllm-build-epkernels-deepep,source=/,target=/deepep,rw <<EOF
@@ -1571,7 +1485,6 @@ RUN <<EOF
         --package flash-attn \
         --package torch \
         --package triton \
-        --package pplx-kernels \
         --package deep-gemm \
         --package deep-ep \
         --package lmcache \
