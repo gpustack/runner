@@ -1526,7 +1526,7 @@
     "service_version": "0.15.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.15.1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1537,7 +1537,7 @@
     "service_version": "0.15.1",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.15.1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1548,7 +1548,7 @@
     "service_version": "0.14.1",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.14.1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1559,7 +1559,7 @@
     "service_version": "0.14.1",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.14.1",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1570,7 +1570,7 @@
     "service_version": "0.13.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.13.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1581,7 +1581,7 @@
     "service_version": "0.13.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.13.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1592,7 +1592,7 @@
     "service_version": "0.12.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.12.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1603,7 +1603,7 @@
     "service_version": "0.12.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.12.0",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1614,7 +1614,7 @@
     "service_version": "0.11.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.11.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1625,7 +1625,7 @@
     "service_version": "0.11.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.11.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1658,7 +1658,7 @@
     "service_version": "0.10.2",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.10.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1669,7 +1669,7 @@
     "service_version": "0.10.2",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-vllm0.10.2",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1724,7 +1724,7 @@
     "service_version": "0.0.21",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.21",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
@@ -1735,7 +1735,7 @@
     "service_version": "0.0.21",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.6-voxbox0.0.21",
-    "deprecated": false
+    "deprecated": true
   },
   {
     "backend": "cuda",
