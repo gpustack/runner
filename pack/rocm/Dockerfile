@@ -76,18 +76,18 @@ ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.0.2
 ARG ROCM_ARCHS
 ARG VLLM_BASE_IMAGE=gpustack/runner:rocm${ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.16.0
-ARG VLLM_TORCH_VERSION=2.9.1
+ARG VLLM_VERSION=0.17.0
+ARG VLLM_TORCH_VERSION=2.10.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_TORCH_SOURCE=pytorch
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:rocm${VLLM_TORCH_ROCM_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_TRITON_COMMIT=57c693b6
-ARG VLLM_MORI_COMMIT=20920706
+ARG VLLM_TRITON_COMMIT=42270451
+ARG VLLM_MORI_COMMIT=2f88d06a
 ARG VLLM_FLASHATTENTION_VERSION=2.8.3
-ARG VLLM_AITER_VERSION=0.1.10.post3
-ARG VLLM_LMCACHE_VERSION=0.3.14
+ARG VLLM_AITER_VERSION=0.1.11.post1
+ARG VLLM_LMCACHE_VERSION=0.3.15
 ARG VLLM_MOONCAKE_VERSION=0.3.9
-ARG VLLM_OMNI_COMMIT=3d9fa8d5
+ARG VLLM_OMNI_COMMIT=155856ff
 ARG SGLANG_BASE_IMAGE=vllm
 ARG SGLANG_VERSION=0.5.9
 ARG SGLANG_BUILD_BASE_IMAGE=vllm-build
@@ -381,7 +381,10 @@ RUN <<EOF
         fi
         TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCH_URL}" ]]; then
-            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        if [[ -z "${TORCH_URL}" ]]; then
+            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         fi
         TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCHVISION_URL}" ]]; then
@@ -436,7 +439,6 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
-setuptools>=77.0.3,<80.0.0
 requests
 pyyaml
 einops
@@ -491,7 +493,7 @@ EOT
 
     # Download
     git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/ROCm/triton.git triton \
+        https://github.com/triton-lang/triton.git triton \
         && pushd /tmp/triton \
         && git checkout ${VLLM_TRITON_COMMIT} \
         && git submodule update --init --recursive
@@ -506,11 +508,7 @@ EOT
     fi
     TT_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${TT_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
-        else
-            TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
-        fi
+        TT_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${TT_ROCM_ARCHS}"
@@ -575,13 +573,8 @@ RUN <<EOF
     fi
     FA_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
     if [[ -z "${FA_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${FA_MAJOR}.${FA_MINOR} <= 2.7" | bc -l) )); then
-            # See https://github.com/Dao-AILab/flash-attention/blob/c555642172e281cae6da8a6cff4dfd9ff678ae85/setup.py#L126-L133.
-            FA_ROCM_ARCHS="gfx90a;gfx940;gfx941;gfx942"
-        else
-            # See https://github.com/Dao-AILab/flash-attention/blob/6f8f0406eea522735d590c2d7b46139167b95b6e/setup.py#L133-L140.
-            FA_ROCM_ARCHS="gfx90a;gfx950;gfx942"
-        fi
+        # See https://github.com/Dao-AILab/flash-attention/blob/6f8f0406eea522735d590c2d7b46139167b95b6e/setup.py#L133-L140.
+        FA_ROCM_ARCHS="gfx90a;gfx950;gfx942"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export GPU_ARCHS="${FA_ROCM_ARCHS}"
@@ -644,11 +637,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     fi
     AT_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
     if [[ -z "${AT_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            AT_ROCM_ARCHS="gfx942"
-        else
-            AT_ROCM_ARCHS="gfx942;gfx950"
-        fi
+        AT_ROCM_ARCHS="gfx942;gfx950"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export GPU_ARCHS="${AT_ROCM_ARCHS}"
@@ -658,6 +647,8 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     echo "Building AITER with the following environment variables:"
     env
     pushd /tmp/aiter \
+      && sed -i '/c1 = torch.empty((M, D, S1 + S3), dtype=dtype, device=x.device)/i\    config = dict(config)' /tmp/aiter/aiter/ops/triton/gemm/fused/fused_gemm_afp4wfp4_split_cat.py \
+      && uv pip install flydsl==0.0.1.dev95158637 \
       && python setup.py bdist_wheel --dist-dir=dist \
       && tree -hs /tmp/aiter/dist \
       && mv /tmp/aiter/dist /workspace
@@ -718,15 +709,11 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     fi
     MR_ROCM_ARCHS="$(echo ${ROCM_ARCHS} | sed -e 's/;gfx1[0-9]\{3\}//g')"
     if [[ -z "${MR_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            MR_ROCM_ARCHS="gfx942"
-        else
-            MR_ROCM_ARCHS="gfx942;gfx950"
-        fi
+        MR_ROCM_ARCHS="gfx942;gfx950"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${MR_ROCM_ARCHS}"
-    export GPU_ARCH="${MR_ROCM_ARCHS}"
+    export MORI_GPU_ARCHS="${MR_ROCM_ARCHS}"
     export LD_LIBRARY_PATH="/opt/rocm/lib:/usr/local/lib:${TORCH_LIB_PREFIX}/torch/lib:${LD_LIBRARY_PATH}"
     echo "Building MORI with the following environment variables:"
     env
@@ -776,19 +763,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
     fi
     VL_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
-            if (( $(echo "${VL_MAJOR}.${VL_MINOR} >= 0.13" | bc -l) )); then
-                # TODO(thxCode): Temporarily remove gfx1030 for vLLM ROCm build due to build error in ROCm 6.4.4.
-                # #15 134.9 /tmp/vllm/build/temp.linux-x86_64-cpython-312/csrc/sampler.hip:564:63: error: local memory (66032) exceeds limit (65536) in 'void vllm::topKPerRowDecode<1024, true, false, true>(float const*, int const*, int*, int, int, int, int, float*, int, int const*)'
-                # ##15 134.9   564 | static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
-                # ##15 134.9       |                                                               ^
-                # ##15 134.9 16 warnings and 1 error generated when compiling for gfx1030.
-                VL_ROCM_ARCHS="gfx908;gfx90a;gfx942"
-            fi
-        else
-            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
-        fi
+        VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
@@ -858,19 +833,7 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     fi
     VL_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
-            if (( $(echo "${VL_MAJOR}.${VL_MINOR} == 0.13" | bc -l) )); then
-                # TODO(thxCode): Temporarily remove gfx1030 for vLLM ROCm build due to build error in ROCm 6.4.4.
-                # #15 134.9 /tmp/vllm/build/temp.linux-x86_64-cpython-312/csrc/sampler.hip:564:63: error: local memory (66032) exceeds limit (65536) in 'void vllm::topKPerRowDecode<1024, true, false, true>(float const*, int const*, int*, int, int, int, int, float*, int, int const*)'
-                # ##15 134.9   564 | static __global__ __launch_bounds__(kNumThreadsPerBlock) void topKPerRowDecode(
-                # ##15 134.9       |                                                               ^
-                # ##15 134.9 16 warnings and 1 error generated when compiling for gfx1030.
-                VL_ROCM_ARCHS="gfx908;gfx90a;gfx942"
-            fi
-        else
-            VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
-        fi
+        VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export COMPILE_CUSTOM_KERNELS=1
@@ -930,11 +893,7 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     fi
     LC_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${LC_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
-        else
-            LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
-        fi
+        LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${LC_ROCM_ARCHS}"
@@ -1031,6 +990,34 @@ ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow \
     UV_SKIP_WHEEL_FILENAME_CHECK=1
 
+## Install AMD DRM
+
+RUN <<EOF
+    # AMD DRM
+
+    if dpkg -l | grep libdrm-amdgpu-amdgpu1 >/dev/null 2>&1; then
+        echo "Skipping AMD DRM installation as installed..."
+        exit 0
+    fi
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${ROCM_VERSION}"
+    source /etc/os-release
+    curl -fsSL https://repo.radeon.com/rocm/rocm.gpg.key | gpg --dearmor -o /etc/apt/keyrings/amdgpu-graphics.gpg
+    echo "deb [arch=amd64,i386 signed-by=/etc/apt/keyrings/amdgpu-graphics.gpg] https://repo.radeon.com/graphics/${ROCM_MAJOR}.${ROCM_MINOR}/ubuntu ${VERSION_CODENAME} main" > /etc/apt/sources.list.d/amdgpu-graphics.list
+    apt-get update
+
+    apt-get install -y --no-install-recommends \
+            libdrm-amdgpu-common \
+            libdrm-amdgpu-amdgpu1 \
+            libdrm2-amdgpu
+    cp /opt/amdgpu/share/libdrm/amdgpu.ids /usr/share/libdrm/amdgpu.ids
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
 ## Install Torch
 
 ARG VLLM_TORCH_VERSION
@@ -1060,7 +1047,10 @@ RUN <<EOF
         fi
         TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCH_URL}" ]]; then
-            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v lw | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
+        fi
+        if [[ -z "${TORCH_URL}" ]]; then
+            TORCH_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torch-${VLLM_TORCH_VERSION}" | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         fi
         TORCHVISION_URL="$(curl -sf "${WHEEL_PREFIX}" | grep "torchvision" | grep -v lw | grep -v dev | grep "${WHEEL_SUFFIX}" | tail -n 1 | sed -n 's/.*href="\([^"]*\)".*/\1/p' || echo "")"
         if [[ -z "${TORCHVISION_URL}" ]]; then
@@ -1115,7 +1105,6 @@ RUN <<EOF
 
     # Install
     cat <<EOT >/tmp/requirements.txt
-setuptools>=77.0.3,<80.0.0
 requests
 pyyaml
 einops
@@ -1387,23 +1376,6 @@ ARG TARGETARCH
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow
 
-## Install Dependencies
-
-RUN <<EOF
-    # Dependencies
-
-    # Install
-    cat <<EOT >/tmp/requirements.txt
-setuptools>=77.0.3,<80.0.0
-EOT
-    uv pip install \
-        -r /tmp/requirements.txt
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 # Stage SGLang Build SGLang
 #
 # Example build command:
@@ -1436,18 +1408,7 @@ RUN <<EOF
     if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
         CMAKE_MAX_JOBS="8"
     fi
-    SG_ROCM_ARCHS="${ROCM_ARCHS}"
-    if [[ -z "${SG_ROCM_ARCHS}" ]]; then
-        if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-            SG_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx1030;gfx1100"
-        else
-            SG_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
-        fi
-    fi
-    SK_ROCM_ARCHS="gfx950"
-    if (( $(echo "${ROCM_MAJOR}.${ROCM_MINOR} < 7.0" | bc -l) )); then
-        SK_ROCM_ARCHS="gfx942"
-    fi
+    SK_ROCM_ARCHS="gfx942"
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${SG_ROCM_ARCHS}"
     export AMDGPU_TARGET="${SK_ROCM_ARCHS}"
