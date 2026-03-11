@@ -80,11 +80,12 @@ The following table lists the supported accelerated backends and their correspon
 
 ### MetaX MACA
 
-| MACA Version <br/> (Variant) | vLLM     | SGLang  |
-|------------------------------|----------|---------|
-| 3.3                          | `0.11.2` | `0.5.6` |
-| 3.2                          | `0.10.2` |         |
-| 3.0                          | `0.9.1`  |         |
+| MACA Version <br/> (Variant) | vLLM                              | SGLang           |
+|------------------------------|-----------------------------------|------------------|
+| 3.5                          | `0.14.0`                          |                  |
+| 3.3                          | `0.13.0`, `0.12.0`, <br/>`0.11.2` | `0.5.7`, `0.5.6` |
+| 3.2                          | `0.10.2`                          |                  |
+| 3.0                          | `0.9.1`                           |                  |
 
 ### MThreads MUSA
 
