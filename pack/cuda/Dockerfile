@@ -99,7 +99,7 @@ ARG VOXBOX_VERSION=0.0.21
 ARG VOXBOX_TORCH_VERSION=2.7.1
 ARG VOXBOX_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BASE_IMAGE=gpustack/runner:cuda${CUDA_VERSION}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.17.0
+ARG VLLM_VERSION=0.17.1
 ARG VLLM_TORCH_VERSION=2.10.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_BUILD_BASE_IMAGE=gpustack/runner:cuda${VLLM_TORCH_CUDA_VERSION}-python${PYTHON_VERSION}
@@ -937,7 +937,7 @@ RUN --mount=type=bind,from=vllm-build-flashattention,source=/,target=/flashatten
         --depth 1 --branch v${VLLM_VERSION} --single-branch \
         https://github.com/vllm-project/vllm.git vllm
     pushd /tmp/vllm \
-        && uv pip install grpcio-tools==1.78.0 \
+        && uv pip install grpcio-tools==1.78.0 cuda-bindings==12.9.4 \
         && VLLM_TARGET_DEVICE="cuda" python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/vllm/dist \
         && mv /tmp/vllm/dist /workspace
@@ -1071,6 +1071,7 @@ RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     pushd /tmp/lmcache \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
         && cat /tmp/lmcache/pyproject.toml \
+        && uv pip install cuda-bindings==12.9.4 \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/lmcache/dist \
         && mv /tmp/lmcache/dist /workspace
