@@ -156,6 +156,7 @@ rules:
   - backend: "hggc"
     services:
       - "vllm"
+      - "sglang"
     platforms:
       - "linux/amd64"
     args:
@@ -173,6 +174,7 @@ rules:
   - backend: "maca"
     services:
       - "vllm"
+      - "sglang"
     platforms:
       - "linux/amd64"
     args:
@@ -189,6 +191,7 @@ rules:
   ##
   - backend: "musa"
     services:
+      - "vllm"
       - "sglang"
     platforms:
       - "linux/amd64"
