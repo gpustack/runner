@@ -61,18 +61,31 @@ rules:
       - "CANN_ARCHS=310p"
 
   #
-  # Iluvatar CoreX
+  # AMD ROCm
   #
 
-  ## Iluvatar CoreX 4.2.0
+  ## AMD ROCm 7.1.1
   ##
-  - backend: "corex"
+  - backend: "rocm"
     services:
       - "vllm"
     platforms:
       - "linux/amd64"
     args:
-      - "COREX_VERSION=4.2.0"
+      - "ROCM_VERSION=7.1.1"
+      - "VLLM_TORCH_SOURCE=radeon"
+  ## AMD ROCm 7.0.2
+  ##
+  - backend: "rocm"
+    services:
+      - "sglang"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.0.2"
+      - "VLLM_TORCH_SOURCE=radeon"
+      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
+      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
 
   #
   # NVIDIA CUDA
@@ -101,10 +114,27 @@ rules:
       - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.15.1"
 
   #
+  # Iluvatar CoreX
+  #
+  ##
+  ## Use pack flow's arguments to override the default COREX version and version extra,
+  ## which are used in `pack/corex/Dockerfile` to construct the image tags and build arguments.
+  ##
+  - backend: "corex"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "COREX_VERSION="
+      - "VLLM_VERSION="
+
+  #
   # Hygon DTK
   #
-
-  ## Hygon DTK 25.04.2
+  ##
+  ## Use pack flow's arguments to override the default DTK version and version extra,
+  ## which are used in `pack/dtk/Dockerfile` to construct the image tags and build arguments.
   ##
   - backend: "dtk"
     services:
@@ -112,13 +142,15 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "DTK_VERSION=25.04.2"
+      - "DTK_VERSION="
+      - "VLLM_VERSION="
 
   #
   # T-Head HGGC
   #
-
-  ## T-Head HGGC 12.3
+  ##
+  ## Use pack flow's arguments to override the default HGGC version and version extra,
+  ## which are used in `pack/hggc/Dockerfile` to construct the image tags and build arguments.
   ##
   ## Get HGGC version via `VERSION=$(cat /usr/local/PPU_SDK/include/hggc.h | grep HGGC_VERSION | grep define | cut -d' ' -f3); echo "$(( ${VERSION} / 1000 )).$(( ${VERSION} % 1000 / 10 )).$(( ${VERSION} % 10 ))"`
   - backend: "hggc"
@@ -127,22 +159,16 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "HGGC_VERSION=12.3"
-      - "HGGC_VERSION_EXTRA=-vllm0.12.0"
-  - backend: "hggc"
-    services:
-      - "sglang"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "HGGC_VERSION=12.3"
-      - "HGGC_VERSION_EXTRA=-sglang0.5.6"
+      - "HGGC_VERSION="
+      - "HGGC_VERSION_EXTRA="
+      - "VLLM_VERSION="
 
   #
   # MateX MACA
   #
-
-  ## MateX MACA 3.3.0
+  ##
+  ## Use pack flow's arguments to override the default MACA version and version extra,
+  ## which are used in `pack/maca/Dockerfile` to construct the image tags and build arguments.
   ##
   - backend: "maca"
     services:
@@ -150,22 +176,16 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "MACA_VERSION=3.3.0"
-      - "MACA_VERSION_EXTRA=-20260105-vllm"
-  - backend: "maca"
-    services:
-      - "sglang"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "MACA_VERSION=3.3.0"
-      - "MACA_VERSION_EXTRA=-20251231-sglang"
+      - "MACA_VERSION="
+      - "MACA_VERSION_EXTRA="
+      - "VLLM_VERSION="
 
   #
   # MThreads MUSA
   #
-
-  ## MThreads MUSA 4.3.2
+  ##
+  ## Use pack flow's arguments to override the default MUSA version and version extra,
+  ## which are used in `pack/musa/Dockerfile` to construct the image tags and build arguments.
   ##
   - backend: "musa"
     services:
@@ -173,41 +193,6 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "MUSA_VERSION=4.3.2"
-      - "MUSA_VERSION_EXTRA=-kuae2.1-1201"
-  ## MThreads MUSA 4.1.0
-  ##
-  - backend: "musa"
-    services:
-      - "vllm"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "MUSA_VERSION=4.1.0"
-
-  #
-  # AMD ROCm
-  #
-
-  ## AMD ROCm 7.1.1
-  ##
-  - backend: "rocm"
-    services:
-      - "vllm"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "ROCM_VERSION=7.1.1"
-      - "VLLM_TORCH_SOURCE=radeon"
-  ## AMD ROCm 7.0.2
-  ##
-  - backend: "rocm"
-    services:
-      - "sglang"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "ROCM_VERSION=7.0.2"
-      - "VLLM_TORCH_SOURCE=radeon"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
+      - "MUSA_VERSION="
+      - "MUSA_VERSION_EXTRA="
+      - "VLLM_VERSION="
