@@ -124,6 +124,27 @@
                 ]
               },
               {
+                "backend": "maca",
+                "versions": [
+                  {
+                    "version": "3.3",
+                    "original_version": "3.3.0",
+                    "variants": [
+                      {
+                        "variant": "",
+                        "deprecated": false,
+                        "platforms": [
+                          {
+                            "platform": "linux/amd64",
+                            "docker_image": "gpustack/runner:maca3.3-vllm0.13.0"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
                 "backend": "rocm",
                 "versions": [
                   {
