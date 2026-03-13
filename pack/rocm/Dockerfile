@@ -939,7 +939,7 @@ ARG CMAKE_MAX_JOBS
 ARG VLLM_MOONCAKE_VERSION
 
 ENV VLLM_MOONCAKE_VERSION=${VLLM_MOONCAKE_VERSION} \
-    PATH="/usr/local/go/bin:${PATH}"
+    PATH="/opt/rocm/bin:/usr/local/go/bin:${PATH}"
 
 RUN --mount=type=bind,from=vllm-build-vllm,source=/,target=/vllm,rw <<EOF
     # MoonCake
@@ -1225,6 +1225,7 @@ RUN --mount=type=bind,from=vllm-build-aiter,source=/,target=/aiter,rw <<EOF
     # Install
     uv pip install --no-build-isolation \
         /aiter/workspace/*.whl
+    uv pip install flydsl==0.0.1.dev95158637
 
     # Cleanup
     rm -rf /var/tmp/* \
