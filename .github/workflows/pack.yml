@@ -219,6 +219,15 @@ jobs:
             done
           fi
           echo "EOF" >> $GITHUB_OUTPUT
+
+          DOCKER_CONTEXT="${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}"
+          echo "docker_context=${DOCKER_CONTEXT}" >> $GITHUB_OUTPUT
+
+          if [[ -f ${DOCKER_CONTEXT}/Dockerfile.${{ matrix.service }} ]]; then
+            echo "docker_file=${DOCKER_CONTEXT}/Dockerfile.${{ matrix.service }}" >> $GITHUB_OUTPUT
+          else
+            echo "docker_file=${DOCKER_CONTEXT}/Dockerfile" >> $GITHUB_OUTPUT
+          fi
       - name: Package
         timeout-minutes: 360
         uses: docker/build-push-action@v6
@@ -233,8 +242,8 @@ jobs:
           push: ${{ github.event.inputs.dry_run == 'false' }}
           provenance: false
           sbom: false
-          context: ${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}
-          file: ${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}/Dockerfile
+          context: ${{ steps.metadata.outputs.docker_context }}
+          file: ${{ steps.metadata.outputs.docker_file }}
           platforms: ${{ matrix.platform }}
           target: ${{ matrix.service }}
           tags: |
