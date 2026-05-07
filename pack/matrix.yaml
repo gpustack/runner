@@ -73,8 +73,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "VLLM_VERSION=v0.19.1"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.19.1"
+      - "VLLM_VERSION=v0.20.1"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.20.1"
 
   #
   # NVIDIA CUDA
