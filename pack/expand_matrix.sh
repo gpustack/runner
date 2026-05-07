@@ -10,6 +10,11 @@ INPUT_RUNNER_PROFILE=${INPUT_RUNNER_PROFILE:-"normal"}
 INPUT_WORKSPACE="${INPUT_WORKSPACE:-"$(dirname "${BASH_SOURCE[0]}")"}"
 INPUT_TEMPDIR="${INPUT_TEMPDIR:-"/tmp"}"
 
+if [[ -z "${INPUT_TARGET}" ]]; then
+    echo "[ERROR] No target specified. Please set the INPUT_TARGET input."
+    exit 1
+fi
+
 if [[ -n "${INPUT_POST_OPERATION}" ]]; then
     INPUT_WORKSPACE="${INPUT_WORKSPACE}/.post_operation/${INPUT_POST_OPERATION}"
 fi
@@ -87,87 +92,12 @@ EOT
 
     # Prepare tag prefix/suffix.
     TAG_PREFIX="${BACKEND}\${BACKEND_VERSION}-"
-    if [[ "${INPUT_TARGET}" == "runtime" ]]; then
-        TAG_PREFIX="${BACKEND}\${${BACKEND_UPPER}_VERSION}\${${BACKEND_UPPER}_VERSION_EXTRA:-\"\"}-"
-    fi
     if [[ "${BACKEND}" == "cann" ]]; then
         TAG_PREFIX="${TAG_PREFIX}\${${BACKEND_UPPER}_ARCHS}-"
     fi
     TAG_SUFFIX="-dev"
-    if [[ "${INPUT_FOR_RELEASE}" == "true" ]] || [[ "${INPUT_TARGET}" == "runtime" ]]; then
+    if [[ "${INPUT_FOR_RELEASE}" == "true" ]]; then
         TAG_SUFFIX=""
-    fi
-
-    # For runtime packing.
-    if [[ "${INPUT_TARGET}" == "runtime" ]]; then
-        # Prepare environment variables for sourcing.
-        cp -f "${INPUT_TEMPDIR}/envs_shared" "${INPUT_TEMPDIR}/envs_dedicated"
-        echo "export TAG=${TAG_PREFIX}python\${PYTHON_VERSION}" >>"${INPUT_TEMPDIR}/envs_dedicated"
-        # Value from environment variable.
-        source "${INPUT_TEMPDIR}/envs_dedicated" &&
-            rm -f "${INPUT_TEMPDIR}/envs_dedicated"
-        TAG="$(echo "${TAG}" | tr '[:upper:]' '[:lower:]')"
-        if [[ -n "${INPUT_TAG}" ]] && [[ "${INPUT_TAG}" != "${TAG}"* ]]; then
-            echo "[INFO] Skipping build tag ${TAG}${TAG_SUFFIX} for backend ${BACKEND} runtime..."
-            continue
-        fi
-        # Generate.
-        MANIFEST_JOBS="$(echo "${MANIFEST_JOBS}" | jq -cr \
-            --arg tag "${TAG}${TAG_SUFFIX}" \
-            '{($tag): []} + .')"
-        # Iterate all platforms of the item.
-        PLATFORMS=($(echo "${RULE}" | jq -cr '(.platforms[])?'))
-        if [[ "${#PLATFORMS[@]}" -eq 0 ]]; then
-            PLATFORMS=("linux/amd64" "linux/arm64")
-        fi
-        for PLATFORM in "${PLATFORMS[@]}"; do
-            IFS="/" read -r OS ARCH VARIANT <<<"${PLATFORM}"
-            PLATFORM_TAG="${TAG}-${OS}-${ARCH}"
-            if [[ -n "${INPUT_TAG}" ]] && [[ "${PLATFORM_TAG}" != "${INPUT_TAG}"* ]]; then
-                echo "[INFO] Skipping build tag ${PLATFORM_TAG} for backend ${BACKEND} runtime..."
-                continue
-            fi
-            RUNNER="ubuntu-22.04"
-            if [[ "${PLATFORM}" == "linux/arm64" ]]; then
-                RUNNER="ubuntu-22.04-arm"
-            fi
-            if [[ "${INPUT_RUNNER_PROFILE}" != "normal" ]]; then
-                RUNNER="${RUNNER}-${INPUT_RUNNER_PROFILE}"
-            fi
-            # Generate.
-            MANIFEST_JOBS="$(echo "${MANIFEST_JOBS}" | jq -cr \
-                --arg tag "${TAG}${TAG_SUFFIX}" \
-                --arg platform_tag "${PLATFORM_TAG}" \
-                '.[$tag] += [$platform_tag]')"
-            BUILD_JOBS="$(echo "${BUILD_JOBS}" | jq -cr \
-                --arg backend "${BACKEND}" \
-                --arg backend_version "${BACKEND_VERSION}" \
-                --arg backend_variant "${BACKEND_VARIANT}" \
-                --arg platform "${PLATFORM}" \
-                --arg platform_tag "${PLATFORM_TAG}" \
-                --arg tag "${TAG}${TAG_SUFFIX}" \
-                --argjson args "${ARGS}" \
-                --arg runner "${RUNNER}" \
-                --argjson platform_tag_cache "[\"${PLATFORM_TAG}\"]" \
-                --arg original_backend_version "${ORIGINAL_BACKEND_VERSION}" \
-                '[{
-                    backend: $backend,
-                    backend_version: $backend_version,
-                    backend_variant: $backend_variant,
-                    service: "runtime",
-                    service_version: "",
-                    platform: $platform,
-                    platform_tag: $platform_tag,
-                    tag: $tag,
-                    args: $args,
-                    runner: $runner,
-                    platform_tag_cache: $platform_tag_cache,
-                    original_backend_version: $original_backend_version,
-                    deprecated: false,
-                  }] + .')"
-        done
-
-        continue
     fi
 
     # For service packing.
@@ -180,7 +110,7 @@ EOT
     fi
     for SERVICE in "${SERVICES[@]}"; do
         SERVICE_UPPER="$(echo "${SERVICE}" | tr '[:lower:]' '[:upper:]')"
-        if [[ "${INPUT_TARGET}" != "services" && "${INPUT_TARGET}" != "${SERVICE}" ]]; then
+        if [[ "${INPUT_TARGET}" != "${SERVICE}" ]]; then
             echo "[INFO] Skipping build service '${SERVICE}' for backend '${BACKEND}' as input target '${INPUT_TARGET}'..."
             continue
         fi
