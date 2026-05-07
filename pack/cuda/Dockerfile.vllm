@@ -3,7 +3,7 @@ ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.1
 ARG CUDA_ARCHS
 ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.20.1
-ARG VLLM_VERSION=v0.20.1
+ARG VLLM_VERSION=0.20.1
 ARG VLLM_TORCH_VERSION=2.12.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_OMNI_COMMIT=704b6bb6
@@ -68,15 +68,46 @@ RUN <<EOF
     # Python
 
     # Update alternatives
-    if [[ -f /etc/alternatives/python ]]; then update-alternatives --remove-all python; fi; update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
+    if ! command -v python >/dev/null 2>&1 \
+        && command -v python${PYTHON_VERSION} >/dev/null 2>&1; then
+        update-alternatives --install /usr/bin/python python $(which python${PYTHON_VERSION}) 1
+    fi
+EOF
 
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore
+
+## Prepare Python Buildkit
+
+RUN <<EOF
+    # Buildkit
+
+    cat <<EOT >/tmp/requirements.txt
+build
+EOT
+    pip install -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
 EOF
 
 ## Prepare Envs
 
+ARG CUDA_VERSION
+ARG CUDA_ARCHS
+
+ENV CUDA_HOME="/usr/local/cuda" \
+    CUDA_VERSION=${CUDA_VERSION} \
+    CUDA_ARCHS=${CUDA_ARCHS}
+
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow \
-    UV_SKIP_WHEEL_FILENAME_CHECK=1
+    UV_SKIP_WHEEL_FILENAME_CHECK=1 \
+    UV_NO_CACHE=1 \
+    UV_HTTP_TIMEOUT=500 \
+    UV_INDEX_STRATEGY="unsafe-best-match"
 
 ARG VLLM_VERSION
 ARG VLLM_TORCH_VERSION
@@ -104,6 +135,8 @@ ENV VLLM_OMNI_COMMIT=${VLLM_OMNI_COMMIT}
 RUN <<EOF
     # Omni
 
+    rm -rf /workspace
+
     if [[ -z "${VLLM_OMNI_COMMIT}" ]]; then
         echo "Skipping vLLM Omni build for ${TARGETARCH}..."
         exit 0
@@ -115,7 +148,7 @@ RUN <<EOF
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
         CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
     fi
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+    if (( $(echo "${CMAKE_MAX_JOBS} < 4" | bc -l) )); then
         CMAKE_MAX_JOBS="4"
     fi
     VL_CUDA_ARCHS="${CUDA_ARCHS}"
