@@ -98,8 +98,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=v0.19.1"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.19.1-cu130-ubuntu2404"
+      - "VLLM_VERSION=v0.20.1"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.20.1-ubuntu2404"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
@@ -107,8 +107,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=v0.19.1"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.19.1-ubuntu2404"
+      - "VLLM_VERSION=v0.20.1"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.20.1-cu129-ubuntu2404"
 
   #
   # Iluvatar CoreX
