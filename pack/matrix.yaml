@@ -64,7 +64,7 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.1.1
+  ## AMD ROCm 7.0.2
   ##
   - backend: "rocm"
     services:
@@ -72,20 +72,9 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "ROCM_VERSION=7.1.1"
-      - "VLLM_TORCH_SOURCE=radeon"
-  ## AMD ROCm 7.0.2
-  ##
-  - backend: "rocm"
-    services:
-      - "sglang"
-    platforms:
-      - "linux/amd64"
-    args:
       - "ROCM_VERSION=7.0.2"
-      - "VLLM_TORCH_SOURCE=radeon"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:rocm7.0-vllm0.15.1"
+      - "VLLM_VERSION=v0.18.1"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.18.1"
 
   #
   # NVIDIA CUDA
