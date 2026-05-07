@@ -129,6 +129,10 @@ package:
 		if [[ -n "$(PACKAGE_POST_OPERATION)" ]]; then \
 		    JOB_LOCATION=$(SRCDIR)/pack/.post_operation/$(PACKAGE_POST_OPERATION)/$${JOB_BACKEND}; \
 		fi; \
+		JOB_DOCKERFILE="$${JOB_LOCATION}/Dockerfile"; \
+		if [[ -f "$${JOB_DOCKERFILE}.$${JOB_TARGET}" ]]; then \
+			JOB_DOCKERFILE="$${JOB_DOCKERFILE}.$${JOB_TARGET}"; \
+		fi; \
 		echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
 		set -x; \
 		docker buildx build \

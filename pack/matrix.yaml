@@ -91,27 +91,22 @@ rules:
   # NVIDIA CUDA
   #
 
+  ## NVIDIA CUDA 13.0.1
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=13.0.1"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.18.1-cu130"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
     services:
       - "vllm"
-      - "sglang"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.15.1"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.9-vllm0.15.1"
-  ## NVIDIA CUDA 12.8.1
-  ##
-  - backend: "cuda"
-    services:
-      - "voxbox"
-      - "vllm"
-      - "sglang"
-    args:
-      - "CUDA_VERSION=12.8.1"
-      - "SGLANG_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.15.1"
-      - "SGLANG_BUILD_BASE_IMAGE=gpustack/runner:cuda12.8-vllm0.15.1"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.18.1"
 
   #
   # Iluvatar CoreX
