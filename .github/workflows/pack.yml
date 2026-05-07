@@ -41,13 +41,11 @@ on:
           - rocm
       # Control the build stage.
       target:
-        description: 'Target, which target to pack for, "runtime" is for runtime image, "services" is to build all services, or other specific target.'
+        description: 'Target, which target to pack for.'
         required: false
         type: choice
-        default: services
+        default: vllm
         options:
-          - runtime
-          - services
           - voxbox
           - mindie
           - vllm
@@ -74,7 +72,7 @@ on:
         default: false
       # Do not append a `-dev` suffix to the tag.
       for_release:
-        description: 'For release (without -dev suffix). Always be true if target is "runtime".'
+        description: 'For release (without -dev suffix).'
         required: false
         type: boolean
         default: false
@@ -291,7 +289,7 @@ jobs:
 
   # Submit a PR to merge the runner.
   merge-runner:
-    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.target != 'runtime' && github.event.inputs.for_release == 'true' && github.event.inputs.post_operation == '' }}
+    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.for_release == 'true' && github.event.inputs.post_operation == '' }}
     needs:
       - expand-matrix
       - manifest

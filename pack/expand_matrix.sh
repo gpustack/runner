@@ -4,7 +4,7 @@ set -eo pipefail
 
 INPUT_POST_OPERATION=${INPUT_POST_OPERATION:-""}
 INPUT_BACKEND="${INPUT_BACKEND:-"all"}"
-INPUT_TARGET=${INPUT_TARGET:-"services"}
+INPUT_TARGET=${INPUT_TARGET:-""}
 INPUT_FOR_RELEASE=${INPUT_FOR_RELEASE:-"false"}
 INPUT_RUNNER_PROFILE=${INPUT_RUNNER_PROFILE:-"normal"}
 INPUT_WORKSPACE="${INPUT_WORKSPACE:-"$(dirname "${BASH_SOURCE[0]}")"}"
@@ -33,6 +33,9 @@ BACKENDS="$(echo "${RULES}" | jq -r '.[] | .backend' | sort -u | jq -R . | jq -c
 for BACKEND in $(echo "${BACKENDS}" | jq -cr '.[]'); do
     # Get the Dockerfile path for the backend.
     DOCKERFILE="${INPUT_WORKSPACE}/${BACKEND}/Dockerfile"
+    if [[ -f "${DOCKERFILE}.${INPUT_TARGET}" ]]; then
+        DOCKERFILE="${DOCKERFILE}.${INPUT_TARGET}"
+    fi
     if [[ ! -f "${DOCKERFILE}" ]]; then
         echo "[ERROR]: Dockerfile not found: ${DOCKERFILE}"
         exit 1
