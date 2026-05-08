@@ -85,6 +85,10 @@ RUN <<EOF
 
     cat <<EOT >/tmp/requirements.txt
 build
+cmake<4
+wheel
+pybind11<3
+Cython
 EOT
     pip install -r /tmp/requirements.txt
 
