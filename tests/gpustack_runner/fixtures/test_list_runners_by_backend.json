@@ -1116,9 +1116,9 @@
         "original_backend_version": "13.0.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.20.1",
+        "service_version": "0.20.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cuda13.0-vllmv0.20.1",
+        "docker_image": "gpustack/runner:cuda13.0-vllm0.20.1",
         "deprecated": false
       },
       {
@@ -1127,9 +1127,9 @@
         "original_backend_version": "13.0.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.20.1",
+        "service_version": "0.20.1",
         "platform": "linux/arm64",
-        "docker_image": "gpustack/runner:cuda13.0-vllmv0.20.1",
+        "docker_image": "gpustack/runner:cuda13.0-vllm0.20.1",
         "deprecated": false
       },
       {
@@ -1138,9 +1138,9 @@
         "original_backend_version": "13.0.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.19.1",
+        "service_version": "0.19.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cuda13.0-vllmv0.19.1",
+        "docker_image": "gpustack/runner:cuda13.0-vllm0.19.1",
         "deprecated": false
       },
       {
@@ -1149,9 +1149,9 @@
         "original_backend_version": "13.0.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.19.1",
+        "service_version": "0.19.1",
         "platform": "linux/arm64",
-        "docker_image": "gpustack/runner:cuda13.0-vllmv0.19.1",
+        "docker_image": "gpustack/runner:cuda13.0-vllm0.19.1",
         "deprecated": false
       },
       {
@@ -1270,9 +1270,9 @@
         "original_backend_version": "12.9.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.20.1",
+        "service_version": "0.20.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cuda12.9-vllmv0.20.1",
+        "docker_image": "gpustack/runner:cuda12.9-vllm0.20.1",
         "deprecated": false
       },
       {
@@ -1281,9 +1281,9 @@
         "original_backend_version": "12.9.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.20.1",
+        "service_version": "0.20.1",
         "platform": "linux/arm64",
-        "docker_image": "gpustack/runner:cuda12.9-vllmv0.20.1",
+        "docker_image": "gpustack/runner:cuda12.9-vllm0.20.1",
         "deprecated": false
       },
       {
@@ -1292,9 +1292,9 @@
         "original_backend_version": "12.9.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.19.1",
+        "service_version": "0.19.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cuda12.9-vllmv0.19.1",
+        "docker_image": "gpustack/runner:cuda12.9-vllm0.19.1",
         "deprecated": false
       },
       {
@@ -1303,9 +1303,9 @@
         "original_backend_version": "12.9.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.19.1",
+        "service_version": "0.19.1",
         "platform": "linux/arm64",
-        "docker_image": "gpustack/runner:cuda12.9-vllmv0.19.1",
+        "docker_image": "gpustack/runner:cuda12.9-vllm0.19.1",
         "deprecated": false
       },
       {
@@ -2498,9 +2498,9 @@
         "original_backend_version": "7.2.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.20.1",
+        "service_version": "0.20.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:rocm7.2-vllmv0.20.1",
+        "docker_image": "gpustack/runner:rocm7.2-vllm0.20.1",
         "deprecated": false
       },
       {
@@ -2509,9 +2509,9 @@
         "original_backend_version": "7.2.1",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.19.1",
+        "service_version": "0.19.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:rocm7.2-vllmv0.19.1",
+        "docker_image": "gpustack/runner:rocm7.2-vllm0.19.1",
         "deprecated": false
       },
       {
@@ -2575,9 +2575,9 @@
         "original_backend_version": "7.0.2",
         "backend_variant": "",
         "service": "vllm",
-        "service_version": "v0.18.1",
+        "service_version": "0.18.1",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:rocm7.0-vllmv0.18.1",
+        "docker_image": "gpustack/runner:rocm7.0-vllm0.18.1",
         "deprecated": false
       },
       {
