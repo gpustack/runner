@@ -418,6 +418,26 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
     fi
 EOF
 
+## Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+# audio extras
+librosa
+soundfile
+mistral_common[audio]
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_ASCEND_RT_VISIBLE_DEVICES=1 \
