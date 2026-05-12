@@ -67,6 +67,7 @@ class ListImagesSubCommand(SubCommand):
     service_version: str
     service_version_prefix: str
     repository: str
+    no_repository: list[str]
     platform: str
     deprecated: bool
     format: str
@@ -129,6 +130,12 @@ class ListImagesSubCommand(SubCommand):
         )
 
         list_parser.add_argument(
+            "--no-repository",
+            nargs="*",
+            help="List of excluded repository names to filter images by (space separated)",
+        )
+
+        list_parser.add_argument(
             "--platform",
             type=str,
             help="Filter images by platform",
@@ -160,9 +167,14 @@ class ListImagesSubCommand(SubCommand):
         self.service_version = args.service_version
         self.service_version_prefix = args.service_version_prefix
         self.repository = args.repository
+        self.no_repository = args.no_repository or []
         self.platform = args.platform
         self.deprecated = args.deprecated or False
         self.format = args.format or "text"
+
+        if self.repository and self.no_repository:
+            msg = f"Repository '{self.repository}' cannot be both included and excluded"
+            raise RuntimeError(msg)
 
     def run(self):
         images = list_images(
@@ -174,6 +186,7 @@ class ListImagesSubCommand(SubCommand):
             service_version=self.service_version,
             service_version_prefix=self.service_version_prefix,
             repository=self.repository,
+            no_repository=self.no_repository,
             platform=self.platform,
             with_deprecated=self.deprecated,
         )
@@ -202,6 +215,7 @@ class SaveImagesSubCommand(SubCommand):
     service_version: str
     service_version_prefix: str
     repository: str
+    no_repository: list[str]
     platform: str
     deprecated: bool
     max_workers: int
@@ -269,6 +283,12 @@ class SaveImagesSubCommand(SubCommand):
             "--repository",
             type=str,
             help="Filter images by repository name",
+        )
+
+        save_parser.add_argument(
+            "--no-repository",
+            nargs="*",
+            help="List of excluded repository names to filter images by (space separated)",
         )
 
         save_parser.add_argument(
@@ -355,6 +375,7 @@ class SaveImagesSubCommand(SubCommand):
         self.service_version = args.service_version
         self.service_version_prefix = args.service_version_prefix
         self.repository = args.repository
+        self.no_repository = args.no_repository or []
         self.platform = args.platform or _get_current_platform()
         self.deprecated = args.deprecated or False
         self.max_workers = args.max_workers
@@ -365,6 +386,10 @@ class SaveImagesSubCommand(SubCommand):
         self.source_password = args.source_password or os.getenv("SOURCE_PASSWORD")
         self.archive_format = args.archive_format
         self.output = Path(args.output or Path.cwd())
+
+        if self.repository and self.no_repository:
+            msg = f"Repository '{self.repository}' cannot be both included and excluded"
+            raise RuntimeError(msg)
 
         try:
             if not self.output.exists():
@@ -389,6 +414,7 @@ class SaveImagesSubCommand(SubCommand):
             service_version=self.service_version,
             service_version_prefix=self.service_version_prefix,
             repository=self.repository,
+            no_repository=self.no_repository,
             platform=self.platform,
             with_deprecated=self.deprecated,
         )
@@ -538,6 +564,7 @@ class CopyImagesSubCommand(SubCommand):
     service_version: str
     service_version_prefix: str
     repository: str
+    no_repository: list[str]
     platform: str
     deprecated: bool
     max_workers: int
@@ -606,7 +633,13 @@ class CopyImagesSubCommand(SubCommand):
         copy_parser.add_argument(
             "--repository",
             type=str,
-            help="Filter images by repository name",
+            help="Filter images by included repository name",
+        )
+
+        copy_parser.add_argument(
+            "--no-repository",
+            nargs="*",
+            help="List of excluded repository names to filter images by (space separated)",
         )
 
         copy_parser.add_argument(
@@ -711,6 +744,7 @@ class CopyImagesSubCommand(SubCommand):
         self.service_version = args.service_version
         self.service_version_prefix = args.service_version_prefix
         self.repository = args.repository
+        self.no_repository = args.no_repository or []
         self.platform = args.platform
         self.deprecated = args.deprecated or False
         self.max_workers = args.max_workers
@@ -735,6 +769,10 @@ class CopyImagesSubCommand(SubCommand):
             "DESTINATION_PASSWORD",
         )
 
+        if self.repository and self.no_repository:
+            msg = f"Repository '{self.repository}' cannot be both included and excluded"
+            raise RuntimeError(msg)
+
     def run(self):
         images = list_images(
             backend=self.backend,
@@ -745,6 +783,7 @@ class CopyImagesSubCommand(SubCommand):
             service_version=self.service_version,
             service_version_prefix=self.service_version_prefix,
             repository=self.repository,
+            no_repository=self.no_repository,
             platform=self.platform,
             with_deprecated=self.deprecated,
         )
@@ -896,6 +935,7 @@ class LoadImagesSubCommand(SubCommand):
     """
 
     repository: str
+    no_repository: list[str]
     platform: str
     max_workers: int
     max_retries: int
@@ -918,6 +958,12 @@ class LoadImagesSubCommand(SubCommand):
             "--repository",
             type=str,
             help="Filter images by repository name",
+        )
+
+        load_parser.add_argument(
+            "--no-repository",
+            nargs="*",
+            help="List of excluded repository names to filter images by (space separated)",
         )
 
         load_parser.add_argument(
@@ -985,6 +1031,7 @@ class LoadImagesSubCommand(SubCommand):
         _ensure_required_tools()
 
         self.repository = args.repository
+        self.no_repository = args.no_repository or []
         self.platform = args.platform or _get_current_platform()
         self.max_workers = args.max_workers
         self.max_retries = args.max_retries
@@ -999,6 +1046,10 @@ class LoadImagesSubCommand(SubCommand):
         self.storage = args.storage
         self.input = Path(args.input)
         self.archives = []
+
+        if self.repository and self.no_repository:
+            msg = f"Repository '{self.repository}' cannot be both included and excluded"
+            raise RuntimeError(msg)
 
         if not self.input.exists() or not self.input.is_dir():
             msg = f"Input path '{self.input}' is not a valid directory"
@@ -1350,6 +1401,9 @@ def list_images(**kwargs) -> list[PlatformedImage]:
     """
     platform = kwargs.pop("platform", None)
     repository = kwargs.pop("repository", None)
+    no_repository = kwargs.pop("no_repository", [])
+    if repository:
+        no_repository = []
 
     image_names_index: dict[str, int] = {}
     images: list[PlatformedImage] = []
@@ -1401,6 +1455,12 @@ def list_images(**kwargs) -> list[PlatformedImage]:
         ]
     if repository:
         images = [img for img in images if img.name.__contains__(f"/{repository}:")]
+    elif no_repository:
+        images = [
+            img
+            for img in images
+            if not any(f"/{no_repo}:" in img.name for no_repo in no_repository)
+        ]
 
     return images
 
