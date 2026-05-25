@@ -142,7 +142,7 @@ package:
 			--platform "$${JOB_PLATFORM}" \
 			--target "$${JOB_TARGET}" \
 			--tag "$${JOB_TAG}" \
-			--file "$${JOB_LOCATION}/Dockerfile" \
+			--file "$${JOB_DOCKERFILE}" \
 			--attest "type=provenance,disabled=true" \
 			--attest "type=sbom,disabled=true" \
 			--ulimit nofile=65536:65536 \
