@@ -1,0 +1,379 @@
+ARG PYTHON_VERSION=3.12
+ARG CMAKE_MAX_JOBS
+ARG CUDA_VERSION=13.0.1
+ARG CUDA_ARCHS
+ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12-cu130
+ARG SGLANG_VERSION=0.5.12
+ARG SGLANG_TORCH_VERSION=2.11.0
+ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
+ARG SGLANG_LMCACHE_VERSION=0.4.4
+ARG SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda13
+ARG SGLANG_AWS_EFA_VERSION=1.44.0
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang-build
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install Tools
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG='en_US.UTF-8' \
+    LANGUAGE='en_US:en' \
+    LC_ALL='en_US.UTF-8'
+
+RUN <<EOF
+    # Tools
+
+    # Refresh
+    apt-get update -y && apt-get install -y --no-install-recommends \
+        software-properties-common apt-transport-https \
+        ca-certificates gnupg2 lsb-release gnupg-agent \
+      && apt-get update -y
+
+    # Install
+    apt-get install -y --no-install-recommends \
+        ca-certificates build-essential binutils bash openssl \
+        curl wget aria2 \
+        git git-lfs \
+        unzip xz-utils \
+        tzdata locales \
+        iproute2 iputils-ping ifstat net-tools dnsutils pciutils ipmitool \
+        rdma-core rdmacm-utils infiniband-diags \
+        procps sysstat htop \
+        tini vim jq bc tree
+
+    # Update locale
+    localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+
+    # Update timezone
+    rm -f /etc/localtime \
+        && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+        && echo "Asia/Shanghai" > /etc/timezone \
+        && dpkg-reconfigure --frontend noninteractive tzdata
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Prepare Python
+
+ARG PYTHON_VERSION
+
+ENV PYTHON_VERSION=${PYTHON_VERSION}
+
+RUN <<EOF
+    # Python
+
+    # Update alternatives
+    if ! command -v python >/dev/null 2>&1 \
+        && command -v python${PYTHON_VERSION} >/dev/null 2>&1; then
+        update-alternatives --install /usr/bin/python python $(which python${PYTHON_VERSION}) 1
+    fi
+EOF
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore
+
+## Prepare Python Buildkit
+
+RUN <<EOF
+    # Buildkit
+
+    cat <<EOT >/tmp/requirements.txt
+build
+cmake<4
+setuptools>=77.0.3,<81.0.0
+setuptools_scm>=8
+wheel
+pybind11<3
+Cython
+uv
+EOT
+    pip install -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Prepare Envs
+
+ARG CUDA_VERSION
+ARG CUDA_ARCHS
+
+ENV CUDA_HOME="/usr/local/cuda" \
+    CUDA_VERSION=${CUDA_VERSION} \
+    CUDA_ARCHS=${CUDA_ARCHS}
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1 \
+    UV_NO_CACHE=1 \
+    UV_HTTP_TIMEOUT=500 \
+    UV_INDEX_STRATEGY="unsafe-best-match" \
+    UV_BREAK_SYSTEM_PACKAGES=1
+
+ARG SGLANG_VERSION
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_CUDA_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_CUDA_VERSION=${SGLANG_TORCH_CUDA_VERSION}
+
+
+FROM sglang-build AS sglang-build-lmcache
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build LMCache
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_LMCACHE_VERSION
+
+ENV SGLANG_LMCACHE_VERSION=${SGLANG_LMCACHE_VERSION}
+
+RUN <<EOF
+    # LMCache
+    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L67-L129.
+
+    rm -rf /workspace
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${SGLANG_TORCH_CUDA_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    LC_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${LC_CUDA_ARCHS}" ]]; then
+        ## Match per-CUDA-major support per README.md "NVIDIA CUDA" section:
+        ## - CUDA 13.0 supports up to compute_120+PTX (no compute_121)
+        ## - CUDA 12.9 supports compute_120 + compute_121+PTX
+        ## - CUDA 12.6/12.4 (older) goes the conservative branch
+        if (( CUDA_MAJOR >= 13 )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0+PTX"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} >= 12.9" | bc -l) )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX"
+        else
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
+    export NVCC_THREADS=1
+    echo "Building LMCache with the following environment variables:"
+    env
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    ## Note: don't pin cuda-bindings —— cu129 base has 12.9.4, cu130 base has 13.2.0,
+    ## both compatible with their respective torch. Hardcoding 12.9.4 on cu130 downgrades
+    ## and breaks `torch -> cuda-bindings<14,>=13.0.3` requirement.
+    pushd /tmp/lmcache \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
+        && cat /tmp/lmcache/pyproject.toml \
+        && python -m build --no-isolation --wheel \
+        && tree -hs /tmp/lmcache/dist \
+        && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+
+FROM sglang-build AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install NVIDIA HPC-X,
+## See https://catalog.ngc.nvidia.com/orgs/nvidia/containers/cuda-dl-base/layers?version=24.12-cuda12.6-devel-ubuntu24.04.
+
+ARG SGLANG_NVIDIA_HPCX_VERSION
+
+ENV SGLANG_NVIDIA_HPCX_VERSION=${SGLANG_NVIDIA_HPCX_VERSION}
+
+RUN <<EOF
+    # NVIDIA HPC-X
+
+    # Prepare
+    rm -f $(dpkg-query -L libibverbs-dev librdmacm-dev libibumad-dev | grep "\(\.so\|\.a\)$") || true
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
+    source /etc/os-release
+
+    # Get Download Version
+    # If SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda13, SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD=2.24.1
+    # If SGLANG_NVIDIA_HPCX_VERSION=2.22.1rc4, SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD=2.22.1
+    # If SGLANG_NVIDIA_HPCX_VERSION=2.21.3, SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD=2.21.3
+    if [[ "${SGLANG_NVIDIA_HPCX_VERSION}" == *"_cuda"* ]]; then
+        SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD=$(echo "${SGLANG_NVIDIA_HPCX_VERSION}" | sed 's/_cuda.*//')
+    elif [[ "${SGLANG_NVIDIA_HPCX_VERSION}" == *"rc"* ]]; then
+        SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD=$(echo "${SGLANG_NVIDIA_HPCX_VERSION}" | sed 's/rc.*//')
+    else
+        SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD=${SGLANG_NVIDIA_HPCX_VERSION}
+    fi
+
+    # Download
+    mkdir -p /opt/hpcx
+    curl --retry 3 --retry-connrefused -fL "https://content.mellanox.com/hpc/hpc-x/v${SGLANG_NVIDIA_HPCX_VERSION}/hpcx-v${SGLANG_NVIDIA_HPCX_VERSION_DOWNLOAD}-gcc-inbox-${ID}${VERSION_ID}-cuda${CUDA_MAJOR}-$(uname -m).tbz" | tar -jxv -C /opt/hpcx --strip-components 1
+
+    # Install
+    ln -sf /opt/hpcx/ompi /usr/local/mpi
+    ln -sf /opt/hpcx/ucx /usr/local/ucx
+    sed -i 's/^\(hwloc_base_binding_policy\) = core$/\1 = none/' /opt/hpcx/ompi/etc/openmpi-mca-params.conf
+    sed -i 's/^\(btl = self\)$/#\1/' /opt/hpcx/ompi/etc/openmpi-mca-params.conf
+    cat <<EOT > /etc/ld.so.conf.d/hpcx.conf
+/opt/hpcx/clusterkit/lib
+/opt/hpcx/hcoll/lib
+/opt/hpcx/nccl_rdma_sharp_plugin/lib
+/opt/hpcx/ncclnet_plugin/lib
+/opt/hpcx/ompi/lib
+/opt/hpcx/sharp/lib
+/opt/hpcx/ucc/lib
+/opt/hpcx/ucx/lib
+EOT
+
+    # Review
+    ldconfig -v
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+ENV PATH="/usr/local/mpi/bin:/usr/local/ucx/bin:${PATH}" \
+    OPAL_PREFIX=/opt/hpcx/ompi \
+    OMPI_MCA_coll_hcoll_enable=0
+
+## Install AWS EFA,
+## See https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/efa-start-nccl.html#nccl-start-base-enable.
+
+ARG SGLANG_AWS_EFA_VERSION
+
+ENV SGLANG_AWS_EFA_VERSION=${SGLANG_AWS_EFA_VERSION}
+
+RUN <<EOF
+    # AWS EFA
+
+    # Download
+    curl --retry 3 --retry-connrefused -fL "https://efa-installer.amazonaws.com/aws-efa-installer-${SGLANG_AWS_EFA_VERSION}.tar.gz" | tar -zxv -C /tmp
+
+    # Install
+    pushd /tmp/aws-efa-installer && \
+        ./efa_installer.sh -y --skip-kmod
+
+    # Prepare
+    rm /opt/amazon/efa/lib/libfabric.a || true
+
+    # Review
+    ldconfig -v
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+ENV PATH="${PATH}:/opt/amazon/efa/bin"
+
+## Install LMCache
+
+ARG SGLANG_LMCACHE_VERSION
+
+ENV SGLANG_LMCACHE_VERSION=${SGLANG_LMCACHE_VERSION}
+
+RUN --mount=type=bind,from=sglang-build-lmcache,source=/,target=/lmcache,rw <<EOF
+    # LMCache
+
+    # Install
+    uv pip install --no-build-isolation \
+        /lmcache/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+# dockerfile extras
+accelerate
+hf_transfer
+bitsandbytes
+
+# audio extras
+librosa
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Uninstall
+    ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
+    ## Note: 0.5.12 base image still ships runai-model-streamer 0.15.9 via the [runai] extra.
+    uv pip uninstall \
+        runai-model-streamer || true
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sglang-router \
+        --package sgl-kernel \
+        --package flashinfer-python \
+        --package flash-attn \
+        --package triton \
+        --package torch \
+        --package lmcache \
+        --package deep-ep \
+        --package deep-gemm \
+        --package mooncake-transfer-engine
+EOF
+
+## Entrypoint
+
+ENV PATH="/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/cuda/nvvm/bin:${PATH}" \
+    LD_LIBRARY_PATH="/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}" \
+    SGLANG_DISABLE_CUDNN_CHECK=1 \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_INT4_WEIGHT=0 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_SET_CPU_AFFINITY=1 \
+    SAFETENSORS_FAST_GPU=1 \
+    RUNAI_STREAMER_MEMORY_LIMIT=0 \
+    RUNAI_STREAMER_LOG_TO_STDERR=1 \
+    RUNAI_STREAMER_LOG_LEVEL=INFO
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]

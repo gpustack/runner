@@ -108,6 +108,15 @@ rules:
       - "CUDA_VERSION=13.0.1"
       - "VLLM_VERSION=0.20.2"
       - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.20.2-ubuntu2404"
+  ## NVIDIA CUDA 13.0.1 - SGLang 0.5.12
+  ##
+  - backend: "cuda"
+    services:
+      - "sglang"
+    args:
+      - "CUDA_VERSION=13.0.1"
+      - "SGLANG_VERSION=0.5.12"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12-cu130"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
@@ -117,6 +126,16 @@ rules:
       - "CUDA_VERSION=12.9.1"
       - "VLLM_VERSION=0.20.2"
       - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.20.2-cu129-ubuntu2404"
+  ## NVIDIA CUDA 12.9.1 - SGLang 0.5.12
+  ##
+  - backend: "cuda"
+    services:
+      - "sglang"
+    args:
+      - "CUDA_VERSION=12.9.1"
+      - "SGLANG_VERSION=0.5.12"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12-cu129"
+      - "SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda12"
 
   #
   # Iluvatar CoreX
