@@ -1,0 +1,265 @@
+ARG PYTHON_VERSION=3.11
+ARG CMAKE_MAX_JOBS
+ARG CANN_VERSION=8.5.1
+ARG CANN_ARCHS=910b
+ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.12-cann8.5.0-910b
+ARG SGLANG_VERSION=0.5.12
+ARG SGLANG_TORCH_VERSION=2.8.0
+ARG SGLANG_LMCACHE_VERSION=0.4.2
+ARG SGLANG_LMCACHE_ASCEND_VERSION=${SGLANG_LMCACHE_VERSION}
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang-build
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install Tools
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG='en_US.UTF-8' \
+    LANGUAGE='en_US:en' \
+    LC_ALL='en_US.UTF-8'
+
+RUN <<EOF
+    # Tools
+
+    # Refresh
+    apt-get update -y && apt-get install -y --no-install-recommends \
+        software-properties-common apt-transport-https \
+        ca-certificates gnupg2 lsb-release gnupg-agent \
+      && apt-get update -y
+
+    # Install
+    apt-get install -y --no-install-recommends \
+        ca-certificates build-essential binutils bash openssl \
+        curl wget aria2 \
+        git git-lfs \
+        unzip xz-utils \
+        tzdata locales \
+        iproute2 iputils-ping ifstat net-tools dnsutils pciutils ipmitool \
+        rdma-core rdmacm-utils infiniband-diags \
+        procps sysstat htop \
+        tini vim jq bc tree
+
+    # Update locale
+    localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+
+    # Update timezone
+    rm -f /etc/localtime \
+        && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+        && echo "Asia/Shanghai" > /etc/timezone \
+        && dpkg-reconfigure --frontend noninteractive tzdata
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Prepare C Buildkit
+
+RUN <<EOF
+    # C Buildkit
+
+    apt-get install -y --no-install-recommends \
+        ffmpeg libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
+        numactl libnuma-dev libjemalloc2 \
+        cmake make ninja-build pkg-config ccache
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Prepare Python
+
+ARG PYTHON_VERSION
+
+ENV PYTHON_VERSION=${PYTHON_VERSION}
+
+RUN <<EOF
+    # Python
+
+    # Update alternatives
+    if ! command -v python >/dev/null 2>&1 \
+        && command -v python${PYTHON_VERSION} >/dev/null 2>&1; then
+        update-alternatives --install /usr/bin/python python $(which python${PYTHON_VERSION}) 1
+    fi
+
+EOF
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore
+
+## Prepare Python Buildkit
+
+RUN <<EOF
+    # Buildkit
+
+    cat <<EOT >/tmp/requirements.txt
+build
+uv
+EOT
+    pip install -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Prepare Envs
+
+ARG CANN_VERSION
+ARG CANN_ARCHS
+
+ENV CANN_HOME="/usr/local/Ascend" \
+    CANN_VERSION=${CANN_VERSION} \
+    CANN_ARCHS=${CANN_ARCHS}
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1 \
+    UV_NO_CACHE=1 \
+    UV_HTTP_TIMEOUT=500 \
+    UV_INDEX_STRATEGY="unsafe-best-match" \
+    UV_BREAK_SYSTEM_PACKAGES=1
+
+ARG SGLANG_VERSION
+ARG SGLANG_TORCH_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION}
+
+
+FROM sglang-build AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install LMCache
+
+ARG SGLANG_LMCACHE_VERSION
+ARG SGLANG_LMCACHE_ASCEND_VERSION
+
+ENV SGLANG_LMCACHE_VERSION=${SGLANG_LMCACHE_VERSION} \
+    SGLANG_LMCACHE_ASCEND_VERSION=${SGLANG_LMCACHE_ASCEND_VERSION}
+
+RUN <<EOF
+    # LMCache
+
+    if [[ "${CANN_ARCHS}" == "310p" ]]; then
+        echo "Skipping LMCache installation for ${CANN_ARCHS}..."
+        exit 0
+    fi
+
+    ## NOTE: nnal/atb/set_env.sh uses `result=$(grep ...GLIBCXX_USE_CXX11_ABI...)` then
+    ## `cxx_abi=${result:-1}` as a fallback. But torch 2.7.1+ removed that symbol so
+    ## grep exits 1, and `set -e` kills the script before the fallback assignment ——
+    ## leaving ATB_HOME_PATH / LD_LIBRARY_PATH (lines 50+) un-exported. Temporarily
+    ## relax set -e around the source so the fallback completes.
+    set +e
+    source /usr/local/Ascend/ascend-toolkit/set_env.sh
+    source /usr/local/Ascend/nnal/atb/set_env.sh
+    set -e
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} < 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    ## Cap MAX_JOBS for LMCache-Ascend build —— the C++ template-heavy sources
+    ## (kvcache-ops / hcomm_onesided) make g++ use ~2GB per parallel job and
+    ## trigger "internal compiler error" on >4 parallel jobs.
+    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
+    if [[ "${CANN_ARCHS}" == "a3" ]]; then
+        export SOC_VERSION="Ascend910_9382"
+    elif [[ "${CANN_ARCHS}" == "310p" ]]; then
+        export SOC_VERSION="Ascend310P3"
+    else
+        export SOC_VERSION="Ascend910B3"
+    fi
+    echo "Building LMCache with the following environment variables:"
+    env
+
+    # Install LMCache
+    NO_CUDA_EXT=1 pip install lmcache==${SGLANG_LMCACHE_VERSION}
+
+    # Install LMCache Ascend
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_LMCACHE_ASCEND_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache-Ascend.git lmcache-ascend-${SGLANG_LMCACHE_ASCEND_VERSION}
+    uv pip install --no-build-isolation \
+        /tmp/lmcache-ascend-${SGLANG_LMCACHE_ASCEND_VERSION}
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    ## Note: CANN base already ships `hf_transfer 0.1.9`, `mistral_common 1.11.2`,
+    ## `soundfile 0.13.1` —— skip them. Also skip `accelerate` / `bitsandbytes` (old
+    ## cann sglang didn't ship them; bitsandbytes has no Ascend NPU support).
+    ## BiSheng toolkit also already in base at /usr/local/Ascend/cann-8.5.0/tools/bishengir/
+    ## (softlinked into ascend-toolkit/latest/bin via set_env.sh).
+    cat <<EOT >/tmp/requirements.txt
+# audio extras
+librosa
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sglang-router \
+        --package sgl-kernel-npu \
+        --package deep-ep \
+        --package triton-ascend \
+        --package torch \
+        --package torch-npu \
+        --package lmcache \
+        --package lmcache-ascend
+EOF
+
+## Entrypoint
+
+ENV TASK_QUEUE_ENABLE=1 \
+    CPU_AFFINITY_CONF=1 \
+    PYTORCH_NPU_ALLOC_CONF="expandable_segments:True" \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_SET_CPU_AFFINITY=1
+
+WORKDIR /
+## Wrap tini around the upstream Ascend env-source chain. Must source ascend-toolkit,
+## ascendnpu-ir, and nnal/atb set_env.sh to get LD_LIBRARY_PATH/PATH to Ascend libs +
+## BiSheng (`bishengir-compile` is softlinked into ascend-toolkit/latest/bin via set_env.sh).
+ENTRYPOINT ["/bin/bash", "-c", "source /usr/local/Ascend/ascend-toolkit/set_env.sh && source /usr/local/Ascend/cann-8.5.0/share/info/ascendnpu-ir/bin/set_env.sh && source /usr/local/Ascend/nnal/atb/set_env.sh && exec tini -- \"$@\"", "--"]
