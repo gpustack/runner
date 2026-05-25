@@ -1,0 +1,296 @@
+ARG PYTHON_VERSION=3.10
+ARG CMAKE_MAX_JOBS
+ARG ROCM_VERSION=7.2.1
+ARG ROCM_ARCHS
+ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12-rocm720-mi30x
+ARG SGLANG_VERSION=0.5.12
+ARG SGLANG_TORCH_VERSION=2.9.1
+ARG SGLANG_TORCH_ROCM_VERSION=${ROCM_VERSION}
+ARG SGLANG_LMCACHE_VERSION=0.4.4
+
+FROM ${SGLANG_BASE_IMAGE} AS sglang-build
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install Tools
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG='en_US.UTF-8' \
+    LANGUAGE='en_US:en' \
+    LC_ALL='en_US.UTF-8'
+
+RUN <<EOF
+    # Tools
+
+    # Refresh
+    apt-get update -y && apt-get install -y --no-install-recommends \
+        software-properties-common apt-transport-https \
+        ca-certificates gnupg2 lsb-release gnupg-agent \
+      && apt-get update -y
+
+    # Install
+    apt-get install -y --no-install-recommends \
+        ca-certificates build-essential binutils bash openssl \
+        curl wget aria2 \
+        git git-lfs \
+        unzip xz-utils \
+        tzdata locales \
+        iproute2 iputils-ping ifstat net-tools dnsutils pciutils ipmitool \
+        rdma-core rdmacm-utils infiniband-diags \
+        procps sysstat htop \
+        tini vim jq bc tree
+
+    # Update locale
+    localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8
+
+    # Update timezone
+    rm -f /etc/localtime \
+        && ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+        && echo "Asia/Shanghai" > /etc/timezone \
+        && dpkg-reconfigure --frontend noninteractive tzdata
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Prepare C Buildkit
+
+RUN <<EOF
+    # C Buildkit
+
+    apt-get install -y --no-install-recommends \
+        ffmpeg libjpeg-dev libpng-dev libtiff-dev libwebp-dev \
+        make ninja-build pkg-config ccache
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && rm -rf /var/cache/apt
+EOF
+
+## Prepare Python
+
+ARG PYTHON_VERSION
+
+ENV PYTHON_VERSION=${PYTHON_VERSION}
+
+RUN <<EOF
+    # Python
+
+    # Update alternatives
+    if ! command -v python >/dev/null 2>&1 \
+        && command -v python${PYTHON_VERSION} >/dev/null 2>&1; then
+        update-alternatives --install /usr/bin/python python $(which python${PYTHON_VERSION}) 1
+    fi
+
+EOF
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_ROOT_USER_ACTION=ignore
+
+## Prepare Python Buildkit
+
+RUN <<EOF
+    # Buildkit
+
+    cat <<EOT >/tmp/requirements.txt
+build
+setuptools>=77.0.3,<81.0.0
+setuptools_scm>=8
+wheel
+uv
+EOT
+    pip install -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Prepare Envs
+
+ARG ROCM_VERSION
+ARG ROCM_ARCHS
+
+ENV ROCM_HOME="/opt/rocm" \
+    ROCM_VERSION=${ROCM_VERSION} \
+    ROCM_ARCHS=${ROCM_ARCHS}
+
+ENV UV_SYSTEM_PYTHON=1 \
+    UV_PRERELEASE=allow \
+    UV_SKIP_WHEEL_FILENAME_CHECK=1 \
+    UV_NO_CACHE=1 \
+    UV_HTTP_TIMEOUT=500 \
+    UV_INDEX_STRATEGY="unsafe-best-match" \
+    UV_BREAK_SYSTEM_PACKAGES=1
+
+ARG SGLANG_VERSION
+ARG SGLANG_TORCH_VERSION
+ARG SGLANG_TORCH_ROCM_VERSION
+
+ENV SGLANG_VERSION=${SGLANG_VERSION} \
+    SGLANG_TORCH_VERSION=${SGLANG_TORCH_VERSION} \
+    SGLANG_TORCH_ROCM_VERSION=${SGLANG_TORCH_ROCM_VERSION}
+
+
+FROM sglang-build AS sglang-build-lmcache
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build LMCache
+
+ARG CMAKE_MAX_JOBS
+ARG SGLANG_LMCACHE_VERSION
+
+ENV SGLANG_LMCACHE_VERSION=${SGLANG_LMCACHE_VERSION}
+
+RUN <<EOF
+    # LMCache
+    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L184-L237.
+
+    rm -rf /workspace
+
+    IFS="." read -r ROCM_MAJOR ROCM_MINOR ROCM_PATCH <<< "${SGLANG_TORCH_ROCM_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} < 4" | bc -l) )); then
+        CMAKE_MAX_JOBS="4"
+    fi
+    LC_ROCM_ARCHS="${ROCM_ARCHS}"
+    if [[ -z "${LC_ROCM_ARCHS}" ]]; then
+        ## Limit to MI300X (gfx942) for v0.5.12-rocm720-mi30x base image.
+        ## Full list `gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151`
+        ## triggers ROCm 7.2.0 clang segfaults on gfx1100 / gfx90a compiling LMCache's `ac_enc.hip` / `cal_cdf.hip`.
+        ## Upstream sglang ROCm Dockerfile pins AMDGPU_TARGET=gfx942 only for the same reason.
+        LC_ROCM_ARCHS="gfx942"
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export PYTORCH_ROCM_ARCH="${LC_ROCM_ARCHS}"
+    export TORCH_DONT_CHECK_COMPILER_ABI=1
+    export CXX=hipcc
+    export BUILD_WITH_HIP=1
+    ## Disable LMCache's optional mooncake extension —— the ROCm base sets
+    ## BUILD_MOONCAKE=1 for its own use, but Mooncake's headers (`real_client.h`)
+    ## aren't available on LMCache's include path (Mooncake exists only as
+    ## static libs under /sgl-workspace/Mooncake/build/, no proper install).
+    export BUILD_MOONCAKE=0
+    echo "Building LMCache with the following environment variables:"
+    env
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${SGLANG_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    pushd /tmp/lmcache \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
+        && cat /tmp/lmcache/pyproject.toml \
+        && python -v -m build --no-isolation --wheel \
+        && tree -hs /tmp/lmcache/dist \
+        && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/* \
+        && ccache --clear --clean
+EOF
+
+
+FROM sglang-build AS sglang
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Install LMCache
+
+RUN --mount=type=bind,from=sglang-build-lmcache,source=/,target=/lmcache,rw <<EOF
+    # LMCache
+
+    # Install
+    uv pip install --no-build-isolation \
+        /lmcache/workspace/*.whl
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Install Dependencies
+
+RUN <<EOF
+    # Dependencies
+
+    # Install
+    cat <<EOT >/tmp/requirements.txt
+# dockerfile extras
+hf_transfer
+bitsandbytes
+boto3
+
+# audio extras
+librosa
+EOT
+    uv pip install \
+        -r /tmp/requirements.txt
+
+    # Uninstall
+    ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
+    ## Note: 0.5.12 base image still ships runai-model-streamer via the [runai] extra.
+    uv pip uninstall \
+        runai-model-streamer || true
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Postprocess
+
+RUN <<EOF
+    # Postprocess
+
+    # Review
+    uv pip tree \
+        --package sglang \
+        --package sglang-router \
+        --package sgl-kernel \
+        --package flashinfer-python \
+        --package flash-attn \
+        --package triton \
+        --package torch \
+        --package lmcache \
+        --package deep-ep \
+        --package mooncake-transfer-engine
+EOF
+
+## Entrypoint
+
+ENV SGLANG_DISABLE_CUDNN_CHECK=1 \
+    SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_INT4_WEIGHT=0 \
+    SGLANG_MOE_PADDING=1 \
+    SGLANG_SET_CPU_AFFINITY=1 \
+    SGLANG_ROCM_DISABLE_LINEARQUANT=0 \
+    SGLANG_ROCM_FUSED_DECODE_MLA=1 \
+    SGLANG_USE_AITER=1 \
+    SGLANG_USE_ROCM700A=1 \
+    SAFETENSORS_FAST_GPU=1 \
+    RUNAI_STREAMER_MEMORY_LIMIT=0 \
+    RUNAI_STREAMER_LOG_TO_STDERR=1 \
+    RUNAI_STREAMER_LOG_LEVEL=INFO
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
