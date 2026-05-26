@@ -1159,6 +1159,28 @@
         "backend_version": "13.0",
         "original_backend_version": "13.0.1",
         "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.12",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda13.0-sglang0.5.12",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "13.0",
+        "original_backend_version": "13.0.1",
+        "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.12",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda13.0-sglang0.5.12",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "13.0",
+        "original_backend_version": "13.0.1",
+        "backend_variant": "",
         "service": "vllm",
         "service_version": "0.20.2",
         "platform": "linux/amd64",
@@ -1240,6 +1262,28 @@
         "service_version": "0.18.1",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda13.0-vllm0.18.1",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.9",
+        "original_backend_version": "12.9.1",
+        "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.12",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:cuda12.9-sglang0.5.12",
+        "deprecated": false
+      },
+      {
+        "backend": "cuda",
+        "backend_version": "12.9",
+        "original_backend_version": "12.9.1",
+        "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.12",
+        "platform": "linux/arm64",
+        "docker_image": "gpustack/runner:cuda12.9-sglang0.5.12",
         "deprecated": false
       },
       {
