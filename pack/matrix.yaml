@@ -81,8 +81,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "VLLM_VERSION=0.20.2"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.20.2"
+      - "VLLM_VERSION=0.21.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.21.0"
   ## AMD ROCm 7.2.1 - SGLang 0.5.12 (rocm720-mi30x)
   ##
   - backend: "rocm"
