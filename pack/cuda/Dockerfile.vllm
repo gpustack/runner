@@ -242,6 +242,38 @@ EOT
         && rm -rf /tmp/*
 EOF
 
+## Deduplicate CuPy
+
+RUN <<EOF
+    # CuPy
+    # ray[cgraph] pulls cupy-cuda12x while the base already ships cupy-cuda13x; both share
+    # the same cupy/ tree, so uninstalling one breaks the other. Purge both, then reinstall
+    # the CUDA-matching variant at the version vLLM pinned in the base (its cupy-cuda13x),
+    # so cu129 also gets that pinned version instead of ray's unconstrained cupy-cuda12x.
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
+    PURELIB="$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+    CUPY="cupy-cuda${CUDA_MAJOR}x"
+    CUPY_VER="$(uv pip show cupy-cuda13x 2>/dev/null | awk '/^Version:/{print $2}' || true)"
+    uv pip uninstall cupy-cuda12x cupy-cuda13x || true
+    rm -rf "${PURELIB}"/cupy "${PURELIB}"/cupyx "${PURELIB}"/cupy_backends
+    # cupy-cuda12x and cupy-cuda13x share the same version number, so reuse the base's
+    # pinned version and install only the variant matching the CUDA major we build for.
+    # Fail loudly if the base no longer ships cupy, rather than installing an unpinned latest.
+    if [[ -z "${CUPY_VER}" ]]; then
+        echo "cupy-cuda13x not found in base image; refusing to install unpinned cupy" >&2
+        exit 1
+    fi
+    uv pip install "${CUPY}==${CUPY_VER}"
+
+    # Review
+    uv pip list | grep -i cupy
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Postprocess
 
 RUN <<EOF
