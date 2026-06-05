@@ -319,8 +319,10 @@ ARG TARGETARCH
 RUN <<EOF
     # Ray
 
-    # Install Ray Client and Default
-    RAY_VERSION=2.55.1
+    # Install Ray Client and Default.
+    # Pinned to 2.54.0: ray 2.55 (ray-project/ray#61029) breaks distributed
+    # ray.init when the driver has no co-located raylet (gpustack split containers).
+    RAY_VERSION=2.54.0
     cat <<EOT >/tmp/requirements.txt
 ray[cgraph]==${RAY_VERSION}
 ray[client]==${RAY_VERSION}
