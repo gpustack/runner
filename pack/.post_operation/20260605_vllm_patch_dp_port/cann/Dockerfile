@@ -23,7 +23,14 @@ ARG TARGETARCH
 RUN <<EOF
     # Patch
 
-    F="$(pip show vllm | grep Location: | cut -d" " -f 2)/vllm/utils/network_utils.py"
+    # cann uses vllm-ascend: vllm is an editable checkout and the cann build
+    # patches it via `pushd /vllm-workspace/vllm && patch -p1`, so the live file
+    # is /vllm-workspace/vllm/vllm/utils/network_utils.py (NOT pip show Location).
+    # Prefer that exact path, then fall back to Python import / find.
+    F=/vllm-workspace/vllm/vllm/utils/network_utils.py
+    [ -f "${F}" ] || F="$(python -c 'import vllm.utils.network_utils as n; print(n.__file__)' 2>/dev/null || true)"
+    [ -f "${F}" ] || F="$(find /vllm-workspace -path '*/vllm/utils/network_utils.py' 2>/dev/null | head -1)"
+    [ -f "${F}" ] || { echo "network_utils.py not found" >&2; exit 1; }
     echo "Target: ${F}"
     grep -n "_next_port" "${F}" || true
     if grep -qE '^[[:space:]]*_next_port = port \+ 1[[:space:]]*$' "${F}"; then
