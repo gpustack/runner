@@ -17,7 +17,7 @@ index 6b940c92d..230f96c3d 100644
 -    return _get_open_port()
 +    global _next_port
 +    port = _get_open_port(_next_port)
-+    _next_port = port
++    _next_port = port + 1
 +    return port
  
  
