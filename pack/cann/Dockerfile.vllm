@@ -287,6 +287,15 @@ RUN <<EOF
         exit 0
     fi
 
+    # LMCache-Ascend (kvcache-ops) does not support CANN >= 9.0 yet:
+    # its ascendc_with_def.cmake gates the new build path on `VERSION_EQUAL "8.5"`,
+    # so CANN 9.0 falls back to "8.2 mode" and passes an empty --run-mode to
+    # extract_host_stub.py, failing the kernel precompile. Skip until upstream adapts.
+    if (( "${CANN_VERSION%%.*}" >= 9 )); then
+        echo "Skipping LMCache installation for CANN ${CANN_VERSION} (>=9.0 not supported by kvcache-ops)..."
+        exit 0
+    fi
+
     source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
     source /usr/local/Ascend/nnal/atb/set_env.sh
 
