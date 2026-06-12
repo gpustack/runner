@@ -1,0 +1,30 @@
+Backport of the upstream fix for refresh_block_size crashing when
+model_config is None. vllm-omni diffusion workers initialize an empty
+VllmConfig (no model_config), and v0.20.2rc1 dereferences
+model_config.hf_config before the None guard, so every --omni diffusion
+model dies on startup with:
+    AttributeError: 'NoneType' object has no attribute 'hf_config'
+Upstream main moved the deepseek_v4 check after the guard; this patch
+does the same.
+
+diff --git a/vllm_ascend/utils.py b/vllm_ascend/utils.py
+--- a/vllm_ascend/utils.py
++++ b/vllm_ascend/utils.py
+@@ -1316,13 +1316,13 @@ def refresh_block_size(vllm_config):
+     if cache_config.block_size is None:
+         cache_config.block_size = 128
+
+-    if model_config.hf_config.model_type == "deepseek_v4":
+-        # TODO(qcs): generalize the block_size
+-        cache_config.block_size = 128
+-
+     if not scheduler_config or not model_config:
+         return
+
++    if model_config.hf_config.model_type == "deepseek_v4":
++        # TODO(qcs): generalize the block_size
++        cache_config.block_size = 128
++
+     if model_config.is_hybrid:
+         # Hybrid attention+mamba models rely on the model-specific sizing
+         # logic rather than the generic platform default.
