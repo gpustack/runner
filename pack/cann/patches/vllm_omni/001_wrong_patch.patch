@@ -11,3 +11,29 @@ index 687ff51..6b67924 100644
      if hasattr(module, "EngineCoreOutput") and module.EngineCoreOutput == _OriginalEngineCoreOutput:
          module.EngineCoreOutput = OmniEngineCoreOutput
      if hasattr(module, "EngineCoreOutputs") and module.EngineCoreOutputs == _OriginalEngineCoreOutputs:
+diff --git a/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py b/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py
+index 8cff1849..00000001 100644
+--- a/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py
++++ b/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py
+@@ -388,6 +388,7 @@
+                 (
+                     logits_indices,
+                     spec_decode_metadata,
+                     total_num_scheduled_tokens,
++                    num_scheduled_tokens_compressed_list,
+                 ) = self._prepare_inputs(
+                     scheduler_output,
+                     num_scheduled_tokens_np,
+diff --git a/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py b/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py
+index 00000002..00000003 100644
+--- a/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py
++++ b/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py
+@@ -160,6 +160,7 @@
+                 (
+                     logits_indices,
+                     spec_decode_metadata,
+                     total_num_scheduled_tokens,
++                    num_scheduled_tokens_compressed_list,
+                 ) = self._prepare_inputs(
+                     scheduler_output,
+                     num_scheduled_tokens_np,
