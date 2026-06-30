@@ -174,7 +174,8 @@ rules:
   #
   ##
   ## Use pack flow's arguments to override the default HGGC version and version extra,
-  ## which are used in `pack/hggc/Dockerfile` to construct the image tags and build arguments.
+  ## which are used in `pack/hggc/Dockerfile.vllm` and `pack/hggc/Dockerfile.sglang`
+  ## to construct the image tags and build arguments.
   ##
   ## Get HGGC version via `VERSION=$(cat /usr/local/PPU_SDK/include/hggc.h | grep HGGC_VERSION | grep define | cut -d' ' -f3); echo "$(( ${VERSION} / 1000 )).$(( ${VERSION} % 1000 / 10 )).$(( ${VERSION} % 10 ))"`
   - backend: "hggc"
@@ -187,6 +188,7 @@ rules:
       - "HGGC_VERSION="
       - "HGGC_VERSION_EXTRA="
       - "VLLM_VERSION="
+      - "SGLANG_VERSION="
 
   #
   # MateX MACA
