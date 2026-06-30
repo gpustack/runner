@@ -184,11 +184,6 @@ rules:
       - "sglang"
     platforms:
       - "linux/amd64"
-    args:
-      - "HGGC_VERSION="
-      - "HGGC_VERSION_EXTRA="
-      - "VLLM_VERSION="
-      - "SGLANG_VERSION="
 
   #
   # MateX MACA
