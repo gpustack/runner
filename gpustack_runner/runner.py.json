@@ -2520,6 +2520,17 @@
   },
   {
     "backend": "hggc",
+    "backend_version": "13.0",
+    "original_backend_version": "13.0",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.12",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:hggc13.0-sglang0.5.12",
+    "deprecated": false
+  },
+  {
+    "backend": "hggc",
     "backend_version": "12.3",
     "original_backend_version": "12.3",
     "backend_variant": "",
