@@ -440,6 +440,9 @@ RUN <<EOF
 librosa
 soundfile
 mistral_common[audio]
+
+# tokenizer extras
+fastokens==0.2.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt

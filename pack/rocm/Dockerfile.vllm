@@ -437,6 +437,9 @@ mistral_common[audio]
 
 # petit extras
 petit-kernel
+
+# tokenizer extras
+fastokens==0.2.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
