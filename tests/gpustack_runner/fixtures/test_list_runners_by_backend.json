@@ -2517,6 +2517,17 @@
     [
       {
         "backend": "dtk",
+        "backend_version": "26.04",
+        "original_backend_version": "26.04",
+        "backend_variant": "",
+        "service": "vllm",
+        "service_version": "0.18.1",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:dtk26.04-vllm0.18.1",
+        "deprecated": false
+      },
+      {
+        "backend": "dtk",
         "backend_version": "25.04",
         "original_backend_version": "25.04.2",
         "backend_variant": "",
