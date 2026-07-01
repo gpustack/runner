@@ -163,11 +163,9 @@ rules:
   - backend: "dtk"
     services:
       - "vllm"
+      - "sglang"
     platforms:
       - "linux/amd64"
-    args:
-      - "DTK_VERSION="
-      - "VLLM_VERSION="
 
   #
   # T-Head HGGC
