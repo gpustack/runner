@@ -198,10 +198,6 @@ rules:
       - "sglang"
     platforms:
       - "linux/amd64"
-    args:
-      - "MACA_VERSION="
-      - "MACA_VERSION_EXTRA="
-      - "VLLM_VERSION="
 
   #
   # MThreads MUSA
