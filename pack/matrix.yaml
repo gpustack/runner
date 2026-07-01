@@ -72,7 +72,7 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.2.1
+  ## AMD ROCm 7.2.3
   ##
   - backend: "rocm"
     services:
@@ -80,9 +80,9 @@ rules:
     platforms:
       - "linux/amd64"
     args:
-      - "ROCM_VERSION=7.2.1"
-      - "VLLM_VERSION=0.22.1"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.22.1"
+      - "ROCM_VERSION=7.2.3"
+      - "VLLM_VERSION=0.24.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.24.0"
   ## AMD ROCm 7.2.1 - SGLang 0.5.12.post1 (rocm720-mi30x)
   ##
   - backend: "rocm"
@@ -106,8 +106,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=0.22.1"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.22.1-ubuntu2404"
+      - "VLLM_VERSION=0.24.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.24.0-ubuntu2404"
   ## NVIDIA CUDA 13.0.1 - SGLang 0.5.12.post1
   ##
   - backend: "cuda"
@@ -124,8 +124,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.22.1"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.22.1-cu129-ubuntu2404"
+      - "VLLM_VERSION=0.24.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.24.0-cu129-ubuntu2404"
   ## NVIDIA CUDA 12.9.1 - SGLang 0.5.12.post1
   ##
   - backend: "cuda"
