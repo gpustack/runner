@@ -2620,6 +2620,17 @@
   {
     "backend": "maca",
     "backend_version": "3.5",
+    "original_backend_version": "3.5",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.9",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:maca3.5-sglang0.5.9",
+    "deprecated": false
+  },
+  {
+    "backend": "maca",
+    "backend_version": "3.5",
     "original_backend_version": "3.5.3",
     "backend_variant": "",
     "service": "vllm",
