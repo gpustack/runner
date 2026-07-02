@@ -6,7 +6,11 @@ ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.14-cann9.0.0-910b
 ARG SGLANG_VERSION=0.5.14
 ARG SGLANG_TORCH_VERSION=2.10.0
 ARG SGLANG_LMCACHE_VERSION=0.4.2
-ARG SGLANG_LMCACHE_ASCEND_VERSION=${SGLANG_LMCACHE_VERSION}
+## LMCache-Ascend is pinned to a commit rather than a release tag: CANN 9.0.0 support
+## (kvcache-ops update, LMCache/LMCache-Ascend#256) landed on main after the latest tag
+## v0.4.3, so no tagged release builds against the cann9.0.0 base yet. Bump to a tag once
+## one ships. This commit builds lmcache-ascend 0.4.4.dev against lmcache 0.4.2.
+ARG SGLANG_LMCACHE_ASCEND_COMMIT=dbd6545
 
 FROM ${SGLANG_BASE_IMAGE} AS sglang-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
@@ -145,10 +149,10 @@ ARG TARGETARCH
 ## Install LMCache
 
 ARG SGLANG_LMCACHE_VERSION
-ARG SGLANG_LMCACHE_ASCEND_VERSION
+ARG SGLANG_LMCACHE_ASCEND_COMMIT
 
 ENV SGLANG_LMCACHE_VERSION=${SGLANG_LMCACHE_VERSION} \
-    SGLANG_LMCACHE_ASCEND_VERSION=${SGLANG_LMCACHE_ASCEND_VERSION}
+    SGLANG_LMCACHE_ASCEND_COMMIT=${SGLANG_LMCACHE_ASCEND_COMMIT}
 
 RUN <<EOF
     # LMCache
@@ -197,11 +201,24 @@ RUN <<EOF
     NO_CUDA_EXT=1 pip install lmcache==${SGLANG_LMCACHE_VERSION}
 
     # Install LMCache Ascend
+    ## Pinned to a commit (not a tag) —— see SGLANG_LMCACHE_ASCEND_COMMIT note above.
     git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${SGLANG_LMCACHE_ASCEND_VERSION} --single-branch \
-        https://github.com/LMCache/LMCache-Ascend.git lmcache-ascend-${SGLANG_LMCACHE_ASCEND_VERSION}
+        https://github.com/LMCache/LMCache-Ascend.git lmcache-ascend \
+        && pushd /tmp/lmcache-ascend \
+        && git checkout ${SGLANG_LMCACHE_ASCEND_COMMIT} \
+        && git submodule update --init --recursive \
+        && popd
     uv pip install --no-build-isolation \
-        /tmp/lmcache-ascend-${SGLANG_LMCACHE_ASCEND_VERSION}
+        /tmp/lmcache-ascend
+
+    # Register lmcache_ascend's bundled shared libs on the loader path.
+    ## Its c_ops.so ships a broken RUNPATH —— `$$ORIGIN` (literal, not `$ORIGIN`) plus the
+    ## build dir we delete —— so the dynamic loader can't find the co-located
+    ## libcache_kernels.so and import fails with "libcache_kernels.so: cannot open shared
+    ## object file". Point ldconfig at the install dir so it's found at runtime.
+    LMCACHE_ASCEND_DIR="$(pip show lmcache-ascend | awk '/^Location:/{print $2}')/lmcache_ascend"
+    echo "${LMCACHE_ASCEND_DIR}" > /etc/ld.so.conf.d/lmcache_ascend.conf
+    ldconfig
 
     # Cleanup
     rm -rf /var/tmp/* \
