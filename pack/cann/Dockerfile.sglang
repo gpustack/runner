@@ -1,10 +1,10 @@
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
-ARG CANN_VERSION=8.5.1
+ARG CANN_VERSION=9.0.0
 ARG CANN_ARCHS=910b
-ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.12.post1-cann8.5.0-910b
-ARG SGLANG_VERSION=0.5.12.post1
-ARG SGLANG_TORCH_VERSION=2.8.0
+ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.14-cann9.0.0-910b
+ARG SGLANG_VERSION=0.5.14
+ARG SGLANG_TORCH_VERSION=2.10.0
 ARG SGLANG_LMCACHE_VERSION=0.4.2
 ARG SGLANG_LMCACHE_ASCEND_VERSION=${SGLANG_LMCACHE_VERSION}
 
@@ -217,7 +217,7 @@ RUN <<EOF
     ## Note: CANN base already ships `hf_transfer 0.1.9`, `mistral_common 1.11.2`,
     ## `soundfile 0.13.1` —— skip them. Also skip `accelerate` / `bitsandbytes` (old
     ## cann sglang didn't ship them; bitsandbytes has no Ascend NPU support).
-    ## BiSheng toolkit also already in base at /usr/local/Ascend/cann-8.5.0/tools/bishengir/
+    ## BiSheng toolkit also already in base at /usr/local/Ascend/cann-9.0.0/tools/bishengir/
     ## (softlinked into ascend-toolkit/latest/bin via set_env.sh).
     cat <<EOT >/tmp/requirements.txt
 # audio extras
@@ -262,4 +262,4 @@ WORKDIR /
 ## Wrap tini around the upstream Ascend env-source chain. Must source ascend-toolkit,
 ## ascendnpu-ir, and nnal/atb set_env.sh to get LD_LIBRARY_PATH/PATH to Ascend libs +
 ## BiSheng (`bishengir-compile` is softlinked into ascend-toolkit/latest/bin via set_env.sh).
-ENTRYPOINT ["/bin/bash", "-c", "source /usr/local/Ascend/ascend-toolkit/set_env.sh && source /usr/local/Ascend/cann-8.5.0/share/info/ascendnpu-ir/bin/set_env.sh && source /usr/local/Ascend/nnal/atb/set_env.sh && exec tini -- \"$@\"", "--"]
+ENTRYPOINT ["/bin/bash", "-c", "source /usr/local/Ascend/ascend-toolkit/set_env.sh && source /usr/local/Ascend/cann-9.0.0/share/info/ascendnpu-ir/bin/set_env.sh && source /usr/local/Ascend/nnal/atb/set_env.sh && exec tini -- \"$@\"", "--"]
