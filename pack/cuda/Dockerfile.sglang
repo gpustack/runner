@@ -2,8 +2,8 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.1
 ARG CUDA_ARCHS
-ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12.post1-cu130
-ARG SGLANG_VERSION=0.5.12.post1
+ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-cu130
+ARG SGLANG_VERSION=0.5.14
 ARG SGLANG_TORCH_VERSION=2.11.0
 ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG SGLANG_LMCACHE_VERSION=0.4.4
@@ -332,7 +332,7 @@ EOT
 
     # Uninstall
     ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
-    ## Note: 0.5.12 base image still ships runai-model-streamer 0.15.9 via the [runai] extra.
+    ## Note: 0.5.14 base image still ships runai-model-streamer 0.16.0 via the [runai] extra.
     uv pip uninstall \
         runai-model-streamer || true
 

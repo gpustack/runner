@@ -115,8 +115,8 @@ rules:
       - "sglang"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "SGLANG_VERSION=0.5.12.post1"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12.post1-cu130"
+      - "SGLANG_VERSION=0.5.14"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-cu130"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
@@ -133,8 +133,8 @@ rules:
       - "sglang"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "SGLANG_VERSION=0.5.12.post1"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12.post1-cu129"
+      - "SGLANG_VERSION=0.5.14"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-cu129"
       - "SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda12"
 
   #
