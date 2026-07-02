@@ -92,8 +92,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.12.post1"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.12.post1-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.14"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
