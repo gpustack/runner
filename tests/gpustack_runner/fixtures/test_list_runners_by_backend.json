@@ -2726,6 +2726,17 @@
         "backend_version": "13.0",
         "original_backend_version": "13.0",
         "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.10",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:hggc13.0-sglang0.5.10",
+        "deprecated": false
+      },
+      {
+        "backend": "hggc",
+        "backend_version": "13.0",
+        "original_backend_version": "13.0",
+        "backend_variant": "",
         "service": "vllm",
         "service_version": "0.20.1",
         "platform": "linux/amd64",
