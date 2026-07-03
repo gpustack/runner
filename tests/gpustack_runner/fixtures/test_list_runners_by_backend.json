@@ -2652,6 +2652,17 @@
         "backend_version": "26.04",
         "original_backend_version": "26.04",
         "backend_variant": "",
+        "service": "sglang",
+        "service_version": "0.5.10rc0",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:dtk26.04-sglang0.5.10rc0",
+        "deprecated": false
+      },
+      {
+        "backend": "dtk",
+        "backend_version": "26.04",
+        "original_backend_version": "26.04",
+        "backend_variant": "",
         "service": "vllm",
         "service_version": "0.18.1",
         "platform": "linux/amd64",
