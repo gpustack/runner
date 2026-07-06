@@ -71,7 +71,7 @@ The following table lists the supported accelerated backends and their correspon
 | DTK Version <br/> (Variant) | vLLM                                 | SGLang      |
 |-----------------------------|--------------------------------------|-------------|
 | 26.04                       | `0.18.1`                             | `0.5.10rc0` |
-| 25.04                       | `0.18.1` ,`0.11.0`, `0.9.2`, `0.8.5` |             |
+| 25.04                       | `0.18.1`, `0.11.0`, `0.9.2`, `0.8.5` |             |
 
 ### T-Head HGGC
 
