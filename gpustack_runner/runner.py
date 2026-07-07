@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from dataclasses_json import dataclass_json
+from packaging.version import InvalidVersion, Version
 
 _RE_DOCKER_IMAGE = re.compile(
     r"(?:(?P<prefix>[\w\\.\-]+(?:/[\w\\.\-]+)*)/)?runner:(?P<backend>(Host|cann|corex|cuda|dtk|hggc|maca|musa|rocm))(?P<backend_version>[XY\d\\.]+)(?:-(?P<backend_variant>\w+))?-(?P<service>(vllm|voxbox|mindie|sglang))(?P<service_version>[\w\\.]+)(?:-(?P<suffix>\w+))?",
@@ -63,6 +64,45 @@ def set_re_docker_image(pattern: str):
         missing = required_groups - _RE_DOCKER_IMAGE.groupindex.keys()
         msg = f"The provided pattern is missing required named groups: {missing}"
         raise ValueError(msg)
+
+
+def version_sort_key(
+    version: str,
+) -> tuple[int, Version | list[tuple[int, int | str]]]:
+    """
+    Build a total-order sort key for a version string.
+
+    Well-formed versions are ordered by :class:`packaging.version.Version`, which
+    follows PEP 440 semantics (e.g. ``0.5.10 > 0.5.9`` numerically, and a
+    pre-release such as ``0.5.10rc0`` sorts *before* its final release
+    ``0.5.10``). Strings that cannot be parsed as a version (e.g. ``"latest"``,
+    ``"main"``) fall back to a per-segment ``(type_rank, value)`` tuple and are
+    ranked below every well-formed version.
+
+    Wrapping both cases behind a leading discriminator (``1`` for parsed
+    versions, ``0`` for the fallback) guarantees the resulting keys are always
+    comparable, avoiding
+    ``TypeError: '<' not supported between instances of 'str' and 'int'`` that
+    a naive ``[int(x) if x.isdigit() else x, ...]`` key raises whenever a
+    numeric segment (``0.5.14`` -> ``14``) has to be compared against a mixed
+    segment (``0.5.10rc0`` -> ``"10rc0"``) at the same position.
+
+    Args:
+        version:
+            The version string, e.g. "0.10.0", "0.5.10rc0", "2.1.rc1", "latest".
+
+    Returns:
+        A comparable sort key. Larger keys correspond to newer versions, so
+        ``sorted(..., reverse=True)`` yields newest-first ordering.
+
+    """
+    try:
+        return (1, Version(version))
+    except InvalidVersion:
+        return (
+            0,
+            [(0, int(x)) if x.isdigit() else (1, x) for x in version.split(".")],
+        )
 
 
 @dataclass_json
@@ -598,9 +638,7 @@ def build_backend_runners(
     results.sort(key=lambda br: br.backend)
     for backend in results:
         backend.versions.sort(
-            key=lambda bv: [
-                int(x) if x.isdigit() else x for x in bv.version.split(".")
-            ],
+            key=lambda bv: version_sort_key(bv.version),
             reverse=True,
         )
         for version in backend.versions:
@@ -609,9 +647,7 @@ def build_backend_runners(
                 variant.services.sort(key=lambda s: s.service)
                 for service in variant.services:
                     service.versions.sort(
-                        key=lambda sv: [
-                            int(x) if x.isdigit() else x for x in sv.version.split(".")
-                        ],
+                        key=lambda sv: version_sort_key(sv.version),
                         reverse=True,
                     )
                     for service_version in service.versions:
@@ -772,18 +808,14 @@ def build_service_runners(
     results.sort(key=lambda sr: sr.service)
     for service in results:
         service.versions.sort(
-            key=lambda sv: [
-                int(x) if x.isdigit() else x for x in sv.version.split(".")
-            ],
+            key=lambda sv: version_sort_key(sv.version),
             reverse=True,
         )
         for service_version in service.versions:
             service_version.backends.sort(key=lambda b: b.backend)
             for backend in service_version.backends:
                 backend.versions.sort(
-                    key=lambda bv: [
-                        int(x) if x.isdigit() else x for x in bv.version.split(".")
-                    ],
+                    key=lambda bv: version_sort_key(bv.version),
                     reverse=True,
                 )
                 for backend_version in backend.versions:
