@@ -198,6 +198,7 @@ source = { editable = "." }
 dependencies = [
     { name = "argcomplete" },
     { name = "dataclasses-json" },
+    { name = "packaging" },
     { name = "requests" },
 ]
 
@@ -218,6 +219,7 @@ dev = [
 requires-dist = [
     { name = "argcomplete", specifier = ">=3.6.3" },
     { name = "dataclasses-json", specifier = ">=0.6.7" },
+    { name = "packaging", specifier = ">=21.0" },
     { name = "requests", specifier = ">=2.32.3" },
 ]
 
