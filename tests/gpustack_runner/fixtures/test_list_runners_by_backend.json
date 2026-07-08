@@ -2653,9 +2653,9 @@
         "original_backend_version": "26.04",
         "backend_variant": "",
         "service": "sglang",
-        "service_version": "0.5.10rc0",
+        "service_version": "0.5.10",
         "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:dtk26.04-sglang0.5.10rc0",
+        "docker_image": "gpustack/runner:dtk26.04-sglang0.5.10",
         "deprecated": false
       },
       {
