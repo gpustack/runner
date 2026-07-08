@@ -1,7 +1,7 @@
 # This workflow copies a Docker image from a source registry to Docker Hub.
 # It uses the `skopeo` tool to perform the copy operation.
 # The source image is specified in the format "namespace/name:tag".
-# The destination image is automatically suffixed with "-vanilla".
+# The destination image is optionally suffixed with "-vanilla" (enabled by default).
 # The workflow is triggered manually via the GitHub Actions UI.
 
 name: copy
@@ -36,9 +36,14 @@ on:
         required: false
         type: string
       dst-image-tag:
-        description: 'Destination Docker image tag, inform of "{backend}{backend_version_vX_Y_Z}[{backend_version_extra}][-{backend_variant}]-python${python_version_vX_Y}", automatically suffixed with "-vanilla".'
+        description: 'Destination Docker image tag, inform of "{backend}{backend_version_vX_Y_Z}[{backend_version_extra}][-{backend_variant}]-python${python_version_vX_Y}", optionally suffixed with "-vanilla".'
         required: true
         type: string
+      vanilla-suffix:
+        description: 'Append "-vanilla" suffix to the destination image tag.'
+        required: false
+        default: true
+        type: boolean
 
 env:
   INPUT_USERNAME: gpustack
@@ -63,6 +68,7 @@ jobs:
           INPUT_SRC_USERNAME: ${{ inputs.src-username }}
           INPUT_SRC_TOKEN: ${{ inputs.src-token }}
           INPUT_TAG: ${{ inputs.dst-image-tag }}
+          INPUT_VANILLA_SUFFIX: ${{ inputs.vanilla-suffix }}
         run: |
           #!/usr/bin/env bash
 
@@ -71,4 +77,9 @@ jobs:
           fi
           skopeo login docker.io -u ${INPUT_USERNAME} -p ${INPUT_PASSWORD}
 
-          skopeo copy docker://${INPUT_SRC_REGISTRY}/${INPUT_SRC_IMAGE} docker://docker.io/${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${INPUT_TAG}-vanilla --all --retry-delay 5s --retry-times 10
+          DST_TAG="${INPUT_TAG}"
+          if [[ "${INPUT_VANILLA_SUFFIX}" == "true" ]]; then
+            DST_TAG="${DST_TAG}-vanilla"
+          fi
+
+          skopeo copy docker://${INPUT_SRC_REGISTRY}/${INPUT_SRC_IMAGE} docker://docker.io/${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${DST_TAG} --all --retry-delay 5s --retry-times 10
