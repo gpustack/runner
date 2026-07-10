@@ -27,7 +27,6 @@ ARG HGGC_ARCHS
 ARG VLLM_VERSION=0.18.0
 ARG VLLM_TORCH_VERSION=2.9.0
 ARG VLLM_BASE_IMAGE=gpustack/runner:hggc${HGGC_VERSION}${HGGC_VERSION_EXTRA}-vllm${VLLM_VERSION}-python${PYTHON_VERSION}-vanilla
-ARG VLLM_GGUF_PLUGIN_VERSION=0.0.3
 
 # Stage Bake Runtime
 #
@@ -282,7 +281,6 @@ SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
-ARG VLLM_GGUF_PLUGIN_VERSION
 
 ENV UV_SYSTEM_PYTHON=1 \
     UV_PRERELEASE=allow \
@@ -304,20 +302,6 @@ ENV VLLM_VERSION=${VLLM_VERSION}
 
 ## Nothing to do, as the vLLM has installed in global.
 
-## Install GGUF
-
-RUN <<EOF
-    # GGUF
-    # https://docs.vllm.ai/en/v0.24.0/features/quantization/gguf/
-
-    uv pip install \
-        vllm-gguf-plugin==${VLLM_GGUF_PLUGIN_VERSION}
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Postprocess
 
 RUN <<EOF
@@ -326,7 +310,6 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
-        --package vllm-gguf-plugin \
         --package flash-attn \
         --package torch
 EOF
