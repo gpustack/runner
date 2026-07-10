@@ -9,6 +9,7 @@ ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG VLLM_LMCACHE_VERSION=0.5.0
 ARG VLLM_MOONCAKE_VERSION=0.3.11.post1
 ARG VLLM_OMNI_COMMIT=a560ed1
+ARG VLLM_GGUF_PLUGIN_VERSION=0.0.3
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
@@ -313,6 +314,7 @@ SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
+ARG VLLM_GGUF_PLUGIN_VERSION
 
 ## Install Ray
 
@@ -399,6 +401,7 @@ RUN <<EOF
     # Review
     uv pip tree \
         --package vllm \
+        --package vllm-gguf-plugin \
         --package vllm-omni \
         --package flash-attn \
         --package triton \
@@ -421,6 +424,20 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
         pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
             && patch -p1 < /workspace/patches/vllm_omni/*.patch; \
     fi
+EOF
+
+## Install GGUF
+
+RUN <<EOF
+    # GGUF
+    # https://docs.vllm.ai/en/v0.24.0/features/quantization/gguf/
+
+    uv pip install \
+        vllm-gguf-plugin==${VLLM_GGUF_PLUGIN_VERSION}
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
 EOF
 
 ## Dependencies
