@@ -20,7 +20,7 @@ on:
     inputs:
       src-registry:
         description: 'Source Docker registry.'
-        required: false
+        required: true
         default: 'docker.io'
         type: string
       src-image:
