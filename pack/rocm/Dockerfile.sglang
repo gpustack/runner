@@ -2,8 +2,8 @@ ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.2.1
 ARG ROCM_ARCHS
-ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-rocm720-mi30x
-ARG SGLANG_VERSION=0.5.14
+ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.15-rocm720-mi30x
+ARG SGLANG_VERSION=0.5.15
 ARG SGLANG_TORCH_VERSION=2.9.1
 ARG SGLANG_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ARG SGLANG_LMCACHE_VERSION=0.4.4
@@ -170,7 +170,7 @@ RUN <<EOF
     fi
     LC_ROCM_ARCHS="${ROCM_ARCHS}"
     if [[ -z "${LC_ROCM_ARCHS}" ]]; then
-        ## Limit to MI300X (gfx942) for v0.5.14-rocm720-mi30x base image.
+        ## Limit to MI300X (gfx942) for v0.5.15-rocm720-mi30x base image.
         ## Full list `gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151`
         ## triggers ROCm 7.2.0 clang segfaults on gfx1100 / gfx90a compiling LMCache's `ac_enc.hip` / `cal_cdf.hip`.
         ## Upstream sglang ROCm Dockerfile pins AMDGPU_TARGET=gfx942 only for the same reason.
@@ -248,7 +248,7 @@ EOT
 
     # Uninstall
     ## Remove Run:AI Model Streamer to avoid peak memory usage in model loading.
-    ## Note: 0.5.12 base image still ships runai-model-streamer via the [runai] extra.
+    ## Note: 0.5.15 base image still ships runai-model-streamer via the [runai] extra.
     uv pip uninstall \
         runai-model-streamer || true
 

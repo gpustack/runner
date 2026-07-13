@@ -46,7 +46,7 @@ rules:
       - "CANN_ARCHS=310p"
       - "VLLM_VERSION=0.20.2"
       - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.20.2rc1-310p"
-  ## Ascend CANN 9.0.0, SGLang 0.5.14 for A3.
+  ## Ascend CANN 9.0.0, SGLang 0.5.15 for A3.
   ## (no sglang upstream image for 310p variant)
   ##
   - backend: "cann"
@@ -55,9 +55,9 @@ rules:
     args:
       - "CANN_VERSION=9.0.0"
       - "CANN_ARCHS=a3"
-      - "SGLANG_VERSION=0.5.14"
-      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.14-cann9.0.0-a3"
-  ## Ascend CANN 9.0.0, SGLang 0.5.14 for 910B.
+      - "SGLANG_VERSION=0.5.15"
+      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.15-cann9.0.0-a3"
+  ## Ascend CANN 9.0.0, SGLang 0.5.15 for 910B.
   ##
   - backend: "cann"
     services:
@@ -65,8 +65,8 @@ rules:
     args:
       - "CANN_VERSION=9.0.0"
       - "CANN_ARCHS=910b"
-      - "SGLANG_VERSION=0.5.14"
-      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.14-cann9.0.0-910b"
+      - "SGLANG_VERSION=0.5.15"
+      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.15-cann9.0.0-910b"
 
   #
   # AMD ROCm
@@ -81,9 +81,9 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.24.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.24.0"
-  ## AMD ROCm 7.2.1 - SGLang 0.5.12.post1 (rocm720-mi30x)
+      - "VLLM_VERSION=0.25.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.25.0"
+  ## AMD ROCm 7.2.1 - SGLang 0.5.15 (rocm720-mi30x)
   ##
   - backend: "rocm"
     services:
@@ -92,8 +92,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.14"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.15"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.15-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
@@ -106,17 +106,17 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=0.24.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.24.0-ubuntu2404"
-  ## NVIDIA CUDA 13.0.1 - SGLang 0.5.12.post1
+      - "VLLM_VERSION=0.25.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.25.0-ubuntu2404"
+  ## NVIDIA CUDA 13.0.1 - SGLang 0.5.15
   ##
   - backend: "cuda"
     services:
       - "sglang"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "SGLANG_VERSION=0.5.14"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-cu130"
+      - "SGLANG_VERSION=0.5.15"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.15-cu130"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
@@ -124,17 +124,17 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.24.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.24.0-cu129-ubuntu2404"
-  ## NVIDIA CUDA 12.9.1 - SGLang 0.5.12.post1
+      - "VLLM_VERSION=0.25.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.25.0-cu129-ubuntu2404"
+  ## NVIDIA CUDA 12.9.1 - SGLang 0.5.15
   ##
   - backend: "cuda"
     services:
       - "sglang"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "SGLANG_VERSION=0.5.14"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.14-cu129"
+      - "SGLANG_VERSION=0.5.15"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.15-cu129"
       - "SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda12"
 
   #
