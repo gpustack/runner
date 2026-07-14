@@ -2749,6 +2749,17 @@
         "original_backend_version": "13.0",
         "backend_variant": "",
         "service": "vllm",
+        "service_version": "0.23.0",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:hggc13.0-vllm0.23.0",
+        "deprecated": false
+      },
+      {
+        "backend": "hggc",
+        "backend_version": "13.0",
+        "original_backend_version": "13.0",
+        "backend_variant": "",
+        "service": "vllm",
         "service_version": "0.20.1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:hggc13.0-vllm0.20.1",
