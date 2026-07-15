@@ -1303,6 +1303,17 @@
     "original_backend_version": "13.0.1",
     "backend_variant": "",
     "service": "sglang",
+    "service_version": "0.5.15.post1",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda13.0-sglang0.5.15.post1",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "13.0",
+    "original_backend_version": "13.0.1",
+    "backend_variant": "",
+    "service": "sglang",
     "service_version": "0.5.15",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda13.0-sglang0.5.15",
@@ -1314,6 +1325,17 @@
     "original_backend_version": "13.0.1",
     "backend_variant": "",
     "service": "sglang",
+    "service_version": "0.5.15.post1",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cuda13.0-sglang0.5.15.post1",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "13.0",
+    "original_backend_version": "13.0.1",
+    "backend_variant": "",
+    "service": "sglang",
     "service_version": "0.5.14",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cuda13.0-sglang0.5.14",
@@ -1523,9 +1545,31 @@
     "original_backend_version": "12.9.1",
     "backend_variant": "",
     "service": "sglang",
+    "service_version": "0.5.15.post1",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cuda12.9-sglang0.5.15.post1",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.9",
+    "original_backend_version": "12.9.1",
+    "backend_variant": "",
+    "service": "sglang",
     "service_version": "0.5.15",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cuda12.9-sglang0.5.15",
+    "deprecated": false
+  },
+  {
+    "backend": "cuda",
+    "backend_version": "12.9",
+    "original_backend_version": "12.9.1",
+    "backend_variant": "",
+    "service": "sglang",
+    "service_version": "0.5.15.post1",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cuda12.9-sglang0.5.15.post1",
     "deprecated": false
   },
   {
