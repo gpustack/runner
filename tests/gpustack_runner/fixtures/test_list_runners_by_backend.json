@@ -11,31 +11,9 @@
         "original_backend_version": "9.0.0",
         "backend_variant": "a3",
         "service": "sglang",
-        "service_version": "0.5.15",
-        "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cann9.0-a3-sglang0.5.15",
-        "deprecated": false
-      },
-      {
-        "backend": "cann",
-        "backend_version": "9.0",
-        "original_backend_version": "9.0.0",
-        "backend_variant": "a3",
-        "service": "sglang",
         "service_version": "0.5.15.post1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann9.0-a3-sglang0.5.15.post1",
-        "deprecated": false
-      },
-      {
-        "backend": "cann",
-        "backend_version": "9.0",
-        "original_backend_version": "9.0.0",
-        "backend_variant": "a3",
-        "service": "sglang",
-        "service_version": "0.5.15",
-        "platform": "linux/arm64",
-        "docker_image": "gpustack/runner:cann9.0-a3-sglang0.5.15",
         "deprecated": false
       },
       {
@@ -495,31 +473,9 @@
         "original_backend_version": "9.0.0",
         "backend_variant": "910b",
         "service": "sglang",
-        "service_version": "0.5.15",
-        "platform": "linux/amd64",
-        "docker_image": "gpustack/runner:cann9.0-910b-sglang0.5.15",
-        "deprecated": false
-      },
-      {
-        "backend": "cann",
-        "backend_version": "9.0",
-        "original_backend_version": "9.0.0",
-        "backend_variant": "910b",
-        "service": "sglang",
         "service_version": "0.5.15.post1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann9.0-910b-sglang0.5.15.post1",
-        "deprecated": false
-      },
-      {
-        "backend": "cann",
-        "backend_version": "9.0",
-        "original_backend_version": "9.0.0",
-        "backend_variant": "910b",
-        "service": "sglang",
-        "service_version": "0.5.15",
-        "platform": "linux/arm64",
-        "docker_image": "gpustack/runner:cann9.0-910b-sglang0.5.15",
         "deprecated": false
       },
       {
