@@ -214,3 +214,20 @@ rules:
       - "MUSA_VERSION="
       - "MUSA_VERSION_EXTRA="
       - "VLLM_VERSION="
+
+  #
+  # Enflame GCU (燧原 S60)
+  #
+  ##
+  ## Use pack flow's arguments to override the default GCU version and version extra,
+  ## which are used in `pack/gcu/Dockerfile` to construct the image tags and build arguments.
+  ##
+  - backend: "gcu"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "GCU_VERSION="
+      - "GCU_VERSION_EXTRA="
+      - "VLLM_VERSION="
