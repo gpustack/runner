@@ -83,7 +83,7 @@ rules:
       - "ROCM_VERSION=7.2.3"
       - "VLLM_VERSION=0.25.1"
       - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.25.1"
-  ## AMD ROCm 7.2.1 - SGLang 0.5.15 (rocm720-mi30x)
+  ## AMD ROCm 7.2.1 - SGLang 0.5.15.post1 (rocm720-mi30x)
   ##
   - backend: "rocm"
     services:
@@ -92,8 +92,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.15"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.15-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.15.post1"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.15.post1-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
