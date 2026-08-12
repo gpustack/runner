@@ -420,7 +420,7 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd /vllm-workspace/vllm \
-        && patch -p1 < /workspace/patches/vllm/*.patch
+        && for f in /workspace/patches/vllm/*.patch; do patch -p1 < "$f" || exit 1; done
     pushd /vllm-workspace/vllm-ascend \
         && patch -p1 < /workspace/patches/vllm_ascend/*.patch
     if pip show vllm_omni > /dev/null 2>&1; then \
