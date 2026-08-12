@@ -1337,7 +1337,7 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
 
     tree -hs /workspace/patches
     pushd $(pip show vllm | grep Location: | cut -d" " -f 2) \
-        && patch -p1 < /workspace/patches/vllm/*.patch
+        && for f in /workspace/patches/vllm/*.patch; do patch -p1 < "$f" || exit 1; done
     if pip show vllm_omni > /dev/null 2>&1; then \
         pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
             && patch -p1 < /workspace/patches/vllm_omni/*.patch; \
