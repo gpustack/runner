@@ -1,16 +1,19 @@
 diff --git a/vllm/utils/network_utils.py b/vllm/utils/network_utils.py
-index 6b940c92d..230f96c3d 100644
 --- a/vllm/utils/network_utils.py
 +++ b/vllm/utils/network_utils.py
-@@ -146,6 +146,7 @@ def get_open_zmq_ipc_path() -> str:
+@@ -146,6 +146,8 @@
  def get_open_zmq_inproc_path() -> str:
      return f"inproc://{uuid4()}"
 
 +_next_port: int | None = None
-
++
  def get_open_port() -> int:
      """
-@@ -159,11 +160,15 @@ def get_open_port() -> int:
+     Get an open port for the vLLM process to listen on.
+@@ -156,13 +158,17 @@
+     Right now we reserve 10 ports for the data parallel master
+     process. Currently it uses 2 ports.
+     """
 +    global _next_port
      if "VLLM_DP_MASTER_PORT" in os.environ:
          dp_master_port = envs.VLLM_DP_MASTER_PORT
