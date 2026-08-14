@@ -1,7 +1,9 @@
 diff --git a/vllm/distributed/device_communicators/shm_broadcast.py b/vllm/distributed/device_communicators/shm_broadcast.py
 --- a/vllm/distributed/device_communicators/shm_broadcast.py
 +++ b/vllm/distributed/device_communicators/shm_broadcast.py
-@@ -32,7 +32,6 @@
+@@ -34,10 +34,9 @@
+ from vllm.distributed.utils import StatelessProcessGroup, sched_yield
+ from vllm.logger import init_logger
  from vllm.platforms import current_platform
  from vllm.utils.network_utils import (
      get_ip,
@@ -9,7 +11,8 @@ diff --git a/vllm/distributed/device_communicators/shm_broadcast.py b/vllm/distr
      get_open_zmq_inproc_path,
      get_open_zmq_ipc_path,
      is_valid_ipv6_address,
-@@ -425,13 +424,13 @@
+ )
+@@ -525,13 +524,13 @@
                  connect_ip = get_ip()
              self.remote_socket = context.socket(XPUB)
              self.remote_socket.setsockopt(XPUB_VERBOSE, True)
