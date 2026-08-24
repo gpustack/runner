@@ -6,7 +6,10 @@ ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu130
 ARG SGLANG_VERSION=0.5.18
 ARG SGLANG_TORCH_VERSION=2.13.0
 ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
-ARG SGLANG_LMCACHE_VERSION=0.4.4
+## Keep >= 0.4.6 and in sync with the ROCm pin: SGLang's lmc_radix_cache.py imports
+## `lmcache.integration.sglang.multi_process_adapter`, added in 0.4.6, and the MP wire
+## protocol has no version handshake. 0.5.4 matches SGLANG_TORCH_VERSION.
+ARG SGLANG_LMCACHE_VERSION=0.5.4
 ARG SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda13
 ARG SGLANG_AWS_EFA_VERSION=1.46.0
 
@@ -345,12 +348,12 @@ EOF
 
 RUN <<EOF
     # CuPy
-    # Our lmcache 0.4.4 hardcodes cupy-cuda12x (requirements/cuda_core.txt, CUDA-agnostic)
-    # while the base's MSCCL++ ships cupy-cuda13x on cu130 (mscclpp[cuda13], added upstream
-    # at sglang 0.5.14); both share the same cupy/ tree, so uninstalling one breaks the
-    # other. Purge both, then reinstall only the variant matching the CUDA major we build
-    # for, at the version already present in the image. On cu129 both sources are cupy-cuda12x
-    # (mscclpp[cuda12] + lmcache) so this collapses to a harmless single-variant reinstall.
+    # lmcache <= 0.4.5 hardcoded cupy-cuda12x regardless of CUDA major, while the base's
+    # MSCCL++ ships cupy-cuda13x on cu130 (mscclpp[cuda13], added upstream at sglang 0.5.14);
+    # both share the same cupy/ tree, so uninstalling one breaks the other. Purge both, then
+    # reinstall only the variant matching the CUDA major we build for, at the version already
+    # present in the image. Since 0.4.6 lmcache splits its requirements per CUDA major, so our
+    # 0.5.4 pin should already agree —— kept as a guard until a build confirms that.
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
     PLATLIB="$(python -c 'import sysconfig; print(sysconfig.get_paths()["platlib"])')"
