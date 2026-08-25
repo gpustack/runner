@@ -241,6 +241,12 @@ RUN <<EOF
     export NVCC_THREADS=1
     ## Selects lmcache's cupy variant, which otherwise defaults to cu13 regardless of toolchain.
     export LMCACHE_CUDA_MAJOR="${CUDA_MAJOR}"
+    ## The base's CUDA toolkit lacks the math-library headers torch's CUDAContextLight.h needs;
+    ## fill only the gaps from the pip nvidia-* wheels, leaving the toolkit's own headers in place.
+    for inc in $(python -c 'import glob, sysconfig; print("\n".join(glob.glob(sysconfig.get_paths()["platlib"] + "/nvidia/*/include")))'); do
+        cp -rn "${inc}/." "${CUDA_HOME}/include/"
+    done
+    test -f "${CUDA_HOME}/include/cusparse.h"
     echo "Building LMCache with the following environment variables:"
     env
 
@@ -347,12 +353,12 @@ RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
     ## Fail here on a torch ABI mismatch: lmcache itself only WARNs and falls back to its slow
     ## torch baseline. RTLD_NOW resolves all symbols without module init, so this needs no GPU.
     cat <<EOT >/tmp/check_lmcache.py
-import ctypes, glob, sysconfig, torch
+import ctypes, glob, os, sysconfig, torch
 platlib = sysconfig.get_paths()["platlib"]
 sos = glob.glob(platlib + "/lmcache/*.so")
 assert sos, "no lmcache extension found under " + platlib
 for so in sos:
-    ctypes.CDLL(so, mode=ctypes.RTLD_NOW)
+    ctypes.CDLL(so, mode=os.RTLD_NOW)
 print("lmcache resolved against torch " + torch.__version__ + ": " + ", ".join(sos))
 EOT
     python /tmp/check_lmcache.py
