@@ -6,6 +6,11 @@ ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.27.1-ubuntu2404
 ARG VLLM_VERSION=0.27.1
 ARG VLLM_TORCH_VERSION=2.13.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
+## Built from source and installed over the base image's own lmcache: vLLM only declares
+## `lmcache >= 0.3.9` (no upper bound), so the base's version drifts with whenever upstream
+## built it. Keep in sync with the ROCm and SGLang pins —— the MP wire protocol has no
+## version handshake, so instances sharing a daemon or an L2 store must match.
+ARG VLLM_LMCACHE_VERSION=0.5.4
 ARG VLLM_OMNI_COMMIT=d77a35a3
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
@@ -188,6 +193,77 @@ RUN <<EOF
 EOF
 
 
+FROM vllm-build AS vllm-build-lmcache
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Build LMCache
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
+RUN <<EOF
+    # LMCache
+    # Ref https://github.com/LMCache/LMCache/blob/5afe9688b3519074b9915e7b3acf871328250150/docs/source/getting_started/installation.rst?plain=1#L67-L129.
+
+    rm -rf /workspace
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
+    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
+        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
+    fi
+    if (( $(echo "${CMAKE_MAX_JOBS} > 8" | bc -l) )); then
+        CMAKE_MAX_JOBS="8"
+    fi
+    LC_CUDA_ARCHS="${CUDA_ARCHS}"
+    if [[ -z "${LC_CUDA_ARCHS}" ]]; then
+        ## Match per-CUDA-major support per README.md "NVIDIA CUDA" section:
+        ## - CUDA 13.0 supports up to compute_120+PTX (no compute_121)
+        ## - CUDA 12.9 supports compute_120 + compute_121+PTX
+        ## - CUDA 12.6/12.4 (older) goes the conservative branch
+        if (( CUDA_MAJOR >= 13 )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0+PTX"
+        elif (( $(echo "${CUDA_MAJOR}.${CUDA_MINOR} >= 12.9" | bc -l) )); then
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX"
+        else
+            LC_CUDA_ARCHS="7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX"
+        fi
+    fi
+    export MAX_JOBS="${CMAKE_MAX_JOBS}"
+    export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
+    export NVCC_THREADS=1
+    echo "Building LMCache with the following environment variables:"
+    env
+
+    # Build
+    git -C /tmp clone --recursive --shallow-submodules \
+        --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
+        https://github.com/LMCache/LMCache.git lmcache
+    ## Note: don't pin cuda-bindings —— cu129 base has 12.9.4, cu130 base has 13.2.0,
+    ## both compatible with their respective torch. Hardcoding 12.9.4 on cu130 downgrades
+    ## and breaks `torch -> cuda-bindings<14,>=13.0.3` requirement.
+    pushd /tmp/lmcache \
+        && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
+        && cat /tmp/lmcache/pyproject.toml \
+        && python -m build --no-isolation --wheel \
+        && tree -hs /tmp/lmcache/dist \
+        && mv /tmp/lmcache/dist /workspace
+
+    # Cleanup
+    ## Note: no `ccache --clear` here (unlike pack/cuda/Dockerfile.sglang) —— the vLLM base
+    ## does not ship ccache, and `bash -e` would abort the build on the missing command.
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+
 FROM vllm-build AS vllm
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
@@ -244,6 +320,30 @@ EOT
         && rm -rf /tmp/*
 EOF
 
+## Install LMCache
+
+ARG VLLM_LMCACHE_VERSION
+
+ENV VLLM_LMCACHE_VERSION=${VLLM_LMCACHE_VERSION}
+
+RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
+    # LMCache
+
+    # Install
+    ## Replaces whatever lmcache the base image happened to resolve —— see the note on
+    ## VLLM_LMCACHE_VERSION. Must run before the CuPy dedup below, since lmcache declares
+    ## a CUDA-major-specific cupy variant of its own.
+    uv pip install --no-build-isolation \
+        /lmcache/workspace/*.whl
+
+    # Review
+    uv pip show lmcache
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
 ## Deduplicate CuPy
 
 RUN <<EOF
@@ -252,6 +352,8 @@ RUN <<EOF
     # the same cupy/ tree, so uninstalling one breaks the other. Purge both, then reinstall
     # the CUDA-matching variant at the version vLLM pinned in the base (its cupy-cuda13x),
     # so cu129 also gets that pinned version instead of ray's unconstrained cupy-cuda12x.
+    # Our own lmcache (installed above) is a third source: since 0.4.6 it declares the
+    # variant matching the CUDA major it was built for, so it agrees with this reinstall.
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
     PLATLIB="$(python -c 'import sysconfig; print(sysconfig.get_paths()["platlib"])')"
