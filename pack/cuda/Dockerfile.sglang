@@ -6,7 +6,10 @@ ARG SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu130
 ARG SGLANG_VERSION=0.5.18
 ARG SGLANG_TORCH_VERSION=2.13.0
 ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
-ARG SGLANG_LMCACHE_VERSION=0.4.4
+## Keep >= 0.4.6 and in sync with the ROCm and vLLM pins: SGLang's lmc_radix_cache.py imports
+## `lmcache.integration.sglang.multi_process_adapter`, added in 0.4.6, and the MP wire protocol
+## has no version handshake. The SGLang base ships no lmcache, so it is always built from source.
+ARG SGLANG_LMCACHE_VERSION=0.5.4
 ARG SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda13
 ARG SGLANG_AWS_EFA_VERSION=1.46.0
 
@@ -174,6 +177,11 @@ RUN <<EOF
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export TORCH_CUDA_ARCH_LIST="${LC_CUDA_ARCHS}"
     export NVCC_THREADS=1
+    ## Picks the cupy variant baked into the wheel's install_requires
+    ## (setup_extensions/build_profiles/cuda.py). It defaults to 13 and does not probe the
+    ## toolchain, so without this the cu129 wheel would demand cupy-cuda13x and contradict
+    ## the CuPy dedup in the `sglang` stage.
+    export LMCACHE_CUDA_MAJOR="${CUDA_MAJOR}"
     echo "Building LMCache with the following environment variables:"
     env
 
@@ -307,6 +315,21 @@ RUN --mount=type=bind,from=sglang-build-lmcache,source=/,target=/lmcache,rw <<EO
     uv pip install --no-build-isolation \
         /lmcache/workspace/*.whl
 
+    # Review
+    uv pip show lmcache
+    ## Fail here on a torch ABI mismatch: lmcache itself only WARNs and falls back to its slow
+    ## torch baseline. RTLD_NOW resolves all symbols without module init, so this needs no GPU.
+    cat <<EOT >/tmp/check_lmcache.py
+import ctypes, glob, sysconfig, torch
+platlib = sysconfig.get_paths()["platlib"]
+sos = glob.glob(platlib + "/lmcache/*.so")
+assert sos, "no lmcache extension found under " + platlib
+for so in sos:
+    ctypes.CDLL(so, mode=ctypes.RTLD_NOW)
+print("lmcache resolved against torch " + torch.__version__ + ": " + ", ".join(sos))
+EOT
+    python /tmp/check_lmcache.py
+
     # Cleanup
     rm -rf /var/tmp/* \
         && rm -rf /tmp/*
@@ -345,12 +368,13 @@ EOF
 
 RUN <<EOF
     # CuPy
-    # Our lmcache 0.4.4 hardcodes cupy-cuda12x (requirements/cuda_core.txt, CUDA-agnostic)
-    # while the base's MSCCL++ ships cupy-cuda13x on cu130 (mscclpp[cuda13], added upstream
-    # at sglang 0.5.14); both share the same cupy/ tree, so uninstalling one breaks the
-    # other. Purge both, then reinstall only the variant matching the CUDA major we build
-    # for, at the version already present in the image. On cu129 both sources are cupy-cuda12x
-    # (mscclpp[cuda12] + lmcache) so this collapses to a harmless single-variant reinstall.
+    # lmcache <= 0.4.5 hardcoded cupy-cuda12x regardless of CUDA major, while the base's
+    # MSCCL++ ships cupy-cuda13x on cu130 (mscclpp[cuda13], added upstream at sglang 0.5.14);
+    # both share the same cupy/ tree, so uninstalling one breaks the other. Purge both, then
+    # reinstall only the variant matching the CUDA major we build for, at the version already
+    # present in the image. Since 0.4.6 lmcache splits its requirements per CUDA major, so our
+    # 0.5.4 pin agrees with this reinstall (see LMCACHE_CUDA_MAJOR in the build stage above),
+    # leaving MSCCL++ as the only source that has to be corrected here.
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
     PLATLIB="$(python -c 'import sysconfig; print(sysconfig.get_paths()["platlib"])')"

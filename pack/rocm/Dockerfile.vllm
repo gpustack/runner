@@ -6,7 +6,9 @@ ARG VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.27.1
 ARG VLLM_VERSION=0.27.1
 ARG VLLM_TORCH_VERSION=2.13.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
-ARG VLLM_LMCACHE_VERSION=0.5.0
+## The ROCm base ships no lmcache of its own, so it is always built from source here.
+## Keep in sync with the CUDA and SGLang pins —— see pack/cuda/Dockerfile.vllm.
+ARG VLLM_LMCACHE_VERSION=0.5.4
 ARG VLLM_MOONCAKE_VERSION=0.3.11.post1
 ARG VLLM_OMNI_COMMIT=d77a35a3
 
@@ -344,6 +346,21 @@ RUN --mount=type=bind,from=vllm-build-lmcache,source=/,target=/lmcache,rw <<EOF
     # Install
     uv pip install --no-build-isolation \
         /lmcache/workspace/*.whl
+
+    # Review
+    uv pip show lmcache
+    ## Fail here on a torch ABI mismatch: lmcache itself only WARNs and falls back to its slow
+    ## torch baseline. RTLD_NOW resolves all symbols without module init, so this needs no GPU.
+    cat <<EOT >/tmp/check_lmcache.py
+import ctypes, glob, sysconfig, torch
+platlib = sysconfig.get_paths()["platlib"]
+sos = glob.glob(platlib + "/lmcache/*.so")
+assert sos, "no lmcache extension found under " + platlib
+for so in sos:
+    ctypes.CDLL(so, mode=ctypes.RTLD_NOW)
+print("lmcache resolved against torch " + torch.__version__ + ": " + ", ".join(sos))
+EOT
+    python /tmp/check_lmcache.py
 
     # Cleanup
     rm -rf /var/tmp/* \

@@ -5,11 +5,15 @@ ARG CANN_ARCHS=910b
 ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.18-cann9.0.0-910b
 ARG SGLANG_VERSION=0.5.18
 ARG SGLANG_TORCH_VERSION=2.10.0
+## Pinned below the CUDA/ROCm 0.5.4: this backend goes through LMCache-Ascend, whose matrix
+## tops out at SGLang 0.5.8 / lmcache 0.4.4, and 0.5.x's renamed extensions would break its
+## patches. `--enable-lmcache` does not work here either way (no multi_process_adapter).
 ARG SGLANG_LMCACHE_VERSION=0.4.2
 ## LMCache-Ascend is pinned to a commit rather than a release tag: CANN 9.0.0 support
 ## (kvcache-ops update, LMCache/LMCache-Ascend#256) landed on main after the latest tag
-## v0.4.3, so no tagged release builds against the cann9.0.0 base yet. Bump to a tag once
-## one ships. This commit builds lmcache-ascend 0.4.4.dev against lmcache 0.4.2.
+## v0.4.3, so no tagged release builds against the cann9.0.0 base yet. A v0.4.4 tag has since
+## shipped (2026-07-28) and is a clean fast-forward —— bumping to it is a separate change.
+## This commit builds lmcache-ascend 0.4.4.dev against lmcache 0.4.2.
 ARG SGLANG_LMCACHE_ASCEND_COMMIT=dbd6545
 
 FROM ${SGLANG_BASE_IMAGE} AS sglang-build
