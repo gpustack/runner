@@ -230,12 +230,12 @@ RUN --mount=type=bind,from=sglang-build-lmcache,source=/,target=/lmcache,rw <<EO
     ## Fail here on a torch ABI mismatch: lmcache itself only WARNs and falls back to its slow
     ## torch baseline. RTLD_NOW resolves all symbols without module init, so this needs no GPU.
     cat <<EOT >/tmp/check_lmcache.py
-import ctypes, glob, sysconfig, torch
+import ctypes, glob, os, sysconfig, torch
 platlib = sysconfig.get_paths()["platlib"]
 sos = glob.glob(platlib + "/lmcache/*.so")
 assert sos, "no lmcache extension found under " + platlib
 for so in sos:
-    ctypes.CDLL(so, mode=ctypes.RTLD_NOW)
+    ctypes.CDLL(so, mode=os.RTLD_NOW)
 print("lmcache resolved against torch " + torch.__version__ + ": " + ", ".join(sos))
 EOT
     python /tmp/check_lmcache.py
