@@ -124,7 +124,10 @@ ENV ROCM_HOME="/opt/rocm" \
     ROCM_VERSION=${ROCM_VERSION} \
     ROCM_ARCHS=${ROCM_ARCHS}
 
-ENV UV_SYSTEM_PYTHON=1 \
+## Unlike every other backend, this base ships a venv at /opt/venv and puts it first on PATH
+## while leaving VIRTUAL_ENV unset. Point uv at it: UV_SYSTEM_PYTHON=1 would install into /usr,
+## which the venv does not include, so nothing we add would be importable at runtime.
+ENV VIRTUAL_ENV="/opt/venv" \
     UV_PRERELEASE=allow \
     UV_SKIP_WHEEL_FILENAME_CHECK=1 \
     UV_NO_CACHE=1 \
