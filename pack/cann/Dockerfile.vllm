@@ -160,6 +160,12 @@ RUN <<EOF
         exit 0
     fi
 
+    # The A5 base image already ships mooncake-transfer-engine-npu.
+    if [[ "${CANN_ARCHS}" == "950" ]]; then
+        echo "Skipping MoonCake build for ${CANN_ARCHS}, the base image ships it..."
+        exit 0
+    fi
+
     # Build MoonCake
     CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
     if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
@@ -421,8 +427,11 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
     tree -hs /workspace/patches
     pushd /vllm-workspace/vllm \
         && for f in /workspace/patches/vllm/*.patch; do patch -p1 < "$f" || exit 1; done
-    pushd /vllm-workspace/vllm-ascend \
-        && patch -p1 < /workspace/patches/vllm_ascend/*.patch
+    # vLLM Ascend fixed this upstream after 0.20.2rc1.
+    if [[ "${VLLM_VERSION}" == 0.20.* ]]; then
+        pushd /vllm-workspace/vllm-ascend \
+            && patch -p1 < /workspace/patches/vllm_ascend/*.patch
+    fi
     if pip show vllm_omni > /dev/null 2>&1; then \
         pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
             && patch -p1 < /workspace/patches/vllm_omni/*.patch; \

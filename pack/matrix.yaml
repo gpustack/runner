@@ -16,6 +16,21 @@ rules:
   # Ascend CANN
   #
 
+  ## Ascend CANN 9.1.0, using CANN Kernel for 950 (A5).
+  ## (CANN_ARCHS follows the CANN variant name "950", while the vLLM Ascend
+  ##  image tags the same generation "a5")
+  ## (Omni has no A5 support yet, so it is switched off)
+  ##
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=9.1.0"
+      - "CANN_ARCHS=950"
+      - "PYTHON_VERSION=3.12"
+      - "VLLM_VERSION=0.23.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0-a5"
+      - "VLLM_OMNI_COMMIT="
   ## Ascend CANN 9.0.0, using CANN Kernel for A3.
   ##
   - backend: "cann"
