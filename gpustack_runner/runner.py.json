@@ -1,6 +1,28 @@
 [
   {
     "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "a3",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann9.1-a3-vllm0.23.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "a3",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann9.1-a3-vllm0.23.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
     "backend_version": "9.0",
     "original_backend_version": "9.0.0",
     "backend_variant": "a3",
@@ -482,6 +504,50 @@
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-a3-vllm0.10.1.1",
     "deprecated": true
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "950",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann9.1-950-vllm0.23.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "950",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann9.1-950-vllm0.23.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann9.1-910b-vllm0.23.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "910b",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann9.1-910b-vllm0.23.0",
+    "deprecated": false
   },
   {
     "backend": "cann",
@@ -1053,6 +1119,28 @@
     "service_version": "0.9.1",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann8.2-910b-vllm0.9.1",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "310p",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann9.1-310p-vllm0.23.0",
+    "deprecated": false
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "310p",
+    "service": "vllm",
+    "service_version": "0.23.0",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann9.1-310p-vllm0.23.0",
     "deprecated": false
   },
   {
