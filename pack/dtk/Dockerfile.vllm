@@ -323,6 +323,33 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
+## Remove CUDA-only NIXL EP packages
+
+# The prebuilt DTK vLLM base image can inherit NIXL Expert Parallel packages
+# from its Python environment. NIXL EP provides NVIDIA CUDA backends which
+# require libcuda.so.1 and cannot run on Hygon DCU systems.
+#
+# vLLM detects NIXL EP through importlib.util.find_spec("nixl_ep"). Remove
+# the packages entirely, rather than leaving an ImportError stub, so vLLM
+# selects its non-NIXL path.
+RUN <<EOF
+    rm -rf \
+        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep \
+        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu12 \
+        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu13 \
+        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep-*.dist-info \
+        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu12-*.dist-info \
+        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu13-*.dist-info
+
+    python - <<'PYEOF'
+import importlib.util
+
+for module_name in ("nixl_ep", "nixl_ep_cu12", "nixl_ep_cu13"):
+    assert importlib.util.find_spec(module_name) is None, \
+        f"{module_name} is still discoverable after DTK image cleanup"
+PYEOF
+EOF
+
 ## Postprocess
 
 RUN <<EOF
