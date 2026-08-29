@@ -330,16 +330,15 @@ EOF
 # require libcuda.so.1 and cannot run on Hygon DCU systems.
 #
 # vLLM detects NIXL EP through importlib.util.find_spec("nixl_ep"). Remove
-# the packages entirely, rather than leaving an ImportError stub, so vLLM
-# selects its non-NIXL path.
+# the distributions entirely, rather than leaving an ImportError stub, so
+# vLLM selects its non-NIXL path. Use uv to resolve the active Python
+# environment and package paths instead of relying on a fixed site-packages
+# location.
 RUN <<EOF
-    rm -rf \
-        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep \
-        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu12 \
-        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu13 \
-        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep-*.dist-info \
-        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu12-*.dist-info \
-        /usr/local/lib/python${PYTHON_VERSION}/dist-packages/nixl_ep_cu13-*.dist-info
+    # The NIXL EP modules are owned by the nixl, nixl-cu12, and nixl-cu13
+    # distributions in the DTK base image. Do not fail if a future base image
+    # no longer includes one of them; the import check below remains required.
+    uv pip uninstall nixl nixl-cu12 nixl-cu13 || true
 
     python - <<'PYEOF'
 import importlib.util
