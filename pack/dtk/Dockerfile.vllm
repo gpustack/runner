@@ -323,6 +323,25 @@ RUN <<EOF
         && rm -rf /tmp/*
 EOF
 
+## Restore NumPy 1.x ABI compatibility
+
+# The DTK base image currently ships a Torch build compiled against the NumPy
+# 1.x ABI. NumPy 2.x cannot initialize in that Torch build, which causes
+# distributed initialization to fail when it calls Tensor.numpy().
+#
+# Install without dependencies to avoid changing the prebuilt DTK Python
+# environment beyond the NumPy compatibility pin.
+RUN <<EOF
+    uv pip install --no-deps "numpy==1.26.4"
+
+    python - <<'PYEOF'
+import numpy
+
+assert numpy.__version__ == "1.26.4", \
+    f"expected numpy 1.26.4, got {numpy.__version__}"
+PYEOF
+EOF
+
 ## Remove CUDA-only NIXL EP packages
 
 # The prebuilt DTK vLLM base image can inherit NIXL Expert Parallel packages
