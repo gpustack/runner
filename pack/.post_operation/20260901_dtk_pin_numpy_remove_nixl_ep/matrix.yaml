@@ -1,0 +1,16 @@
+rules:
+
+  #
+  # Hygon DTK
+  #
+
+  ## Packed Hygon DTK 26.04.
+  ##
+  - backend: "dtk"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "DTK_VERSION=26.04"
+      - "VLLM_VERSION=0.18.1"

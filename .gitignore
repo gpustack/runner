@@ -4,6 +4,9 @@
 .DS_Store
 *.swp
 
+# Local agent tooling
+.claude/
+
 # C extensions
 *.so
 
