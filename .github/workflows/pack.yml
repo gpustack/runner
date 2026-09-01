@@ -4,7 +4,7 @@
 # It also supports dry runs to check the matrix and Dockerfile without building images.
 # The workflow is triggered manually via the GitHub Actions UI.
 
-name: PACK
+name: Pack
 
 permissions:
   actions: write

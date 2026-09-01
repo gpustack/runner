@@ -2,7 +2,7 @@
 # It supports squashing images for multiple OS/ARCH and creating manifest list.
 # The workflow is triggered manually via GitHub Actions UI.
 
-name: SQUASH
+name: Squash
 
 permissions:
   actions: read
