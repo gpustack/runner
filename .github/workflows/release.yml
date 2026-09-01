@@ -1,7 +1,7 @@
 # This workflow runs for releasing the package to PyPI.
 # It triggers on workflow dispatch or when a tag matching 'v*.*.*' is pushed.
 
-name: release
+name: RELEASE
 
 permissions:
   actions: read

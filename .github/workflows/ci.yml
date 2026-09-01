@@ -1,7 +1,7 @@
 # This workflow runs for continuous integration (CI) of the project.
 # It triggers on workflow dispatch or when changes are pushed to the main branch or development branches.
 
-name: ci
+name: CI
 
 permissions:
   actions: read
