@@ -21,7 +21,7 @@ dependencies = [
     "argcomplete>=3.6.3",
     "dataclasses-json>=0.6.7",
     "packaging>=21.0",
-    "requests>=2.32.3",
+    "requests>=2.33.0",
 ]
 dynamic = ["version"]
 
@@ -36,11 +36,11 @@ gpustack-runner = "gpustack_runner.__main__:main"
 dev=[
     "pyclean==3.4.0",
     "pre-commit==4.5.0",
-    "pytest==8.4.2",
+    "pytest==9.0.3",
     "hatchling",
     "hatch-vcs",
     "mkdocs>=1.6.1",
     "mkdocstrings-python>=1.18.0",
     "mkdocs-material>=9.6.18",
-    "pymdown-extensions>=10.16.1",
+    "pymdown-extensions>=11.0.1",
 ]
