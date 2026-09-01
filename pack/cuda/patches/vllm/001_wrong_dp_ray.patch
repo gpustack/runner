@@ -1,33 +1,28 @@
 diff --git a/vllm/utils/network_utils.py b/vllm/utils/network_utils.py
 --- a/vllm/utils/network_utils.py
 +++ b/vllm/utils/network_utils.py
-@@ -146,6 +146,8 @@
- def get_open_zmq_inproc_path() -> str:
-     return f"inproc://{uuid4()}"
-
+@@ -171,6 +171,9 @@
+     return range(dp_master_port, dp_master_port + 10)
+ 
+ 
 +_next_port: int | None = None
++
 +
  def get_open_port() -> int:
      """
      Get an open port for the vLLM process to listen on.
-@@ -156,13 +158,17 @@
+@@ -180,10 +183,13 @@
      Right now we reserve 10 ports for the data parallel master
      process. Currently it uses 2 ports.
      """
 +    global _next_port
-     if "VLLM_DP_MASTER_PORT" in os.environ:
-         dp_master_port = envs.VLLM_DP_MASTER_PORT
-         reserved_port_range = range(dp_master_port, dp_master_port + 10)
-         while True:
--            candidate_port = _get_open_port()
-+            candidate_port = _get_open_port(_next_port)
-+            _next_port = candidate_port + 1
-             if candidate_port not in reserved_port_range:
-                 return candidate_port
--    return _get_open_port()
-+    port = _get_open_port(_next_port)
-+    _next_port = port + 1
-+    return port
-
-
- def get_open_ports_list(count: int = 5) -> list[int]:
+     reserved_port_range = _get_reserved_port_range()
+-    port = _get_open_port()
++    port = _get_open_port(start_port=_next_port)
++    _next_port = (port + 1) if port < 65535 else None
+     if port in reserved_port_range:
+         port = _get_open_port(start_port=reserved_port_range.stop, max_attempts=1000)
++        _next_port = (port + 1) if port < 65535 else None
+     return port
+ 
+ 
