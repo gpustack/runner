@@ -9,6 +9,8 @@ ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ## The ROCm base ships no lmcache of its own, so it is always built from source here.
 ## Keep in sync with the CUDA and SGLang pins —— see pack/cuda/Dockerfile.vllm.
 ARG VLLM_LMCACHE_VERSION=0.5.4
+## Upstream's own HIP build —— same source and CMake options we used to compile here,
+## but produced in a clean rocm/dev-ubuntu-22.04 and smoke-tested before release.
 ARG VLLM_MOONCAKE_VERSION=0.3.13.post1
 ARG VLLM_OMNI_COMMIT=aff7d64948f6
 
@@ -197,56 +199,6 @@ RUN <<EOF
 EOF
 
 
-FROM vllm-build AS vllm-build-mooncake
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build MoonCake
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_MOONCAKE_VERSION
-
-ENV VLLM_MOONCAKE_VERSION=${VLLM_MOONCAKE_VERSION} \
-    PATH="/opt/rocm/bin:/usr/local/go/bin:${PATH}"
-
-RUN <<EOF
-    # MoonCake
-
-    rm -rf /workspace
-
-    # Build MoonCake
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} < 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    echo "Building MoonCake with the following environment variables:"
-    env
-
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_MOONCAKE_VERSION} --single-branch \
-        https://github.com/kvcache-ai/Mooncake.git mooncake
-    pushd /tmp/mooncake \
-        && bash dependencies.sh -y \
-        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DUSE_HIP=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build --target install -j${MAX_JOBS} \
-        && ./scripts/build_wheel.sh \
-        && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
-        && mv /tmp/mooncake/mooncake-wheel/dist /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
-EOF
-
-
 FROM vllm-build AS vllm-build-omni
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
@@ -369,12 +321,14 @@ EOF
 
 ## Install MoonCake
 
-RUN --mount=type=bind,from=vllm-build-mooncake,source=/,target=/mooncake,rw <<EOF
+ARG VLLM_MOONCAKE_VERSION
+
+RUN <<EOF
     # MoonCake
 
     # Install
-    uv pip install --no-build-isolation \
-        /mooncake/workspace/*.whl
+    uv pip install \
+        mooncake-transfer-engine-rocm==${VLLM_MOONCAKE_VERSION}
 
     # Cleanup
     rm -rf /var/tmp/* \
@@ -422,7 +376,7 @@ RUN <<EOF
         --package aiter \
         --package torch \
         --package lmcache \
-        --package mooncake-transfer-engine \
+        --package mooncake-transfer-engine-rocm \
         --package ray
 EOF
 
