@@ -7,7 +7,7 @@ ARG VLLM_VERSION=0.23.0
 ARG VLLM_TORCH_VERSION=2.10.0
 ARG VLLM_LMCACHE_VERSION=0.4.3
 ARG VLLM_LMCACHE_ASCEND_VERSION=${VLLM_LMCACHE_VERSION}
-ARG VLLM_MOONCAKE_VERSION=0.3.13.post1
+ARG VLLM_MOONCAKE_VERSION=0.3.11.post1
 ARG VLLM_OMNI_COMMIT=4a24a517
 
 FROM ${CANN_BASE_IMAGE} AS vllm-build
@@ -134,67 +134,6 @@ ARG VLLM_TORCH_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION} \
     VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION}
-
-
-FROM vllm-build AS vllm-build-mooncake
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-## Build MoonCake
-
-ARG CMAKE_MAX_JOBS
-ARG VLLM_MOONCAKE_VERSION
-
-ENV PATH="/usr/local/go/bin:${PATH}"
-
-RUN <<EOF
-    # MoonCake
-
-    rm -rf /workspace
-
-    if [[ "${CANN_ARCHS}" == "310p" ]]; then
-        echo "Skipping MoonCake build for ${CANN_ARCHS}..."
-        exit 0
-    fi
-
-    # The A5 base image already ships mooncake-transfer-engine-npu.
-    if [[ "${CANN_ARCHS}" == "950" ]]; then
-        echo "Skipping MoonCake build for ${CANN_ARCHS}, the base image ships it..."
-        exit 0
-    fi
-
-    # Build MoonCake
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} < 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/lib64"
-    echo "Building MoonCake with the following environment variables:"
-    env
-
-    git -C /tmp clone --recursive --shallow-submodules \
-        --depth 1 --branch v${VLLM_MOONCAKE_VERSION} --single-branch \
-        https://github.com/kvcache-ai/Mooncake.git mooncake
-    pushd /tmp/mooncake \
-        && bash dependencies.sh -y \
-        && cmake -S . -B build -DBUILD_UNIT_TESTS=OFF -DUSE_ASCEND_DIRECT=ON -DUSE_HTTP=ON -DUSE_ETCD=ON -DSTORE_USE_ETCD=ON -DCMAKE_BUILD_TYPE=Release \
-        && cmake --build build --target install -j${MAX_JOBS} \
-        && ./scripts/build_wheel.sh \
-        && tree -hs /tmp/mooncake/mooncake-wheel/dist/ \
-        && mv /tmp/mooncake/mooncake-wheel/dist/ /workspace
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/* \
-        && ccache --clear --clean
-EOF
 
 
 FROM vllm-build AS vllm-build-omni
@@ -341,17 +280,19 @@ EOF
 
 ## Install MoonCake
 
-RUN --mount=type=bind,from=vllm-build-mooncake,source=/,target=/mooncake,rw <<EOF
+ARG VLLM_MOONCAKE_VERSION
+
+RUN <<EOF
     # MoonCake
 
-    if [[ ! -d /mooncake/workspace ]]; then
-        echo "Skipping MoonCake installation for ${CANN_ARCHS} ${TARGETARCH}..."
+    if [[ "${CANN_ARCHS}" == "310p" ]]; then
+        echo "Skipping MoonCake installation for ${CANN_ARCHS}..."
         exit 0
     fi
 
     # Install
-    uv pip install --no-build-isolation \
-        /mooncake/workspace/*.whl
+    uv pip install \
+        mooncake-transfer-engine-npu==${VLLM_MOONCAKE_VERSION}
 
     # Cleanup
     rm -rf /var/tmp/* \
