@@ -11,6 +11,7 @@ ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## on a mismatch lmcache silently degrades to its torch baseline (vllm-project/vllm#53424).
 ## Keep in sync with the ROCm and SGLang pins —— the MP wire protocol has no version handshake.
 ARG VLLM_LMCACHE_VERSION=0.5.4
+ARG VLLM_ROUTER_VERSION=0.1.15
 ARG VLLM_OMNI_COMMIT=aff7d64948f6
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
@@ -283,6 +284,30 @@ SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
+
+## Install vLLM Router
+
+ARG VLLM_ROUTER_VERSION
+
+RUN <<EOF
+    # vLLM Router
+    #
+    # The PD router GPUStack renders for a disaggregated group. Without it in
+    # the image there is no router to run, and the group either falls back to
+    # an engine example script (no metrics, no circuit breaker, no health
+    # check) or does not start at all.
+    uv pip install \
+        vllm-router==${VLLM_ROUTER_VERSION}
+
+    # Fail the build rather than ship an image whose router is missing: the
+    # alternative surfaces as a container that exits at deploy time, one
+    # layer away from anything that explains it.
+    command -v vllm-router >/dev/null
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
 
 ## Install Ray
 
