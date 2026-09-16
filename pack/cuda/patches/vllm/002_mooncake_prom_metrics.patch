@@ -1,0 +1,160 @@
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/stats.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/stats.py
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/stats.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/stats.py
+@@ -144,3 +144,127 @@
+     @property
+     def num_successful_transfers(self) -> int:
+         return len(self.data["transfer_duration"])
++
++
++
++
++from vllm.config import VllmConfig
++from vllm.distributed.kv_transfer.kv_connector.v1.metrics import (
++    KVConnectorPromMetrics,
++    PromMetric,
++    PromMetricT,
++)
++from vllm.v1.metrics.utils import create_metric_per_engine
++
++
++class MooncakePromMetrics(KVConnectorPromMetrics):
++    """Prometheus metrics for Mooncake point-to-point KV transfers.
++
++    Mirrors NixlPromMetrics: the histograms take one observation per recorded
++    transfer, and the counters take a list of 1s, which is the shape
++    MooncakeKVConnectorStats.reset() already produces.
++
++    The metric names are prefixed `vllm:mooncake_` rather than
++    `vllm:mooncake_store_`, which MooncakeStorePromMetrics owns: the two
++    connectors can be active in the same engine through a MultiConnector, and
++    one namespace for both would merge a direct engine-to-engine transfer with
++    a round trip to the shared store.
++    """
++
++    def __init__(
++        self,
++        vllm_config: VllmConfig,
++        metric_types: dict[type[PromMetric], type[PromMetricT]],
++        labelnames: list[str],
++        per_engine_labelvalues: dict[int, list[object]],
++    ):
++        super().__init__(vllm_config, metric_types, labelnames, per_engine_labelvalues)
++
++        duration_buckets = [
++            0.001, 0.005, 0.01, 0.025, 0.05, 0.075,
++            0.1, 0.2, 0.3, 0.5, 0.75, 1.0, 5.0,
++        ]
++        histogram_xfer_time = self._histogram_cls(
++            name="vllm:mooncake_xfer_time_seconds",
++            documentation="Histogram of transfer duration for Mooncake KV cache transfers.",
++            buckets=duration_buckets,
++            labelnames=labelnames,
++        )
++        self.histogram_xfer_time = create_metric_per_engine(
++            histogram_xfer_time, self.per_engine_labelvalues
++        )
++
++        # Uniform 2KiB to 16GiB range, as NixlPromMetrics uses.
++        byte_buckets = [2 ** (10 + i) for i in range(1, 25, 2)]
++        histogram_bytes_transferred = self._histogram_cls(
++            name="vllm:mooncake_bytes_transferred",
++            documentation="Histogram of bytes transferred per Mooncake KV cache transfer.",
++            buckets=byte_buckets,
++            labelnames=labelnames,
++        )
++        self.histogram_bytes_transferred = create_metric_per_engine(
++            histogram_bytes_transferred, self.per_engine_labelvalues
++        )
++
++        descriptor_buckets = [10, 20, 30, 50, 75, 100, 200, 300, 500, 750, 1000]
++        histogram_num_descriptors = self._histogram_cls(
++            name="vllm:mooncake_num_descriptors",
++            documentation="Histogram of descriptors per Mooncake KV cache transfer.",
++            buckets=descriptor_buckets,
++            labelnames=labelnames,
++        )
++        self.histogram_num_descriptors = create_metric_per_engine(
++            histogram_num_descriptors, self.per_engine_labelvalues
++        )
++
++        counter_num_failed_transfers = self._counter_cls(
++            name="vllm:mooncake_num_failed_transfers",
++            documentation="Number of failed Mooncake KV cache transfers.",
++            labelnames=labelnames,
++        )
++        self.counter_num_failed_transfers = create_metric_per_engine(
++            counter_num_failed_transfers, self.per_engine_labelvalues
++        )
++
++        counter_num_failed_recvs = self._counter_cls(
++            name="vllm:mooncake_num_failed_recvs",
++            documentation="Number of failed Mooncake KV cache receives.",
++            labelnames=labelnames,
++        )
++        self.counter_num_failed_recvs = create_metric_per_engine(
++            counter_num_failed_recvs, self.per_engine_labelvalues
++        )
++
++        counter_num_kv_expired_reqs = self._counter_cls(
++            name="vllm:mooncake_num_kv_expired_reqs",
++            documentation="Number of requests whose Mooncake KV blocks expired.",
++            labelnames=labelnames,
++        )
++        self.counter_num_kv_expired_reqs = create_metric_per_engine(
++            counter_num_kv_expired_reqs, self.per_engine_labelvalues
++        )
++
++    def observe(self, transfer_stats_data: dict[str, Any], engine_idx: int = 0):
++        # A key absent from the payload is skipped rather than raising: the stats
++        # container's key set belongs to the connector and may grow or shrink
++        # between releases, and a metrics path is the wrong place to fail an engine.
++        for prom_obj, key in zip(
++            [
++                self.histogram_xfer_time,
++                self.histogram_bytes_transferred,
++                self.histogram_num_descriptors,
++            ],
++            ["transfer_duration", "bytes_transferred", "num_descriptors"],
++        ):
++            for list_item in transfer_stats_data.get(key, ()):
++                prom_obj[engine_idx].observe(list_item)
++        for counter_obj, key in zip(
++            [
++                self.counter_num_failed_transfers,
++                self.counter_num_failed_recvs,
++                self.counter_num_kv_expired_reqs,
++            ],
++            ["num_failed_transfers", "num_failed_recvs", "num_kv_expired_reqs"],
++        ):
++            for list_item in transfer_stats_data.get(key, ()):
++                counter_obj[engine_idx].inc(list_item)
+diff --git a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+--- a/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
++++ b/vllm/distributed/kv_transfer/kv_connector/v1/mooncake/mooncake_connector.py
+@@ -2144,3 +2144,25 @@
+         host = parallel_config.data_parallel_master_ip
+     port = envs.VLLM_MOONCAKE_BOOTSTRAP_PORT
+     return (host, port)
++
++
++
++
++def _build_mooncake_prom_metrics(
++    cls, vllm_config, metric_types, labelnames, per_engine_labelvalues
++):
++    # Imported here rather than at module scope: this file already imports from
++    # .stats, and keeping the dependency inside the call leaves the module's
++    # import graph exactly as it was.
++    from vllm.distributed.kv_transfer.kv_connector.v1.mooncake.stats import (
++        MooncakePromMetrics,
++    )
++
++    return MooncakePromMetrics(
++        vllm_config, metric_types, labelnames, per_engine_labelvalues
++    )
++
++
++# Bound by assignment rather than written into the class body, so that this patch
++# stays an append and needs no anchor inside a file that differs between releases.
++MooncakeConnector.build_prom_metrics = classmethod(_build_mooncake_prom_metrics)
