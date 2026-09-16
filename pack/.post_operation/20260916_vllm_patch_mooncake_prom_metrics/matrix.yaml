@@ -1,0 +1,83 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+  # Every published vLLM runner at or above 0.22.0 carries the defect: that is the release where
+  # MooncakeStoreConnector gained build_prom_metrics, which is what leaves MooncakeConnector the
+  # only child of a MultiConnector reporting stats without a Prometheus registration. The three
+  # versions below are the ones this project still runs.
+  #
+
+  ## Packed NVIDIA CUDA 13.0.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=13.0"
+      - "VLLM_VERSION=0.27.1"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=13.0"
+      - "VLLM_VERSION=0.25.1"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=13.0"
+      - "VLLM_VERSION=0.24.0"
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.27.1"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.25.1"
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.24.0"
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed AMD ROCm 7.2.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.2"
+      - "VLLM_VERSION=0.27.1"
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.2"
+      - "VLLM_VERSION=0.25.1"
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.2"
+      - "VLLM_VERSION=0.24.0"
