@@ -14,13 +14,16 @@ defaults:
 
 on:
   workflow_dispatch:
+  # `pack/**` is deliberately NOT ignored here or below: it is the only path a
+  # broken dependency-probe wiring can arrive through, and the guard that catches
+  # it is tests/pack/test_probe_wiring.py. Ignoring it buys back a few runner
+  # minutes and gives up the guard entirely.
   push:
     branches:
       - "main"
       - "v*-dev"
     paths-ignore:
       - "!.github/workflows/ci.yml"
-      - "pack/**"
       - "docs/**"
       - "tools/**"
       - "**.md"
@@ -36,7 +39,6 @@ on:
       - "v*-dev"
     paths-ignore:
       - "!.github/workflows/ci.yml"
-      - "pack/**"
       - "docs/**"
       - "tools/**"
       - "**.md"

@@ -221,11 +221,40 @@ jobs:
           DOCKER_CONTEXT="${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}"
           echo "docker_context=${DOCKER_CONTEXT}" >> $GITHUB_OUTPUT
 
-          if [[ -f ${DOCKER_CONTEXT}/Dockerfile.${{ matrix.service }} ]]; then
-            echo "docker_file=${DOCKER_CONTEXT}/Dockerfile.${{ matrix.service }}" >> $GITHUB_OUTPUT
-          else
-            echo "docker_file=${DOCKER_CONTEXT}/Dockerfile" >> $GITHUB_OUTPUT
+          DOCKER_FILE="${DOCKER_CONTEXT}/Dockerfile"
+          if [[ -f ${DOCKER_FILE}.${{ matrix.service }} ]]; then
+            DOCKER_FILE="${DOCKER_FILE}.${{ matrix.service }}"
           fi
+          echo "docker_file=${DOCKER_FILE}" >> $GITHUB_OUTPUT
+
+          # Report whether this Dockerfile exposes the dependency export stage.
+          #
+          # Only post operations are gated on this. The ones predating dependency
+          # probing have no `<service>-deps` stage, and exporting it would fail the
+          # run -- after the image was already pushed. Skipping leaves the recorded
+          # dependencies stale but never wrong, since `pack/merge_runner.sh` only
+          # updates the entries it actually probed. The normal path is never gated,
+          # so a backend Dockerfile that drops the stage still fails loudly.
+          HAS_DEPENDENCIES_STAGE=false
+          if grep -qiE "^[[:space:]]*FROM[[:space:]]+.*[[:space:]]+AS[[:space:]]+${{ matrix.service }}-deps([[:space:]]|#|$)" "${DOCKER_FILE}"; then
+            HAS_DEPENDENCIES_STAGE=true
+          fi
+          echo "[INFO]: dependency export stage '${{ matrix.service }}-deps' present in ${DOCKER_FILE}: ${HAS_DEPENDENCIES_STAGE}"
+          echo "has_dependencies_stage=${HAS_DEPENDENCIES_STAGE}" >> $GITHUB_OUTPUT
+
+          # Flatten the whitelist into the build argument consumed by
+          # pack/shared/probe_dependencies.sh. An empty one must fail the job here:
+          # the script treats empty as "skip probing", the escape hatch for manual
+          # local builds, which in CI would silently ship an unprobed image.
+          DEPENDENCY_PACKAGES="$(jq -er '[.[][]] | join(" ")' "${{ github.workspace }}/pack/dependencies.json")"
+          # Match on "has a non-whitespace character" rather than stripping spaces:
+          # `${VAR// /}` strips spaces only, so a tab would pass as non-empty.
+          if [[ ! "${DEPENDENCY_PACKAGES}" =~ [^[:space:]] ]]; then
+            echo "[ERROR]: empty dependency whitelist from 'pack/dependencies.json'" >&2
+            exit 1
+          fi
+          echo "[INFO]: dependency packages ($(echo "${DEPENDENCY_PACKAGES}" | wc -w | tr -d ' ')): ${DEPENDENCY_PACKAGES}"
+          echo "dependency_packages=${DEPENDENCY_PACKAGES}" >> $GITHUB_OUTPUT
       - name: Package
         timeout-minutes: 360
         uses: docker/build-push-action@v6
@@ -242,16 +271,74 @@ jobs:
           sbom: false
           context: ${{ steps.metadata.outputs.docker_context }}
           file: ${{ steps.metadata.outputs.docker_file }}
+          # Carries pack/shared/, which every backend Dockerfile mounts to reach
+          # the probe script. The build context itself stays pack/<backend>/.
+          build-contexts: |
+            shared=${{ github.workspace }}/pack/shared
           platforms: ${{ matrix.platform }}
           target: ${{ matrix.service }}
           tags: |
             ${{ steps.metadata.outputs.tags }}
           build-args: |
             ${{ steps.metadata.outputs.build_args }}
+            DEPENDENCY_PACKAGES=${{ steps.metadata.outputs.dependency_packages }}
           cache-from: |
             ${{ steps.metadata.outputs.cache_from }}
           cache-to: |
             ${{ steps.metadata.outputs.cache_to }}
+      # Pull the probed versions out of the build that just ran: a second build of
+      # the same Dockerfile targeting the `FROM scratch` export stage, because a
+      # build can only have one target. It runs on the same builder, so it hits the
+      # Package step's cache instead of re-running the business layers, and needs no
+      # `docker pull`. It exports no cache -- Package already wrote it.
+      #
+      # A dry run runs it as a `check` call, which is the only thing that verifies
+      # the `<service>-deps` stage exists and is well formed. That produces no file
+      # and uploads nothing.
+      - name: Export Dependencies
+        if: ${{ github.event.inputs.post_operation == '' || steps.metadata.outputs.has_dependencies_stage == 'true' }}
+        uses: docker/build-push-action@v6
+        with:
+          allow: |
+            network.host
+            security.insecure
+          call: ${{ github.event.inputs.dry_run == 'true' && 'check' || 'build' }}
+          # Must stay byte-identical to the Package step: these land in the LLB
+          # definition, so a mismatch changes every following RUN's digest, misses
+          # the cache Package just populated, and exports a dependencies.json
+          # describing an image that was never pushed. Change one, change both.
+          ulimit: |
+            nofile=65536:65536
+          shm-size: '16G'
+          push: false
+          provenance: false
+          sbom: false
+          context: ${{ steps.metadata.outputs.docker_context }}
+          file: ${{ steps.metadata.outputs.docker_file }}
+          build-contexts: |
+            shared=${{ github.workspace }}/pack/shared
+          platforms: ${{ matrix.platform }}
+          target: ${{ matrix.service }}-deps
+          build-args: |
+            ${{ steps.metadata.outputs.build_args }}
+            DEPENDENCY_PACKAGES=${{ steps.metadata.outputs.dependency_packages }}
+          cache-from: |
+            ${{ steps.metadata.outputs.cache_from }}
+          outputs: ${{ github.event.inputs.dry_run == 'false' && format('type=local,dest={0}/dependencies', runner.temp) || '' }}
+      # The artifact name carries the platform tag, unique per (platform, tag)
+      # within a run: that is the key `merge_runner.sh` relates probes back with.
+      - name: Upload Dependencies
+        if: ${{ github.event.inputs.dry_run == 'false' && (github.event.inputs.post_operation == '' || steps.metadata.outputs.has_dependencies_stage == 'true') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependencies-${{ matrix.platform_tag }}
+          path: ${{ runner.temp }}/dependencies/dependencies.json
+          # `upload-artifact@v4` answers a duplicate name with a non-retryable 409.
+          # `build` carries `timeout-minutes: 360`, so "Re-run all jobs" is routine
+          # here, and without this every re-run leg would fail after pushing.
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 1
 
   # Merge all architecture images into manifest list.
   manifest:
@@ -288,8 +375,14 @@ jobs:
           done
 
   # Submit a PR to merge the runner.
+  #
+  # A post operation runs through here as well: it mutates a released image in
+  # place, so the dependency versions recorded for that tag have to follow.
+  # `for_release == 'true'` stays required, and doubles as the guard for it: a
+  # post operation is by definition applied to released tags, and without the
+  # flag every tag would carry the `-dev` suffix and address no released entry.
   merge-runner:
-    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.for_release == 'true' && github.event.inputs.post_operation == '' }}
+    if: ${{ github.event.inputs.dry_run == 'false' && github.event.inputs.for_release == 'true' }}
     needs:
       - expand-matrix
       - manifest
@@ -300,9 +393,16 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Download Dependencies
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dependencies-*
+          path: ${{ runner.temp }}/dependencies
       - name: Merge Runner
         env:
           INPUT_BUILD_JOBS: ${{ needs.expand-matrix.outputs.build_jobs }}
+          INPUT_DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
+          INPUT_POST_OPERATION: ${{ github.event.inputs.post_operation }}
         run: ${{ github.workspace }}/pack/merge_runner.sh
       - name: Generate Pull Request Token
         id: generate-prt
