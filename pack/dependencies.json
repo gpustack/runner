@@ -1,0 +1,22 @@
+{
+  "diffusers": ["diffusers"],
+  "flash-attn": ["flash-attn"],
+  "flashinfer-python": ["flashinfer-python"],
+  "lmcache": ["lmcache"],
+  "lmcache-ascend": ["lmcache-ascend"],
+  "mooncake-transfer-engine": ["mooncake-transfer-engine-npu", "mooncake-transfer-engine-rocm", "mooncake-transfer-engine"],
+  "ray": ["ray"],
+  "runai-model-streamer": ["runai-model-streamer"],
+  "sgl-kernel-npu": ["sgl-kernel-npu"],
+  "sglang-kernel": ["sglang-kernel"],
+  "sglang-router": ["sglang-router"],
+  "torch": ["torch"],
+  "torch-musa": ["torch-musa"],
+  "torch-npu": ["torch-npu"],
+  "transformers": ["transformers"],
+  "vllm-ascend": ["vllm-ascend"],
+  "vllm-metax": ["vllm-metax"],
+  "vllm-musa": ["vllm-musa"],
+  "vllm-omni": ["vllm-omni"],
+  "vllm-router": ["vllm-router"]
+}

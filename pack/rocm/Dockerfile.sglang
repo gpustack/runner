@@ -296,6 +296,18 @@ RUN <<EOF
         --package mooncake-transfer-engine
 EOF
 
+## Probe Dependencies
+
+# Record the installed versions of the whitelisted packages, through the named
+# build context `shared` (see pack/shared/probe_dependencies.sh).
+#
+# Keep this last, and keep the ARG in-stage: the mount's cache key covers the
+# script's content and the ARG's covers the whitelist, so any step placed above
+# them rebuilds on every edit to either.
+ARG DEPENDENCY_PACKAGES=""
+RUN --mount=type=bind,from=shared,source=probe_dependencies.sh,target=/tmp/probe_dependencies.sh \
+    DEPENDENCY_PACKAGES="${DEPENDENCY_PACKAGES}" bash /tmp/probe_dependencies.sh
+
 ## Entrypoint
 
 ENV SGLANG_DISABLE_CUDNN_CHECK=1 \
@@ -314,3 +326,13 @@ ENV SGLANG_DISABLE_CUDNN_CHECK=1 \
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
+
+## Export Dependencies
+
+# Export-only stage: unreferenced stages are pruned when building
+# `--target sglang`, so it costs the image build nothing. CI builds it with
+# `--target sglang-deps --output type=local` to pull the JSON out of the same
+# buildx build, without pulling the image.
+FROM scratch AS sglang-deps
+
+COPY --from=sglang /etc/gpustack-runner/dependencies.json /

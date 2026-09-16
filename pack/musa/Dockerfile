@@ -315,6 +315,18 @@ RUN <<EOF
         --package torch-musa
 EOF
 
+## Probe Dependencies
+
+# Record the installed versions of the whitelisted packages, through the named
+# build context `shared` (see pack/shared/probe_dependencies.sh).
+#
+# Keep this last, and keep the ARG in-stage: the mount's cache key covers the
+# script's content and the ARG's covers the whitelist, so any step placed above
+# them rebuilds on every edit to either.
+ARG DEPENDENCY_PACKAGES=""
+RUN --mount=type=bind,from=shared,source=probe_dependencies.sh,target=/tmp/probe_dependencies.sh \
+    DEPENDENCY_PACKAGES="${DEPENDENCY_PACKAGES}" bash /tmp/probe_dependencies.sh
+
 ## Entrypoint
 
 ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
@@ -324,6 +336,16 @@ ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
+
+## Export Dependencies
+
+# Export-only stage: unreferenced stages are pruned when building
+# `--target vllm`, so it costs the image build nothing. CI builds it with
+# `--target vllm-deps --output type=local` to pull the JSON out of the same
+# buildx build, without pulling the image.
+FROM scratch AS vllm-deps
+
+COPY --from=vllm /etc/gpustack-runner/dependencies.json /
 
 # Stage SGLang
 #
@@ -383,6 +405,18 @@ RUN <<EOF
         --package ipython
 EOF
 
+## Probe Dependencies
+
+# Record the installed versions of the whitelisted packages, through the named
+# build context `shared` (see pack/shared/probe_dependencies.sh).
+#
+# Keep this last, and keep the ARG in-stage: the mount's cache key covers the
+# script's content and the ARG's covers the whitelist, so any step placed above
+# them rebuilds on every edit to either.
+ARG DEPENDENCY_PACKAGES=""
+RUN --mount=type=bind,from=shared,source=probe_dependencies.sh,target=/tmp/probe_dependencies.sh \
+    DEPENDENCY_PACKAGES="${DEPENDENCY_PACKAGES}" bash /tmp/probe_dependencies.sh
+
 ## Entrypoint
 
 ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
@@ -392,3 +426,13 @@ ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
 
 WORKDIR /
 ENTRYPOINT [ "tini", "--" ]
+
+## Export Dependencies
+
+# Export-only stage: unreferenced stages are pruned when building
+# `--target sglang`, so it costs the image build nothing. CI builds it with
+# `--target sglang-deps --output type=local` to pull the JSON out of the same
+# buildx build, without pulling the image.
+FROM scratch AS sglang-deps
+
+COPY --from=sglang /etc/gpustack-runner/dependencies.json /

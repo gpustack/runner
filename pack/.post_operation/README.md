@@ -9,6 +9,61 @@ However, for some needs, we have to modify the image's content while preserving 
 
 We leverage the matrix expansion feature of GPUStack Runner to achieve this, and document here the operations we perform.
 
+## Requirements for a New Operation
+
+`gpustack_runner/runner.py.json` records, per tag, the versions of the whitelisted
+packages that the image ships. An operation rewrites the content behind an already
+released tag, so one that touches the Python environment without probing it again
+leaves those versions describing the image as it was *before* the operation.
+
+Every **new** operation's Dockerfile must therefore end with the dependency probe and
+expose the export stage. Copy the shape verbatim from `pack/<backend>/Dockerfile*`:
+
+```dockerfile
+FROM gpustack/runner:<released-tag> AS vllm
+
+# ... the operation itself ...
+
+## Probe Dependencies
+
+ARG DEPENDENCY_PACKAGES=""
+RUN --mount=type=bind,from=shared,source=probe_dependencies.sh,target=/tmp/probe_dependencies.sh \
+    DEPENDENCY_PACKAGES="${DEPENDENCY_PACKAGES}" bash /tmp/probe_dependencies.sh
+
+## Entrypoint
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
+
+## Export Dependencies
+
+FROM scratch AS vllm-deps
+
+COPY --from=vllm /etc/gpustack-runner/dependencies.json /
+```
+
+Replace `vllm` with the service target of the operation. The export stage name must be
+exactly `<service>-deps`: `pack.yml` skips the export when it cannot find that stage,
+so a misspelled name silently ships without refreshing the recorded versions.
+`probe_dependencies.sh` arrives through the named build context `shared`, which
+`pack.yml` supplies for post operations too, so nothing else needs wiring up.
+
+Running such an operation:
+
+- Run it with `for_release=true`. Otherwise every tag carries the `-dev` suffix and
+  addresses no released entry.
+- `merge_runner.sh` then **only updates the `dependencies` of the entries that already
+  exist**; it never adds an entry, and never touches any other field. A probed tag that
+  does not address exactly one existing entry fails the job, printing the `platform`,
+  `docker_image` and `platform_tag` it looked for.
+- The run opens the usual `chore: update runner` pull request, which also regenerates
+  `tests/gpustack_runner/fixtures/`. A fixture diff unrelated to the operation is
+  therefore possible and not, by itself, a sign that something went wrong.
+
+The operations recorded below predate this requirement and are deliberately left
+unchanged. They do not refresh `dependencies`: the recorded versions for the tags they
+mutated stay as they were until the next release rebuilds those images.
+
 - [x] 2025-10-20: Install `lmcache` package for CANN/CUDA/ROCm released images.
 - [x] 2025-10-22: Install `ray[client]` package for CANN/CUDA/ROCm released images.
 - [x] 2025-10-22: Install `ray[default]` package for CUDA/ROCm released images.

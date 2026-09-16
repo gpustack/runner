@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from dataclasses_json import dataclass_json
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 _RE_DOCKER_IMAGE = re.compile(
@@ -206,6 +207,22 @@ class Runner:
     """
     Deprecated runner or not.
     """
+    dependencies: dict[str, str] | None = field(
+        default=None,
+        metadata={"dataclasses_json": {"exclude": lambda v: v is None}},
+    )
+    """
+    The versions of whitelisted packages installed in the image, probed at build
+    time rather than declared in the Dockerfile. Keyed by the dependency names of
+    `pack/dependencies.json` and sorted; a name covering several accelerator
+    variants is already resolved to the one that applies. An absent key means the
+    package is not installed; the field being ``None`` means the image was never
+    probed.
+
+    Do not mutate in place: `list_runners` is ``@lru_cache``-decorated and hands
+    out the same ``Runner`` instances on every call, so an edit corrupts the
+    process-wide cache for every future caller.
+    """
 
 
 Runners = list[Runner]
@@ -226,6 +243,106 @@ Runners = list[Runner]
 ]
 ```
 """
+
+
+def _resolve_dependency_conditions(
+    conditions: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, SpecifierSet], ...]:
+    """
+    Validates dependency conditions and compiles their version specifiers.
+
+    Compiling up front, rather than per runner entry, keeps an invalid specifier
+    an error even when no entry would be evaluated against it.
+
+    Args:
+        conditions:
+            A tuple of `(dependency name, PEP 440 specifier)` pairs.
+
+    Returns:
+        A tuple of `(dependency name, specifier set)` pairs.
+
+    Raises:
+        ValueError:
+            If a pair is not a 2-item `(dependency name, specifier)` sequence,
+            or if a specifier is invalid.
+
+    """
+    resolved: list[tuple[str, SpecifierSet]] = []
+    for condition in conditions:
+        if not isinstance(condition, (tuple, list)) or len(condition) != 2:
+            errmsg = (
+                f"Invalid dependency condition {condition!r}: expected a "
+                f"(dependency name, PEP 440 specifier) pair."
+            )
+            raise ValueError(errmsg)
+        name, specifier = condition
+        # A missing specifier means "no version constraint", matching how every
+        # other `list_runners` filter treats `None`. It is also how to ask
+        # whether a package is installed at all, whatever its version.
+        if specifier is None:
+            specifier = ""
+        try:
+            # Pre-releases are the norm here (``vllm-ascend 0.20.2rc1``), and the
+            # default would drop every image carrying one.
+            specifier_set = SpecifierSet(specifier, prereleases=True)
+        except InvalidSpecifier as e:
+            errmsg = f"Invalid specifier {specifier!r} for dependency {name!r}."
+            raise ValueError(errmsg) from e
+        resolved.append((name, specifier_set))
+
+    return tuple(resolved)
+
+
+def _match_dependencies(
+    dependencies: dict[str, str] | None,
+    resolved_conditions: tuple[tuple[str, SpecifierSet], ...],
+    with_unknown_dependencies: bool,
+) -> bool:
+    """
+    Reports whether the probed dependencies of a runner satisfy all conditions.
+
+    Args:
+        dependencies:
+            The probed dependency map of a runner, or None if the runner
+            predates dependency probing.
+        resolved_conditions:
+            The conditions returned by `_resolve_dependency_conditions`.
+        with_unknown_dependencies:
+            Whether to keep runners that have never been probed.
+
+    Returns:
+        True if the runner satisfies every condition.
+
+    """
+    if not resolved_conditions:
+        return True
+
+    # An absent map means "never probed"; an empty one means "probed, nothing
+    # whitelisted installed". Only the former is treated leniently, so this must
+    # check None rather than emptiness.
+    if dependencies is None:
+        return with_unknown_dependencies
+
+    for name, specifier_set in resolved_conditions:
+        version = dependencies.get(name)
+        if version is None:
+            return False
+        # An empty specifier only asks whether the package is installed, which
+        # is already answered. Short-circuit before parsing, so a version string
+        # that is not PEP 440 does not turn an existence check into a miss.
+        if not specifier_set:
+            continue
+        try:
+            matched = specifier_set.contains(version)
+        except InvalidVersion:
+            # A recorded version that cannot be parsed can never be shown to
+            # satisfy a range, so it is a miss rather than a crash of the whole
+            # query. `version_sort_key` makes the same call for the same reason.
+            matched = False
+        if not matched:
+            return False
+
+    return True
 
 
 def convert_runners_to_dict(runners: Runners) -> list[dict]:
@@ -255,6 +372,14 @@ def list_runners(**kwargs) -> Runners | list[dict]:
             - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
             - `todict`: If True, returns a list of dictionaries instead of Runner objects.
             - `with_deprecated`: Whether to include deprecated runners, default is True.
+            - `dependencies`: A tuple of `(dependency name, PEP 440 specifier)` pairs,
+              e.g. `(("lmcache", ">=0.4.6"),)`, ANDed. Must be a tuple, not a list: it is
+              hashed by `@lru_cache`. Names are the keys of a runner's `dependencies` map;
+              an unknown one matches nothing rather than raising. An empty specifier asks
+              only whether the package is installed. See the Dependency Versions section
+              of README.md. Default is None.
+            - `with_unknown_dependencies`: Whether to keep runners that were never
+              dependency-probed, default is True. A no-op without `dependencies`.
             - `backend`: The backend name, default is None.
             - `backend_version`: The backend version, default is None.
             - `backend_version_prefix`: The prefix of the backend version, default is None.
@@ -286,6 +411,14 @@ def list_runners(**kwargs) -> Runners | list[dict]:
     with_deprecated = kwargs.pop("with_deprecated", True)
     if with_deprecated is None:
         with_deprecated = True
+
+    with_unknown_dependencies = kwargs.pop("with_unknown_dependencies", True)
+    if with_unknown_dependencies is None:
+        with_unknown_dependencies = True
+
+    resolved_dependencies = _resolve_dependency_conditions(
+        kwargs.pop("dependencies", None) or (),
+    )
 
     allowed_keys = {
         "backend",
@@ -325,6 +458,12 @@ def list_runners(**kwargs) -> Runners | list[dict]:
                 break
         if match:
             if not with_deprecated and item.deprecated:
+                continue
+            if not _match_dependencies(
+                item.dependencies,
+                resolved_dependencies,
+                with_unknown_dependencies,
+            ):
                 continue
             results.append(item)
 
@@ -668,6 +807,14 @@ def list_backend_runners(**kwargs) -> BackendRunners | list[dict]:
             - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
             - `todict`: If True, returns a list of dictionaries instead of BackendRunner objects.
             - `with_deprecated`: Whether to include deprecated runners, default is True.
+            - `dependencies`: A tuple of `(dependency name, PEP 440 specifier)` pairs,
+              e.g. `(("lmcache", ">=0.4.6"),)`, ANDed. Must be a tuple, not a list: it is
+              hashed by `@lru_cache`. Names are the keys of a runner's `dependencies` map;
+              an unknown one matches nothing rather than raising. An empty specifier asks
+              only whether the package is installed. See the Dependency Versions section
+              of README.md. Default is None.
+            - `with_unknown_dependencies`: Whether to keep runners that were never
+              dependency-probed, default is True. A no-op without `dependencies`.
             - `backend`: The backend name, default is None.
             - `backend_version`: The backend version, default is None.
             - `backend_version_prefix`: The prefix of the backend version, default is None.
@@ -838,6 +985,14 @@ def list_service_runners(**kwargs) -> ServiceRunners | list[dict]:
             - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
             - `todict`: If True, returns a list of dictionaries instead of ServiceRunner objects.
             - `with_deprecated`: Whether to include deprecated runners, default is True.
+            - `dependencies`: A tuple of `(dependency name, PEP 440 specifier)` pairs,
+              e.g. `(("lmcache", ">=0.4.6"),)`, ANDed. Must be a tuple, not a list: it is
+              hashed by `@lru_cache`. Names are the keys of a runner's `dependencies` map;
+              an unknown one matches nothing rather than raising. An empty specifier asks
+              only whether the package is installed. See the Dependency Versions section
+              of README.md. Default is None.
+            - `with_unknown_dependencies`: Whether to keep runners that were never
+              dependency-probed, default is True. A no-op without `dependencies`.
             - `backend`: The backend name, default is None.
             - `backend_version`: The backend version, default is None.
             - `backend_version_prefix`: The prefix of the backend version, default is None.
