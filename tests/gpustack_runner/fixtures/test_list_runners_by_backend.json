@@ -3422,6 +3422,28 @@
         "original_backend_version": "7.2.3",
         "backend_variant": "",
         "service": "vllm",
+        "service_version": "0.29.0",
+        "platform": "linux/amd64",
+        "docker_image": "gpustack/runner:rocm7.2-vllm0.29.0",
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.40.0",
+          "flash-attn": "2.8.3",
+          "lmcache": "0.5.4",
+          "mooncake-transfer-engine": "0.3.13.post1",
+          "ray": "2.54.0",
+          "runai-model-streamer": "0.15.7",
+          "torch": "2.12.0+git6bbd260",
+          "transformers": "5.14.1",
+          "vllm-omni": "0.29.0rc1+rocm"
+        }
+      },
+      {
+        "backend": "rocm",
+        "backend_version": "7.2",
+        "original_backend_version": "7.2.3",
+        "backend_variant": "",
+        "service": "vllm",
         "service_version": "0.27.1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:rocm7.2-vllm0.27.1",
