@@ -100,3 +100,4 @@ mutated stay as they were until the next release rebuilds those images.
 - [x] 2026-02-28: Reinstall `vllm-omni` packages for vLLM 0.16.0 of CUDA released images.
 - [x] 2026-03-03: Fix malformed ARM64 image for vLLM 0.15.1 of CUDA released images.
 - [x] 2026-09-01: Pin `numpy` to 1.26.4 and remove CUDA-only NIXL EP packages for vLLM 0.18.1 of DTK 26.04 released images.
+- [x] 2026-09-16: Patch vLLM 0.24.0/0.25.1/0.27.1/0.29.0 of CUDA/ROCm released images to fix mooncake prom metrics issue.
