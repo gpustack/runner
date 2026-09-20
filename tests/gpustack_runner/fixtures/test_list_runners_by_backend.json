@@ -1661,7 +1661,19 @@
         "service_version": "0.27.1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cuda13.0-vllm0.27.1",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.38.0",
+          "flashinfer-python": "0.6.16.post3",
+          "lmcache": "0.5.4",
+          "mooncake-transfer-engine": "0.3.10.post2",
+          "ray": "2.54.0",
+          "runai-model-streamer": "0.16.1",
+          "torch": "2.13.0+cu130",
+          "transformers": "5.15.0",
+          "vllm-omni": "0.27.0rc2.dev25+gd77a35a32",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cuda",
@@ -1672,7 +1684,19 @@
         "service_version": "0.27.1",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda13.0-vllm0.27.1",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.38.0",
+          "flashinfer-python": "0.6.16.post3",
+          "lmcache": "0.5.4",
+          "mooncake-transfer-engine": "0.3.10.post2",
+          "ray": "2.54.0",
+          "runai-model-streamer": "0.16.1",
+          "torch": "2.13.0+cu130",
+          "transformers": "5.15.0",
+          "vllm-omni": "0.27.0rc2.dev25+gd77a35a32.d20260814",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cuda",
@@ -2059,7 +2083,19 @@
         "service_version": "0.27.1",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cuda12.9-vllm0.27.1",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.38.0",
+          "flashinfer-python": "0.6.16.post3",
+          "lmcache": "0.5.4",
+          "mooncake-transfer-engine": "0.3.10.post2",
+          "ray": "2.54.0",
+          "runai-model-streamer": "0.16.1",
+          "torch": "2.13.0+cu129",
+          "transformers": "5.15.0",
+          "vllm-omni": "0.27.0rc2.dev25+gd77a35a32",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cuda",
@@ -2070,7 +2106,19 @@
         "service_version": "0.27.1",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cuda12.9-vllm0.27.1",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.38.0",
+          "flashinfer-python": "0.6.16.post3",
+          "lmcache": "0.5.4",
+          "mooncake-transfer-engine": "0.3.10.post2",
+          "ray": "2.54.0",
+          "runai-model-streamer": "0.16.1",
+          "torch": "2.13.0+cu129",
+          "transformers": "5.15.0",
+          "vllm-omni": "0.27.0rc2.dev25+gd77a35a32.d20260814",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cuda",
