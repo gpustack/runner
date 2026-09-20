@@ -22,7 +22,9 @@ DEPENDENCIES_CATALOG = str(
 """
 A synthetic runner catalog whose entries carry ``dependencies``, used to drive
 the dependency filtering through the real query entrypoints. The bundled
-catalog cannot serve that purpose: none of its entries has been probed yet.
+catalog cannot serve that purpose: which of its entries carry probe data is
+maintained by the image-build workflow and changes over time, so deterministic
+matching cases need a fixed catalog.
 """
 
 
@@ -613,8 +615,8 @@ def test_list_runners_rejects_unknown_keys():
 
 def test_runner_dependencies_is_optional():
     """
-    Every bundled catalog entry predates dependency probing, so the field must
-    stay optional and must be omitted from the serialized form.
+    An entry predating dependency probing keeps the field unset, and it must
+    be omitted from the serialized form rather than serialized as null.
     """
     item = {
         "backend": "musa",
@@ -633,31 +635,47 @@ def test_runner_dependencies_is_optional():
 
 
 def test_bundled_catalog_omits_absent_dependencies():
-    actual = list_runners(todict=True)
-    assert actual, "expected a non-empty runner catalog"
-    assert all("dependencies" not in r for r in actual), (
-        "expected unprobed entries to serialize without a dependencies key"
-    )
+    """
+    The ``dependencies`` field is optional: an unprobed entry serializes
+    without the key rather than as null, a probed one carries the probed map.
+    """
+    runners = list_runners()
+    assert runners, "expected a non-empty runner catalog"
+    for r in runners:
+        serialized = r.to_dict()
+        if r.dependencies is None:
+            assert "dependencies" not in serialized, (
+                f"expected unprobed entry {r.docker_image} to serialize "
+                f"without a dependencies key"
+            )
+        else:
+            assert serialized["dependencies"] == r.dependencies
 
 
 def test_bundled_catalog_is_lenient_by_default():
     """
-    No bundled entry has been probed yet, so a dependency condition must be a
-    no-op by default, and must exclude everything in strict mode.
+    A dependency condition keeps unprobed bundled entries by default; strict
+    mode drops them and keeps only probed entries satisfying the condition.
     """
     baseline = list_runners(backend="cuda", todict=True)
     assert baseline, "expected a non-empty cuda runner catalog"
 
+    # An unsatisfiable condition isolates the unprobed-entry handling from the
+    # version matching: no probed entry can satisfy it, so lenient mode keeps
+    # exactly the unprobed entries and strict mode keeps nothing.
+    conditions = (("lmcache", ">=99.0"),)
+    unprobed = [r for r in baseline if "dependencies" not in r]
+
     lenient = list_runners(
         backend="cuda",
-        dependencies=(("lmcache", ">=0.4.6"),),
+        dependencies=conditions,
         todict=True,
     )
-    assert lenient == baseline
+    assert lenient == unprobed
 
     strict = list_runners(
         backend="cuda",
-        dependencies=(("lmcache", ">=0.4.6"),),
+        dependencies=conditions,
         with_unknown_dependencies=False,
         todict=True,
     )
