@@ -1,0 +1,32 @@
+rules:
+
+  # CUDA 0.27.1 only, and deliberately so.
+  #
+  # The router install lives in `pack/cuda/Dockerfile.vllm` and `pack/cann/Dockerfile.vllm` -- the
+  # two recipes GPUStack renders a PD mode for. Of the released images that miss it:
+  #
+  #   - cuda 0.27.1 is no longer in `pack/matrix.yaml` (CUDA stands at 0.29.0, which already ships
+  #     the router), so rewriting the tag here is the only way to put a router into it.
+  #   - cann 0.23.0 is still exactly what `pack/matrix.yaml` builds, and the recipe already carries
+  #     the router, so a normal `for_release` pack of backend `cann` rebuilds those four variants
+  #     with it. That is a plain release rather than a mutation, so it does not belong here.
+  #   - rocm never installed a router at all; its 0.29.0 image has none either, and patching only
+  #     0.27.1 would leave the newer image the odd one out.
+
+  ## Packed NVIDIA CUDA 13.0.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=13.0"
+      - "VLLM_VERSION=0.27.1"
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.27.1"
