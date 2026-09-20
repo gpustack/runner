@@ -27,24 +27,24 @@ The following table lists the supported accelerated backends and their correspon
 
 ### Ascend CANN
 
-| CANN Version <br/> (Variant) | MindIE    | vLLM                                                                                 | SGLang                 |
-|------------------------------|-----------|--------------------------------------------------------------------------------------|------------------------|
-| 9.1 (950/A5)                 |           | **`0.23.0`**                                                                         |                        |
-| 9.1 (A3/910C)                |           | **`0.23.0`**                                                                         |                        |
-| 9.1 (910B)                   |           | **`0.23.0`**                                                                         |                        |
-| 9.1 (310P)                   |           | **`0.23.0`**                                                                         |                        |
-| 9.0 (A3/910C)                |           | `0.20.2`(rc)                                                                         | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`               |
-| 9.0 (910B)                   |           | `0.20.2`(rc)                                                                         | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`               |
-| 9.0 (310P)                   |           | `0.20.2`(rc)                                                                         |                        |
+| CANN Version <br/> (Variant) | MindIE    | vLLM                                                                                 | SGLang                                      |
+|------------------------------|-----------|--------------------------------------------------------------------------------------|---------------------------------------------|
+| 9.1 (950/A5)                 |           | **`0.23.0`**                                                                         |                                             |
+| 9.1 (A3/910C)                |           | **`0.23.0`**                                                                         |                                             |
+| 9.1 (910B)                   |           | **`0.23.0`**                                                                         |                                             |
+| 9.1 (310P)                   |           | **`0.23.0`**                                                                         |                                             |
+| 9.0 (A3/910C)                |           | `0.20.2`(rc)                                                                         | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`     |
+| 9.0 (910B)                   |           | `0.20.2`(rc)                                                                         | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`     |
+| 9.0 (310P)                   |           | `0.20.2`(rc)                                                                         |                                             |
 | 8.5 (A3/910C)                | `2.3.0`   | `0.18.0`, `0.17.0`(rc), <br/>`0.16.0`(rc), `0.15.0`(rc), <br/>`0.14.1`(rc), `0.13.0` | `0.5.12.post1`, <br/>`0.5.9`, `0.5.8.post1` |
 | 8.5 (910B)                   | `2.3.0`   | `0.18.0`, `0.17.0`(rc), <br/>`0.16.0`(rc), `0.15.0`(rc), <br/>`0.14.1`(rc), `0.13.0` | `0.5.12.post1`, <br/>`0.5.9`, `0.5.8.post1` |
-| 8.5 (310P)                   | `2.3.0`   | `0.18.0`, `0.17.0`(rc), <br/>`0.16.0`(rc), `0.15.0`(rc), <br/>`0.14.1`(rc)           |                        |
-| 8.3 (A3/910C)                | `2.2.rc1` | `0.12.0`(rc), `0.11.0`                                                               | `0.5.7`, `0.5.6.post2` |
-| 8.3 (910B)                   | `2.2.rc1` | `0.12.0`(rc), `0.11.0`                                                               | `0.5.7`, `0.5.6.post2` |
-| 8.3 (310P)                   | `2.2.rc1` |                                                                                      |                        |
-| 8.2 (A3/910C)                | `2.1.rc2` | `0.10.2`(rc)                                                                         |                        |
-| 8.2 (910B)                   | `2.1.rc2` | `0.10.2`(rc), `0.10.0`(rc),  <br/>`0.9.1`                                            |                        |
-| 8.2 (310P)                   | `2.1.rc2` | `0.10.0`(rc), `0.9.1`                                                                |                        |
+| 8.5 (310P)                   | `2.3.0`   | `0.18.0`, `0.17.0`(rc), <br/>`0.16.0`(rc), `0.15.0`(rc), <br/>`0.14.1`(rc)           |                                             |
+| 8.3 (A3/910C)                | `2.2.rc1` | `0.12.0`(rc), `0.11.0`                                                               | `0.5.7`, `0.5.6.post2`                      |
+| 8.3 (910B)                   | `2.2.rc1` | `0.12.0`(rc), `0.11.0`                                                               | `0.5.7`, `0.5.6.post2`                      |
+| 8.3 (310P)                   | `2.2.rc1` |                                                                                      |                                             |
+| 8.2 (A3/910C)                | `2.1.rc2` | `0.10.2`(rc)                                                                         |                                             |
+| 8.2 (910B)                   | `2.1.rc2` | `0.10.2`(rc), `0.10.0`(rc),  <br/>`0.9.1`                                            |                                             |
+| 8.2 (310P)                   | `2.1.rc2` | `0.10.0`(rc), `0.9.1`                                                                |                                             |
 
 ### Iluvatar CoreX
 
@@ -54,36 +54,26 @@ The following table lists the supported accelerated backends and their correspon
 
 ### NVIDIA CUDA
 
-> [!NOTE]
-> - CUDA 13.0 supports Compute Capabilities:
-    `7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0+PTX`.
-> - CUDA 12.9 supports Compute Capabilities:
-    `7.5 8.0+PTX 8.9 9.0 10.0 10.3 12.0 12.1+PTX`.
-> - CUDA 12.8 supports Compute Capabilities:
-    `7.5 8.0+PTX 8.9 9.0 10.0+PTX 12.0+PTX`.
-> - CUDA 12.6/12.4 supports Compute Capabilities:
-    `7.5 8.0+PTX 8.9 9.0+PTX`.
-
-| CUDA Version <br/> (Variant) | vLLM                                                                                                                   | SGLang                                                                  | VoxBox   |
-|------------------------------|------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------|----------|
-| 13.0                         | **`0.29.0`**, `0.27.1`, `0.25.1`, `0.24.0`, `0.22.1`, <br/>`0.21.0`, `0.20.2`, <br/>`0.19.1`, `0.18.1`                                                                            | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`, `0.5.12.post1`                                                |          |
-| 12.9                         | **`0.29.0`**, `0.27.1`, `0.25.1`, `0.24.0`, `0.22.1`, <br/>`0.21.0`, `0.20.2`, <br/>`0.19.1`, `0.18.1`, <br/>`0.17.1`, `0.16.0`, <br/>`0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2` | `0.5.18`, `0.5.15.post1`, `0.5.14`, `0.5.12.post1`, <br/>`0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2` |          |
-| 12.8                         | `0.17.1`, `0.16.0`, <br/>`0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`                          | `0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2`, <br/>`0.5.5.post3` | `0.0.21` |
-| 12.6                         | `0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`                                                   |                                                                         | `0.0.21` |
+| CUDA Version <br/> (Variant) | vLLM                                                                                                                                                                                                              | SGLang                                                                                                            | VoxBox   |
+|------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|----------|
+| 13.0                         | **`0.29.0`**, **`0.27.1`**,<br/> **`0.25.1`**, **`0.24.0`**,<br/> `0.22.1`, `0.21.0`,<br/> `0.20.2`, `0.19.1`,<br/> `0.18.1`                                                                                      | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`, `0.5.12.post1`                                                           |          |
+| 12.9                         | **`0.29.0`**, **`0.27.1`**,<br/> **`0.25.1`**, **`0.24.0`**,<br/> `0.22.1`, `0.21.0`,<br/> `0.20.2`, `0.19.1`,<br/> `0.18.1`, `0.17.1`,<br/> `0.16.0`, `0.15.1`,<br/> `0.14.1`, `0.13.0`,<br/> `0.12.0`, `0.11.2` | `0.5.18`, `0.5.15.post1`,<br/> `0.5.14`, `0.5.12.post1`, <br/>`0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2` |          |
+| 12.8                         | `0.17.1`, `0.16.0`, <br/>`0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`                                                                                                                     | `0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2`, <br/>`0.5.5.post3`                                           | `0.0.21` |
+| 12.6                         | `0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`                                                                                                                                              |                                                                                                                   | `0.0.21` |
 
 ### Hygon DTK
 
-| DTK Version <br/> (Variant) | vLLM                                 | SGLang     |
-|-----------------------------|--------------------------------------|------------|
-| 26.04                       | **`0.18.1`**                         | `0.5.10`(rc) |
-| 25.04                       | `0.18.1`, `0.11.0`, `0.9.2`, `0.8.5` |            |
+| DTK Version <br/> (Variant) | vLLM                                      | SGLang       |
+|-----------------------------|-------------------------------------------|--------------|
+| 26.04                       | **`0.18.1`**                              | `0.5.10`(rc) |
+| 25.04                       | `0.18.1`, `0.11.0`,<br/> `0.9.2`, `0.8.5` |              |
 
 ### T-Head HGGC
 
-| HGGC Version <br/> (Variant) | vLLM                                   | SGLang                      |
-|------------------------------|----------------------------------------|-----------------------------|
-| 13.0                         | `0.23.0`, `0.20.1`, `0.19.0`, `0.18.0` | `0.5.12`, `0.5.10`, `0.5.9` |
-| 12.3                         | `0.12.0`, `0.11.1`                     | `0.5.6`, `0.5.5`            |
+| HGGC Version <br/> (Variant) | vLLM                                        | SGLang                           |
+|------------------------------|---------------------------------------------|----------------------------------|
+| 13.0                         | `0.23.0`, `0.20.1`,<br/> `0.19.0`, `0.18.0` | `0.5.12`, `0.5.10`,<br/> `0.5.9` |
+| 12.3                         | `0.12.0`, `0.11.1`                          | `0.5.6`, `0.5.5`                 |
 
 ### MetaX MACA
 
@@ -104,25 +94,12 @@ The following table lists the supported accelerated backends and their correspon
 
 ### AMD ROCm
 
-> [!NOTE]
-> - ROCm 7.1/7.0 supports LLVM targets:
-    `gfx908 gfx90a gfx942 gfx950 gfx1030 gfx1100 gfx1101 gfx1200 gfx1201 gfx1150 gfx1151`.
-> - ROCm 6.4 supports LLVM targets:
-    `gfx908 gfx90a gfx942 gfx1030 gfx1100`.
-
-> [!WARNING]
-> - ROCm 7.0 vLLM `0.11.2` are reusing the official ROCm 6.4 PyTorch 2.9 wheel package rather than a ROCm
-    7.0 specific PyTorch build. Although supports ROCm 7.0 in vLLM `0.11.2`, `gfx1150/gfx1151` are not supported yet.
-> - ROCm 6.4 vLLM `0.13.0` supports `gfx903 gfx90a gfx942` only.
-> - ROCm 6.4 SGLang supports `gfx942` only.
-> - ROCm 7.0 SGLang supports `gfx950` only.
-
-| ROCm Version <br/> (Variant) | vLLM                                                                                | SGLang                                                    |
-|------------------------------|-------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| 7.2                          | **`0.29.0`**, `0.27.1`, `0.25.1`, `0.24.0`, `0.22.1`, <br/>`0.21.0`, `0.20.2`, <br/>`0.19.1`                                                   | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`, `0.5.12.post1`                                 |
-| 7.1                          | `0.17.1`                                                                            |                                                           |
-| 7.0                          | `0.18.1`, <br/>`0.16.0`, `0.15.1`, <br/>`0.14.1`, `0.13.0`, <br/>`0.12.0`, `0.11.2` | `0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2`       |
-| 6.4                          | `0.16.0`, <br/>`0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2` | `0.5.8.post1`, `0.5.7`, <br/>`0.5.6.post2`, `0.5.5.post3` |
+| ROCm Version <br/> (Variant) | vLLM                                                                                                          | SGLang                                                    |
+|------------------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
+| 7.2                          | **`0.29.0`**, **`0.27.1`**,<br/> **`0.25.1`**, **`0.24.0`**,<br/> `0.22.1`, `0.21.0`,<br/> `0.20.2`, `0.19.1` | `0.5.18`, `0.5.15.post1`, <br/>`0.5.14`, `0.5.12.post1`   |
+| 7.1                          | `0.17.1`                                                                                                      |                                                           |
+| 7.0                          | `0.18.1`, `0.16.0`,<br/> `0.15.1`, `0.14.1`,<br/> `0.13.0`, `0.12.0`,<br/> `0.11.2`                           | `0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2`       |
+| 6.4                          | `0.16.0`, `0.15.1`,<br/> `0.14.1`, `0.13.0`,<br/> `0.12.0`, `0.11.2`,<br/> `0.10.2`                           | `0.5.8.post1`, `0.5.7`, <br/>`0.5.6.post2`, `0.5.5.post3` |
 
 ## Directory Structure
 
@@ -283,7 +260,13 @@ Keys are the dependency names of the whitelist. Most map one to one onto a distr
 cover several, highest priority first:
 
 ```json
-{ "mooncake-transfer-engine": ["mooncake-transfer-engine-npu", "mooncake-transfer-engine-rocm", "mooncake-transfer-engine"] }
+{
+  "mooncake-transfer-engine": [
+    "mooncake-transfer-engine-npu",
+    "mooncake-transfer-engine-rocm",
+    "mooncake-transfer-engine"
+  ]
+}
 ```
 
 The probe reports raw distribution names, and `pack/merge_runner.sh` folds them onto the dependency name —
@@ -317,10 +300,10 @@ version for troubleshooting.
 
 The field has two levels of meaning, and conflating them leads to wrong conclusions:
 
-| State                                 | Meaning                                                                             |
-|---------------------------------------|-------------------------------------------------------------------------------------|
+| State                                 | Meaning                                                                                       |
+|---------------------------------------|-----------------------------------------------------------------------------------------------|
 | `dependencies` is absent              | The image was **never probed** — built before probing existed, or built without the whitelist |
-| `dependencies` is a map missing a key | The image **was** probed and the package is **not installed**                        |
+| `dependencies` is a map missing a key | The image **was** probed and the package is **not installed**                                 |
 
 ### Querying
 
@@ -373,7 +356,8 @@ To add support for a new accelerated backend:
 
 1. Create a new directory under `pack/` named with the new backend.
 2. Add a `Dockerfile` in the new directory following the [Dockerfile Convention](#dockerfile-convention).
-3. Update [pack.yml](.github/workflows/pack.yml), [discard.yml](.github/workflows/discard.yml) and [prune.yml](.github/workflows/prune.yml) to include the new backend in the build matrix.
+3. Update [pack.yml](.github/workflows/pack.yml), [discard.yml](.github/workflows/discard.yml)
+   and [prune.yml](.github/workflows/prune.yml) to include the new backend in the build matrix.
 4. Update [matrix.yml](pack/matrix.yaml) to include the new backend and its variants.
 5. Update `_RE_DOCKER_IMAGE` in [runner.py](gpustack_runner/runner.py) to recognize the new backend.
 6. [Optional] Update [tests](tests/gpustack_runner) if necessary.
