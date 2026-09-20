@@ -14,7 +14,18 @@
         "service_version": "0.23.0",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann9.1-a3-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.40.0",
+          "mooncake-transfer-engine": "0.3.11.post1",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-omni": "0.20.0+cpu",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -25,7 +36,18 @@
         "service_version": "0.23.0",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann9.1-a3-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.40.0",
+          "mooncake-transfer-engine": "0.3.11.post1",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-omni": "0.20.0+cpu",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -520,7 +542,16 @@
         "service_version": "0.23.0",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann9.1-950-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "mooncake-transfer-engine": "0.3.11.post1",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -531,7 +562,16 @@
         "service_version": "0.23.0",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann9.1-950-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "mooncake-transfer-engine": "0.3.11.post1",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -542,7 +582,18 @@
         "service_version": "0.23.0",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann9.1-910b-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.40.0",
+          "mooncake-transfer-engine": "0.3.11.post1",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-omni": "0.20.0+cpu",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -553,7 +604,18 @@
         "service_version": "0.23.0",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann9.1-910b-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.40.0",
+          "mooncake-transfer-engine": "0.3.11.post1",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-omni": "0.20.0+cpu",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -1136,7 +1198,15 @@
         "service_version": "0.23.0",
         "platform": "linux/amd64",
         "docker_image": "gpustack/runner:cann9.1-310p-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
@@ -1147,7 +1217,17 @@
         "service_version": "0.23.0",
         "platform": "linux/arm64",
         "docker_image": "gpustack/runner:cann9.1-310p-vllm0.23.0",
-        "deprecated": false
+        "deprecated": false,
+        "dependencies": {
+          "diffusers": "0.40.0",
+          "ray": "2.48.0",
+          "torch": "2.10.0+cpu",
+          "torch-npu": "2.10.0.post4",
+          "transformers": "5.5.4",
+          "vllm-ascend": "0.23.0",
+          "vllm-omni": "0.20.0+cpu",
+          "vllm-router": "0.1.15"
+        }
       },
       {
         "backend": "cann",
