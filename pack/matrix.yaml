@@ -101,8 +101,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.29.0"
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.30.0"
   ## AMD ROCm 7.2.1 - SGLang 0.5.18 (rocm720-mi30x)
   ##
   - backend: "rocm"
@@ -119,15 +119,17 @@ rules:
   # NVIDIA CUDA
   #
 
-  ## NVIDIA CUDA 13.0.1
+  ## NVIDIA CUDA 13.0.3
+  ## (torch is upgraded from the base's 2.13.0 to 2.14.0 —— see the
+  ##  "Upgrade Torch" step in pack/cuda/Dockerfile.vllm)
   ##
   - backend: "cuda"
     services:
       - "vllm"
     args:
-      - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-ubuntu2404"
+      - "CUDA_VERSION=13.0.3"
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-ubuntu2404"
   ## NVIDIA CUDA 13.0.1 - SGLang 0.5.18
   ##
   - backend: "cuda"
@@ -138,14 +140,18 @@ rules:
       - "SGLANG_VERSION=0.5.18"
       - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu130"
   ## NVIDIA CUDA 12.9.1
+  ## (stays on the base's torch 2.13.0: 2.14.0 is published for cu130 only,
+  ##  so VLLM_TORCH_VERSION is pinned to the base's version and the
+  ##  "Upgrade Torch" step in pack/cuda/Dockerfile.vllm is a no-op)
   ##
   - backend: "cuda"
     services:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-cu129-ubuntu2404"
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-cu129-ubuntu2404"
+      - "VLLM_TORCH_VERSION=2.13.0"
   ## NVIDIA CUDA 12.9.1 - SGLang 0.5.18
   ##
   - backend: "cuda"
