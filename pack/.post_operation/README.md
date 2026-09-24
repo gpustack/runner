@@ -102,3 +102,4 @@ mutated stay as they were until the next release rebuilds those images.
 - [x] 2026-09-01: Pin `numpy` to 1.26.4 and remove CUDA-only NIXL EP packages for vLLM 0.18.1 of DTK 26.04 released images.
 - [x] 2026-09-16: Patch vLLM 0.24.0/0.25.1/0.27.1/0.29.0 of CUDA/ROCm released images to fix mooncake prom metrics issue.
 - [ ] 2026-09-20: Install `vllm-router` package for vLLM 0.27.1 of CUDA released images.
+- [ ] 2026-09-24: Patch vLLM 0.29.0 of CUDA/ROCm released images to fix mooncake store pending load assertion.

@@ -1,0 +1,42 @@
+rules:
+
+  #
+  # NVIDIA CUDA
+  #
+  # 0.29.0 only. The assertion that turns the rejected load spec into a crash arrived with upstream
+  # #51358, first released in 0.29.0; 0.27.1 and earlier have the same branch without it. Upstream
+  # fixed the branch in #54643, first released in 0.30.0.
+  #
+
+  ## Packed NVIDIA CUDA 13.0.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=13.0"
+      - "VLLM_VERSION=0.29.0"
+
+  ## Packed NVIDIA CUDA 12.9.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9"
+      - "VLLM_VERSION=0.29.0"
+
+  #
+  # AMD ROCm
+  #
+
+  ## Packed AMD ROCm 7.2.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=7.2"
+      - "VLLM_VERSION=0.29.0"
