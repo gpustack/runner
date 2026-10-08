@@ -156,13 +156,12 @@ jobs:
           jq -n --argjson builds "$BUILD_JOBS" --argjson manifests "$MANIFEST_JOBS" \
             --arg repository "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}" \
             '{repository: $repository, build_jobs: $builds, manifest_jobs: $manifests}' >"$RUNNER_TEMP/matrix.json"
-          freeze_options=()
+          freeze_options=(--matrix "$RUNNER_TEMP/matrix.json"
+            --workflow-run "$GITHUB_RUN_ID" --source-revision "$GITHUB_SHA")
           if [[ "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
             freeze_options+=(--previous "$RUNNER_TEMP/invocation/context.json")
           fi
-          python3 pack/collect_dependencies.py freeze --matrix "$RUNNER_TEMP/matrix.json" \
-            "${freeze_options[@]}" \
-            --workflow-run "$GITHUB_RUN_ID" --source-revision "$GITHUB_SHA" \
+          python3 pack/collect_dependencies.py freeze "${freeze_options[@]}" \
             --mapping pack/dependencies.json --output "$RUNNER_TEMP/context.json"
           echo "context=$(jq -c . "$RUNNER_TEMP/context.json")" >>"$GITHUB_OUTPUT"
       # The first attempt owns this immutable record. Missing rerun state fails closed.

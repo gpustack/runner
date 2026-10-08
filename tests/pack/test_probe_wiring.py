@@ -360,7 +360,8 @@ def test_merge_workflow_uses_locked_runtime_dependencies(tmp_path, pack_workflow
     assert not (tmp_path / "gpustack_runner").exists()
 
 
-def test_workflow_freeze_and_record_commands_execute(tmp_path, pack_workflow):
+@pytest.mark.parametrize("shell", ["bash", "/bin/bash"])
+def test_workflow_freeze_and_record_commands_execute(tmp_path, pack_workflow, shell):
     job = {
         "backend": "cuda",
         "service": "vllm",
@@ -384,7 +385,7 @@ def test_workflow_freeze_and_record_commands_execute(tmp_path, pack_workflow):
         "MANIFEST_JOBS": json.dumps({job["tag"]: [job["platform_tag"]]}),
     }
     result = subprocess.run(  # noqa: S603
-        ["bash", "-c", steps["Freeze Invocation"]["run"]],  # noqa: S607
+        [shell, "-c", steps["Freeze Invocation"]["run"]],
         env=env,
         cwd=REPO_ROOT,
         text=True,
@@ -404,7 +405,7 @@ def test_workflow_freeze_and_record_commands_execute(tmp_path, pack_workflow):
         BUILD_JOB=job["platform_tag"],
         BUILD_ATTEMPT="2",
     )
-    command = ["bash", "-c", steps["Record Package Output"]["run"]]
+    command = [shell, "-c", steps["Record Package Output"]["run"]]
     result = subprocess.run(  # noqa: S603 - Executes the repository workflow against fake inputs.
         command,
         env=env,
