@@ -1211,7 +1211,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run mkdocs build --strict`; docstring-only AST comparison for the two Python files.
 
-- [ ] **T12 · Publish canonical release instructions and finish documentation split**
+- [x] **T12 · Publish canonical release instructions and finish documentation split**
 
   Blocked by: T1, T8, T11, T12a
 

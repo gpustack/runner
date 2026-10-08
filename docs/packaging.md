@@ -141,3 +141,35 @@ Support status is documented separately, including what `prepared` and `publishe
 
 Related: [Dependency metadata](dependency-metadata.md) covers how validated receipts become the
 `dependencies` map of a runner entry.
+
+## Recipe conventions
+
+Start a new recipe with comments describing its packaging steps and build arguments.
+Use `ARG` for required and optional build inputs. Mark an intentionally unused required argument as `(PLACEHOLDER)`.
+Keep defaults visible to matrix expansion, and redeclare arguments in stages that use them.
+Use heredoc syntax for multiline `RUN` commands, following the surrounding recipes.
+State compatibility reasons beside the relevant version or patch.
+
+The file is `pack/<backend>/Dockerfile.<service>`, with the backend directory as its build context.
+Define the service's named final target and preserve its runtime ancestry, platform branches, and entrypoint.
+Active recipes do not require dependency-probe arguments, shared mounts, embedded metadata, or export stages.
+Pack collects dependencies from the final image through the central collector.
+
+## Adding a backend or service
+
+For a new backend, create its directory under `pack/` and one `Dockerfile.<service>` per supported service.
+For a new service on an existing backend, add its own service file in that backend directory.
+Do not extend a combined active Dockerfile.
+
+1. Add supported combinations, platform coverage, variants, and argument overrides to `pack/matrix.yaml`.
+2. Review backend choices in `.github/workflows/pack.yml`, `prune.yml`, and `discard.yml`.
+   Add new backend choices where needed. Add new service target choices to Pack.
+3. Update `_RE_DOCKER_IMAGE` in `gpustack_runner/runner.py` when the new backend or service needs parser support.
+4. Review `pack/dependencies.json` for packages that determine engine startup or compatibility.
+   Keep separate keys for packages that coexist or use incomparable versions; see [Dependency metadata](dependency-metadata.md).
+5. Add explicit `prepared` support records with the intended platforms in [Supported runners](supported-runners.md).
+6. Add behavior tests for image parsing, recipe selection, matrix expansion, and relevant dependency behavior.
+   Run `uv run pytest tests/gpustack_runner tests/pack` and `uv run mkdocs build --strict`.
+
+Maintainers review the source changes before Pack builds and collects the new images.
+Local build success alone does not establish catalog measurement, published support, or GPU runtime compatibility.

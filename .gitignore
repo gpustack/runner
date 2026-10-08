@@ -5,7 +5,8 @@
 *.swp
 
 # Local agent tooling
-.claude/
+.claude/*
+!.claude/skills
 
 # C extensions
 *.so
