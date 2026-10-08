@@ -316,6 +316,7 @@ def test_dependency_step_initializes_a_fresh_checkout(
     checkout = tmp_path / "checkout"
     subprocess.run(  # noqa: S603 - local clone without credentials or network.
         [git, "clone", "--quiet", "--no-hardlinks", str(ROOT), str(checkout)],
+        env={**os.environ, "GIT_LFS_SKIP_SMUDGE": "1"},
         check=True,
         timeout=30,
     )
