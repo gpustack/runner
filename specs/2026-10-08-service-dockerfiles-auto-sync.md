@@ -1001,7 +1001,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/auto_sync/test_model.py tests/auto_sync/test_agent.py`
 
-- [ ] **T2 · Prove centralized dependency collection and receipt identity**
+- [x] **T2 · Prove centralized dependency collection and receipt identity**
 
   Blocked by: None
 
@@ -1148,6 +1148,12 @@ Do not interpret their offline results as provider or image runtime acceptance.
   Acceptance: Preserve the DCO 1.1 text verbatim. Add a Runner-specific empty adopter table and contribution instructions. Change only the GPUStack copyright year to 2026 in LICENSE. Do not claim DCO app enforcement was configured.
 
   Verify: Compare DCO with the supplied committed reference; inspect the complete LICENSE diff; run repository text checks on all three files.
+
+T2 validation: 73 collector checks and 244 packaging regression checks passed.
+Tests read real temporary distribution metadata through the selected Python environment.
+Independent review and lead reproduction found three defects; all have regression coverage and fixes.
+The fixes reject missing service environments, bound timeout cleanup, and normalize default image platform variants.
+Receipt identity remains exact. Scoped hooks passed. Native final-image execution remains unverified.
 
 T3 validation: 115 focused tests and 165 packaging regression tests passed.
 Active matrix and manifest outputs match the baseline for all 15 pairs and 31 build jobs.
