@@ -88,6 +88,29 @@ rules:
       - "SGLANG_VERSION=0.5.18"
       - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.18-cann9.0.0-910b"
 
+  ## MindIE 2.3.0 retains the published CANN 8.5.0 variants.
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.5.0"
+      - "CANN_ARCHS=a3"
+      - "MINDIE_VERSION=2.3.0"
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.5.0"
+      - "CANN_ARCHS=910b"
+      - "MINDIE_VERSION=2.3.0"
+  - backend: "cann"
+    services:
+      - "mindie"
+    args:
+      - "CANN_VERSION=8.5.0"
+      - "CANN_ARCHS=310p"
+      - "MINDIE_VERSION=2.3.0"
+
   #
   # AMD ROCm
   #
@@ -156,6 +179,14 @@ rules:
       - "SGLANG_VERSION=0.5.18"
       - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu129"
       - "SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda12"
+
+  ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
+  - backend: "cuda"
+    services:
+      - "voxbox"
+    args:
+      - "CUDA_VERSION=12.8.1"
+      - "VOXBOX_VERSION=0.0.21"
 
   #
   # Iluvatar CoreX

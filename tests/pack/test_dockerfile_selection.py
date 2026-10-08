@@ -233,18 +233,28 @@ def test_explicit_historical_operation_uses_its_matrix_and_defaults(tmp_path):
     }
 
 
-@pytest.mark.parametrize("service", ["vllm", "sglang"])
-def test_musa_matrix_matches_the_existing_service_runtime(tmp_path, service):
+@pytest.mark.parametrize(
+    "backend,service",
+    [("musa", "vllm"), ("musa", "sglang"), ("cuda", "voxbox"), ("cann", "mindie")],
+)
+def test_service_matrix_matches_the_existing_runtime(tmp_path, backend, service):
     catalog = json.loads((REPO_ROOT / "gpustack_runner/runner.py.json").read_text())
+    recipe = (PACK_DIR / backend / f"Dockerfile.{service}").read_text()
+    selected_version = next(
+        line.split("=", 1)[1]
+        for line in recipe.splitlines()
+        if line.startswith(f"ARG {service.upper()}_VERSION=")
+    )
     supported = [
         row
         for row in catalog
-        if row["backend"] == "musa"
+        if row["backend"] == backend
         and row["service"] == service
+        and row["service_version"] == selected_version
         and not row["deprecated"]
     ]
     assert supported
-    result, output = _expand(PACK_DIR, tmp_path, service=service, backend="musa")
+    result, output = _expand(PACK_DIR, tmp_path, service=service, backend=backend)
     assert result.returncode == 0, result.stdout + result.stderr
     jobs = output["build_jobs"]
     assert jobs
@@ -257,7 +267,7 @@ def test_musa_matrix_matches_the_existing_service_runtime(tmp_path, service):
     }
 
 
-@pytest.mark.parametrize("service", ["vllm", "sglang"])
+@pytest.mark.parametrize("service", ["vllm", "sglang", "voxbox", "mindie"])
 def test_repository_matrix_expands_every_supported_pair(tmp_path, service):
     matrix = subprocess.run(  # noqa: S603
         ["yq", "--output-format", "json", ".rules", str(PACK_DIR / "matrix.yaml")],  # noqa: S607

@@ -124,6 +124,7 @@ Acceptance criteria:
 - Do not invent new base-image tags merely to match the HGGC layout.
 - Extract CUDA VoxBox and CANN MindIE before removing their combined files.
 - Align matrix expansion, Pack, local Make targets, comments, and documentation with the new paths.
+- Include explicit matrix rules for CUDA VoxBox and CANN MindIE using their existing published runtime and platform combinations.
 - Filter unsupported vendor/service pairs before resolving their Dockerfile.
 - Skip unsupported pairs when expanding a broad selection.
 - Fail clearly if a supported, selected pair has no required Dockerfile.

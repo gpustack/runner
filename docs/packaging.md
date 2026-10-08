@@ -44,6 +44,7 @@ pack/resolve_dockerfile.sh <pack directory> <backend> <service> [post operation]
 
 `pack/matrix.yaml` is the source of the build matrix. Each rule names a `backend`, the
 `services` it supports, and optional per-platform `platforms` and build `args`.
+CUDA/VoxBox and CANN/MindIE have explicit rules for their existing published runtime and platform combinations.
 
 `pack/expand_matrix.sh` turns those rules into concrete build jobs:
 
