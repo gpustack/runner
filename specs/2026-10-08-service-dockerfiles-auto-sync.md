@@ -1035,7 +1035,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack/test_dockerfile_selection.py tests/pack/test_probe_wiring.py`
 
-- [ ] **T5 · Split CoreX and MUSA recipes**
+- [x] **T5 · Split CoreX and MUSA recipes**
 
   Blocked by: T3
 
@@ -1166,6 +1166,11 @@ T4 validation: Source comparison and independent review confirmed complete retai
 The six extraction checks and 121 selector/probe checks passed.
 The new files preserve configurable bases, runtime outputs, platform branches, and entrypoints.
 Image builds and runtime parity remain unverified.
+
+T5 validation: The 19 extraction checks and 121 selector/probe checks passed.
+Independent review confirmed nine retained stages and 24 global arguments against the baseline.
+All 12 mutated stage or argument controls were rejected. Original vendor base references remain unchanged.
+The active matrix still matches all 31 baseline jobs. Scoped hooks passed; image execution remains unverified.
 
 T14 validation: DCO matches the supplied committed reference byte for byte.
 The LICENSE diff changes only the project copyright year.
