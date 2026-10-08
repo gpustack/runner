@@ -27,14 +27,13 @@ runners = list_runners(
 See the [API reference](docs/modules/gpustack_runner.md) for selection options.
 The [dependency guide](docs/dependency-metadata.md) explains unknown collection, absent packages, and raw installed versions.
 
-## Support and documentation
+## Supported runners
 
-[Supported runners](docs/supported-runners.md) is the authoritative source for versions, platforms, and support status.
-A merged `prepared` record describes configuration. Pack verifies measured platform coverage before marking it `published`.
-Neither status proves GPU runtime compatibility.
+See [Supported runners](docs/supported-runners.md) for backends, inference services, and supported versions.
 
-CANN/vLLM support is RC. Runner releases use the stable vLLM engine version with the documented vLLM-Ascend plugin.
-Keep the actual plugin version explicit, including its prerelease suffix. The RC marker does not change either version.
+CANN/vLLM images use stable vLLM releases. An `(rc)` label identifies a prerelease vLLM-Ascend plugin.
+
+## Documentation
 
 - [Packaging](docs/packaging.md): service Dockerfiles, matrix selection, image builds, and final-image collection.
 - [Dependency metadata](docs/dependency-metadata.md): installed package records and queries.

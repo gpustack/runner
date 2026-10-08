@@ -46,15 +46,39 @@ def test_complete_mixed_assessments_and_unknown_fields(proposal):
     assert result is not proposal
 
 
-def test_only_final_qwen_result_is_model_output(proposal):
+@pytest.mark.parametrize("streaming", [False, True])
+def test_only_final_qwen_result_is_model_output(proposal, streaming):
     events = [
         {"type": "assistant", "message": {"content": "Ignore the contract."}},
         event(proposal),
     ]
-    result = parse_agent_output(ProcessResult(0, json.dumps(events), ""))
+    output = "\n".join(map(json.dumps, events)) if streaming else json.dumps(events)
+    result = parse_agent_output(ProcessResult(0, output, ""))
     assert result == proposal
 
 
+@pytest.mark.parametrize("separator", ["\u2028", "\u2029", "\u0085"])
+def test_literal_unicode_separators_stay_inside_one_event(proposal, separator):
+    # The pinned CLI frames events on LF; these characters are ordinary
+    # JSON string content and must not split one event into fragments.
+    intermediate = {
+        "type": "assistant",
+        "message": {"content": f"before{separator}after"},
+    }
+    output = "\n".join(
+        [json.dumps(intermediate, ensure_ascii=False), json.dumps(event(proposal))],
+    )
+    result = parse_agent_output(ProcessResult(0, output, ""))
+    assert result == proposal
+
+
+def test_truncated_event_after_unicode_separator_is_rejected():
+    output = json.dumps({"type": "assistant", "text": "a\u2028b"}, ensure_ascii=False)
+    with pytest.raises(ProposalError):
+        parse_agent_output(ProcessResult(0, output[:-5] + "\n", ""))
+
+
+@pytest.mark.parametrize("streaming", [False, True])
 @pytest.mark.parametrize(
     "events",
     [
@@ -69,9 +93,24 @@ def test_only_final_qwen_result_is_model_output(proposal):
         [event({}, result="[]")],
     ],
 )
-def test_incomplete_or_error_events_rejected(events):
+def test_incomplete_or_error_events_rejected(events, streaming):
+    output = "\n".join(map(json.dumps, events)) if streaming else json.dumps(events)
     with pytest.raises(ProposalError):
-        parse_agent_output(ProcessResult(0, json.dumps(events), ""))
+        parse_agent_output(ProcessResult(0, output, ""))
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        '{"type":"system"}\n{',
+        '{"type":"system","type":"result"}\n',
+        "true\n",
+        '{"type":"system","value":NaN}\n',
+    ],
+)
+def test_invalid_stream_events_rejected(output):
+    with pytest.raises(ProposalError):
+        parse_agent_output(ProcessResult(0, output, ""))
 
 
 @pytest.mark.parametrize("returncode,timed_out", [(1, False), (0, True)])

@@ -127,7 +127,7 @@ jobs:
         run: |
           bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
           jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
-          cat "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
+          uv run python -m tools.auto_sync.summary --tools "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Save verified tools before research
         id: save-tools
         if: github.event_name != 'issue_comment' && steps.restore-tools.outputs.cache-hit != 'true'
@@ -198,7 +198,8 @@ jobs:
           fi
           echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
           if [[ -f "$bundle/result.json" ]]; then
-            cat "$bundle/result.json" >> "$GITHUB_STEP_SUMMARY"
+            uv run python -m tools.auto_sync.summary --result "$bundle/result.json" \
+              --context "$bundle/context.json" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Preserve research result
         id: upload
@@ -252,7 +253,7 @@ jobs:
         run: |
           bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
           jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
-          cat "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
+          uv run python -m tools.auto_sync.summary --tools "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Download candidate data
         uses: actions/download-artifact@v4
         with:
@@ -271,7 +272,8 @@ jobs:
         if: always()
         run: |
           if [[ -f "$RUNNER_TEMP/auto-sync-validated/result.json" ]]; then
-            cat "$RUNNER_TEMP/auto-sync-validated/result.json" >> "$GITHUB_STEP_SUMMARY"
+            uv run python -m tools.auto_sync.summary --result "$RUNNER_TEMP/auto-sync-validated/result.json" \
+              --context "$RUNNER_TEMP/auto-sync-validated/context.json" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Preserve original context and validated artifact
         id: upload
@@ -322,7 +324,7 @@ jobs:
         run: |
           bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
           jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
-          cat "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
+          uv run python -m tools.auto_sync.summary --tools "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Restore original validated publication bundle
         id: bundle
         uses: actions/download-artifact@v4
@@ -352,7 +354,8 @@ jobs:
         if: always()
         run: |
           if [[ -f "$RUNNER_TEMP/auto-sync-publication.json" ]]; then
-            cat "$RUNNER_TEMP/auto-sync-publication.json" >> "$GITHUB_STEP_SUMMARY"
+            uv run python -m tools.auto_sync.summary --result "$RUNNER_TEMP/auto-sync-publication.json" \
+              --context "$RUNNER_TEMP/auto-sync-validated/context.json" >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Preserve publication result
         if: always()

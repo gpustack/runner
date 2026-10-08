@@ -840,7 +840,14 @@ def _research(args, scratch):
         "Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane. "
         "For unavailable source or conflicting/ambiguous feedback, preserve blocked/failed assessments and finish. "
         "The patch is relative to the current workspace head; include it as group.patch in your final JSON. "
-        "Assess all six subscriptions and retain independent outcomes.\n"
+        "Assess all six subscriptions and retain independent outcomes. "
+        f"Budget: {agent.MAX_SESSION_TURNS} session turns and {agent.MAX_TOOL_CALLS} tool calls. "
+        f"Reserve the last {agent.MAX_SESSION_TURNS // 4} turns for editing and final JSON. "
+        "Reuse the supplied release notes and exact local upstream_sources paths; do not re-clone those trees. "
+        "Batch independent file reads and registry queries. Complete one independent compatibility group before "
+        "expanding research to others. Record unresolved candidates as blocked with the specific missing fact. "
+        "Return completed groups even when other candidates remain blocked. "
+        "The separate trusted validation job runs candidate checks; do not run the repository-wide test suite here.\n"
         + json.dumps(
             {
                 "context": context,
@@ -859,6 +866,7 @@ def _research(args, scratch):
         "required pinned tool directory is missing",
     )
     agent_started = time.monotonic()
+    result = None
     try:
         result = agent.run_agent(
             config,
@@ -871,10 +879,24 @@ def _research(args, scratch):
                 os.environ.get("AUTO_SYNC_GITHUB_TOKEN", ""),
             ),
         )
-        proposal.require(
-            result.returncode == 0 and not result.timed_out,
-            f"agent process failed or timed out (exit {result.returncode}): {result.stderr[-1000:]}",
-        )
+        if result.returncode != 0 or result.timed_out:
+            reason = result.stderr
+            for line in reversed(proposal.stream_lines(result.stdout)):
+                try:
+                    event = proposal.load_json(line)
+                except proposal.ProposalError:
+                    continue
+                if (
+                    isinstance(event, dict)
+                    and event.get("type") == "result"
+                    and event.get("is_error") is True
+                    and isinstance(event.get("error"), dict)
+                    and isinstance(event["error"].get("message"), str)
+                ):
+                    reason = event["error"]["message"]
+                    break
+            msg = f"agent process failed or timed out (exit {result.returncode}): {reason[-1000:]}"
+            raise proposal.ProposalError(msg)
         raw = _bind_discovery(
             proposal.validate_proposal(
                 proposal.parse_agent_output(result),
@@ -890,6 +912,25 @@ def _research(args, scratch):
             {"context": context, "discovery": found, "result": prepared},
         )
         _restore_bundle(args.output, {"context": context, "discovery": found})
+        if result is not None:
+            events = []
+            for line in proposal.stream_lines(result.stdout):
+                if not line.strip():
+                    continue
+                try:
+                    events.append(proposal.load_json(line))
+                except proposal.ProposalError:
+                    events.append({"type": "unparsed", "text": line})
+            _write(
+                args.output / "diagnostics.json",
+                {
+                    "returncode": result.returncode,
+                    "timed_out": result.timed_out,
+                    "agent_seconds": round(time.monotonic() - agent_started, 3),
+                    "events": events,
+                    "stderr": result.stderr,
+                },
+            )
     _write(args.output / "proposal.json", raw)
     return _result(
         "research",
@@ -992,15 +1033,7 @@ def _secrets():
 
 
 def _redact(value, secrets):
-    if isinstance(value, str):
-        for secret in sorted(secrets, key=len, reverse=True):
-            value = value.replace(secret, "[REDACTED]")
-        return value
-    if isinstance(value, dict):
-        return {key: _redact(item, secrets) for key, item in value.items()}
-    if isinstance(value, list):
-        return [_redact(item, secrets) for item in value]
-    return value
+    return proposal.redact(value, proposal.ordered_secrets(secrets))
 
 
 def main(argv=None) -> int:

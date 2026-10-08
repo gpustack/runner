@@ -487,6 +487,10 @@ Acceptance criteria:
 - Load controlling code and agent policy from one frozen default-branch revision.
 - Prevent candidate settings, environment files, and Git hooks from overriding that policy.
 - Set finite limits for model requests, external commands, retries, tool calls, session turns, and agent wall time.
+- Reserve the final quarter of turns for edits and structured output. Reuse acquired source trees and batch independent reads.
+- Preserve redacted streaming tool events and process status in the research artifact on success and failure.
+- Render readable Actions summaries with stage status, durations, candidate versions and outcomes, and the published PR link.
+- Describe a session-wide failure once. Keep full transport JSON and diagnostic events in artifacts.
 - Add an outer process deadline that can terminate stuck child processes.
 - Set the Actions job deadline later than the agent deadline to allow result collection.
 - Stop retrying unchanged failures after the configured limit.
@@ -1045,7 +1049,7 @@ Use these initial limits:
 | --- | --- |
 | Repeated unchanged tool failure | At most two retries |
 | External command | 300 seconds |
-| Qwen session | 60 turns and 180 tool calls |
+| Qwen session | 180 turns and 180 tool calls |
 | Qwen wall time | 2400 seconds |
 | Outer process deadline | 2700 seconds |
 | Actions job deadline | 60 minutes |

@@ -30,6 +30,12 @@ If a managed PR is open, report newer findings without changing it or opening a 
 
 ## Research and changes
 
+Plan research against the supplied turn and tool budgets. Reserve the final quarter for edits and complete JSON.
+Reuse the supplied release notes and local upstream trees before making remote requests.
+Batch independent file reads and registry queries. Complete an independent compatibility group before widening research.
+If another group lacks evidence, record its specific missing fact and retain completed independent groups.
+The separate trusted validation job runs candidate checks. Do not spend the research session running the repository-wide test suite.
+
 Read release notes, installation guidance, compatibility matrices, and resolved upstream fixes.
 Read upstream Dockerfiles at the selected release tag or resolved commit, rather than the moving default branch.
 Follow their referenced requirements, installers, and patches.
