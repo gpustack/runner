@@ -8,7 +8,7 @@ import threading
 import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from service import FakeGitHub
 
@@ -32,6 +32,7 @@ class Upstreams(FakeGitHub):
         }
         self.outages = set()
         self.delays = {}
+        self.source_revisions = {}
 
     @staticmethod
     def release(version, body="", prerelease=False):
@@ -56,7 +57,9 @@ class Upstreams(FakeGitHub):
                 if path == prefix:
                     return 200, {"clone_url": self.clone_url}
                 if path.startswith(prefix + "/commits/"):
-                    return 200, {"sha": self.upstream}
+                    revision = unquote(path[len(prefix + "/commits/") :])
+                    sha = self.source_revisions.get((name, revision), self.upstream)
+                    return (200, {"sha": sha}) if sha is not None else (404, {})
         status, result = super().request(method, url, body)
         if path == "/repos/" + self.repository and method == "GET":
             result["clone_url"] = self.clone_url.replace(

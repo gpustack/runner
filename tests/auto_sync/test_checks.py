@@ -4,6 +4,7 @@ import copy
 import difflib
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +13,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.auto_sync.checks import report_digest, validate_candidate, verify_artifact
+from tools.auto_sync.discovery import promote_support
 from tools.auto_sync.proposal import ProposalError
 
 FIXTURE = Path(__file__).parent / "fixtures/proposals/ready.json"
@@ -21,7 +23,7 @@ SUPPORT_END = "<!-- runner-support-records:end -->\n"
 
 
 def support_row(engine="0.30.0", platforms="linux/amd64"):
-    return f"| cuda | 13.0.1 | vllm | - | {engine} | - | {platforms} | prepared |\n"
+    return f"| cuda | 13.0 | vllm | - | {engine} | - | {platforms} | prepared |\n"
 
 
 def git(repo, *args):
@@ -90,6 +92,60 @@ def test_clean_validation_binds_patch_report_and_leaves_input_untouched(candidat
     assert proposal == before
     assert git(repo, "status", "--porcelain") == ""
     assert "0.29.0" in (repo / "pack/cuda/Dockerfile.vllm").read_text()
+
+
+def test_support_promotes_using_the_actual_pack_runtime_line(candidate, tmp_path):
+    repo, _ = candidate
+    checked = validate(candidate)
+    assert checked["patch"]
+    subprocess.run(  # noqa: S603 - validated patch in a disposable fixture.
+        ["git", "-C", str(repo), "apply", "-"],  # noqa: S607
+        input=checked["patch"],
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    output = tmp_path / "expanded"
+    subprocess.run(  # noqa: S603 - trusted Pack expansion with fixed fixture data.
+        ["bash", str(Path(__file__).resolve().parents[2] / "pack/expand_matrix.sh")],  # noqa: S607
+        env={
+            **os.environ,
+            "INPUT_BACKEND": "cuda",
+            "INPUT_TARGET": "vllm",
+            "INPUT_FOR_RELEASE": "true",
+            "INPUT_ARGS": "",
+            "INPUT_POST_OPERATION": "",
+            "INPUT_WORKSPACE": str(repo / "pack"),
+            "INPUT_TEMPDIR": str(tmp_path),
+            "GITHUB_OUTPUT": str(output),
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    expanded = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    jobs = json.loads(expanded["build_jobs"])
+    assert jobs[0]["backend_version"] == "13.0"
+    assert jobs[0]["original_backend_version"] == "13.0.1"
+    support = (repo / SUPPORT).read_text()
+    measured = {jobs[0]["platform_tag"]: {"vllm": "0.30.0"}}
+    assert "0.30.0 | - | linux/amd64 | published" in promote_support(
+        support,
+        jobs,
+        measured,
+    )
+    assert promote_support(support, jobs, {}) == support
+
+
+def test_new_support_record_rejects_a_full_runtime_patch_version(candidate):
+    group = candidate[1]["groups"][0]
+    group["patch"] = group["patch"].replace(
+        "+| cuda | 13.0 |",
+        "+| cuda | 13.0.1 |",
+    )
+    result = validate(candidate)
+    assert result["groups"][0]["status"] == "failed"
+    assert "runtime line" in result["groups"][0]["validation"]["error"]
 
 
 @pytest.mark.parametrize(
@@ -317,7 +373,7 @@ def test_support_cannot_claim_a_prepared_image_is_published(candidate):
     text = (repo / SUPPORT).read_text()
     new = text.replace(
         "<!-- runner-support-records:end -->",
-        "| cuda | 13.0.1 | vllm | - | 0.30.0 | - | linux/amd64 | published |\n<!-- runner-support-records:end -->",
+        "| cuda | 13.0 | vllm | - | 0.30.0 | - | linux/amd64 | published |\n<!-- runner-support-records:end -->",
     )
     proposal["groups"][0]["patch"] = proposal["groups"][0]["patch"].split(
         "diff --git a/docs/",
@@ -519,7 +575,7 @@ def test_all_changed_runtimes_need_reported_evidence(candidate):
     before = (repo / SUPPORT).read_text()
     after = before.replace(
         SUPPORT_END,
-        support_row() + support_row().replace("13.0.1", "12.9.1") + SUPPORT_END,
+        support_row() + support_row().replace("13.0", "12.9") + SUPPORT_END,
     )
     replace_patch(group, SUPPORT, before, after)
     assert validate(candidate)["groups"][0]["status"] == "ready"
@@ -692,7 +748,7 @@ def test_ascend_plugin_uses_sourced_pairing_not_image_tag_spelling(
     (repo / "pack/matrix.yaml").write_text(old_matrix)
     old_support = (
         SUPPORT_START
-        + "| cann | 9.1.0 | vllm | 910b | 0.29.0 | 0.29.0rc1 | linux/amd64 | prepared |\n"
+        + "| cann | 9.1 | vllm | 910b | 0.29.0 | 0.29.0rc1 | linux/amd64 | prepared |\n"
         + SUPPORT_END
     )
     (repo / SUPPORT).write_text(old_support)
@@ -716,7 +772,7 @@ def test_ascend_plugin_uses_sourced_pairing_not_image_tag_spelling(
     )
     new_support = old_support.replace(
         SUPPORT_END,
-        f"| cann | 9.1.0 | vllm | 910b | 0.30.0 | {plugin} | linux/amd64 | prepared |\n"
+        f"| cann | 9.1 | vllm | 910b | 0.30.0 | {plugin} | linux/amd64 | prepared |\n"
         + SUPPORT_END,
     )
     group["patch"] = (

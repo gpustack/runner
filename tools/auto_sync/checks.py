@@ -358,6 +358,16 @@ def _check_rows(repo, rules, rows, baseline, ascend_pairs):
                         f"compatibility {field} differs from the effective recipe",
                     )
             packages = {p["name"].lower(): p for p in row["packages"]}
+            if any(
+                Path(patch["path"]).parts[3] == "vllm_omni"
+                and patch["disposition"] != "remove"
+                and patch["source_revision"] is not None
+                for patch in row["patches"]
+            ):
+                require(
+                    bool(args.get(f"{service}_OMNI_COMMIT")),
+                    "verified Omni patch source lacks an effective recipe pin",
+                )
             for package, suffix in (
                 ("lmcache", "LMCACHE_VERSION"),
                 ("mooncake", "MOONCAKE_VERSION"),
@@ -437,11 +447,12 @@ def _check_rows(repo, rules, rows, baseline, ascend_pairs):
 
 
 def _support_key(row):
+    runtime = version(row["runtime"])
     return (
         row["backend"],
         row["service"],
         row["variant"],
-        version(row["runtime"]),
+        version(".".join(map(str, runtime.release[:2]))),
         version(row["engine_version"]),
         version(row["plugin_version"]) if row["plugin_version"] else None,
     )
@@ -461,6 +472,10 @@ def _check_support(before, after, rows, changed, protected):
         require(
             record["status"] == "prepared",
             "candidate support cannot fabricate published metadata",
+        )
+        require(
+            record["runtime"] == str(_support_key(record)[3]),
+            "new support runtime line must match the catalog major.minor version",
         )
         platforms = {
             r["platform"] for r in rows if _support_key(r) == _support_key(record)

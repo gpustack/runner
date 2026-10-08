@@ -867,14 +867,18 @@ def publish(
     ``repo`` supplies clean local objects for the frozen default and head. The
     controller supplies upstream ``sources`` and ``ascend_pairs`` independently
     of agent output. Results retain the full checked outcomes on no-write paths.
+    ``checked`` keeps the original publication identity; ``revalidation`` records
+    fresh checks without changing the commit or report used for recovery.
     A failed mutation is not retried blindly; a later call adopts landed state.
     """
     checked = None
+    revalidation = None
     try:
         identity = context["identity"]
         validate_identity(identity)
         raw = verify_artifact(artifact, identity, engine_prereleases=engine_prereleases)
-        checked = validate_candidate(
+        checked = artifact
+        revalidation = validate_candidate(
             Path(repo),
             raw,
             identity,
@@ -882,11 +886,17 @@ def publish(
             ascend_pairs=ascend_pairs,
             engine_prereleases=engine_prereleases,
         )
+        require(
+            revalidation["patch"] == checked["patch"]
+            and revalidation["patch_digest"] == checked["patch_digest"],
+            "accepted patch changed during publication revalidation",
+        )
         if context["status"] != "ready":
-            return _result(context["status"], context["reason"], checked)
-        if identity["mode"] == "revise":
-            return _revise(github, repo, context, checked)
-        return _discover(github, repo, context, checked)
+            result = _result(context["status"], context["reason"], checked)
+        elif identity["mode"] == "revise":
+            result = _revise(github, repo, context, checked)
+        else:
+            result = _discover(github, repo, context, checked)
     except (
         GitHubError,
         ProposalError,
@@ -895,4 +905,5 @@ def publish(
         TypeError,
         ValueError,
     ) as exc:
-        return _result("failed", str(exc), checked)
+        result = _result("failed", str(exc), checked)
+    return dict(result, revalidation=revalidation)

@@ -24,7 +24,10 @@ from boundaries import ExhaustedModel, GitHTTP, Registry, Upstreams, encoded
 from test_agent import _local_cli_process
 
 from tools.auto_sync import run
+from tools.auto_sync.checks import _clone as clone_source
+from tools.auto_sync.checks import _git as source_git
 from tools.auto_sync.checks import _run as run_command
+from tools.auto_sync.checks import _source_patch_checks as source_patch_checks
 from tools.auto_sync.run import (
     _acquire_candidate,
     _env,
@@ -81,7 +84,7 @@ def scenario(tmp_path, monkeypatch):
         "# Runner\n[Supported runners](docs/supported-runners.md)\n",
     )
     (repo / "docs/supported-runners.md").write_text(
-        "<!-- runner-support-records:start -->\n| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| cuda | 13.0.1 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n<!-- runner-support-records:end -->\n",
+        "<!-- runner-support-records:start -->\n| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n<!-- runner-support-records:end -->\n",
     )
     (repo / "pack/cuda").mkdir(parents=True)
     (repo / "pack/matrix.yaml").write_text(
@@ -306,6 +309,331 @@ def test_exact_source_acquisition_reads_release_tree(scenario, tmp_path):
     assert git(target, "rev-parse", "HEAD") == sha
 
 
+def patch_sources(scenario):
+    source, api = scenario[4], scenario[2]
+    (source / "selected.txt").write_text("old release\n")
+    old = commit(source)
+    (source / "selected.txt").write_text("selected release\n")
+    target = commit(source)
+    (source / "selected.txt").write_text("patched release\n")
+    patch = git(source, "diff") + "\n"
+    git(source, "checkout", "--", "selected.txt")
+    git(source, "tag", "-f", "v0.29.0", old)
+    for tag in ("v0.30.0", "v0.30.0rc1", "v0.5.0"):
+        git(source, "tag", "-f", tag, target)
+    for name in (*run.discovery.UPSTREAMS.values(), run.discovery.ASCEND):
+        api.source_revisions.update(
+            {
+                (name, old): old,
+                (name, target): target,
+                (name, "v0.30.0"): target,
+                (name, "v0.29.0"): old,
+            },
+        )
+    api.source_revisions[(run.discovery.ASCEND, "v0.30.0rc1")] = target
+    api.releases["vllm-project/vllm-omni"] = []
+    api.source_revisions[("vllm-project/vllm-omni", old)] = old
+    api.source_revisions[("vllm-project/vllm-omni", target)] = target
+    git(source, "update-server-info")
+    return old, target, patch
+
+
+def add_source_patch(raw, path, revision, content, repository="vllm-project/vllm"):
+    row = raw["groups"][0]["rows"][0]
+    row["patches"] = [
+        {
+            "path": path,
+            "disposition": "add",
+            "reason": "Update the selected source.",
+            "versions": [row["engine_version"]],
+            "platforms": [row["platform"]],
+            "sources": row["sources"],
+            "source_repository": repository,
+            "source_revision": revision,
+        },
+    ]
+    lines = content.splitlines()
+    raw["groups"][0]["patch"] += (
+        f"diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n"
+        f"@@ -0,0 +1,{len(lines)} @@\n" + "".join("+" + line + "\n" for line in lines)
+    )
+
+
+@pytest.mark.parametrize(
+    "component,claim",
+    [
+        ("vllm", "exact"),
+        ("vllm", "old"),
+        ("vllm", "repository"),
+        ("vllm", "version"),
+        ("vllm", "unknown"),
+        ("vllm", "unavailable"),
+        ("vllm", "remove"),
+        ("vllm_ascend", "exact"),
+        ("vllm_ascend", "old"),
+        ("vllm_ascend", "version"),
+        ("vllm_omni", "exact"),
+        ("vllm_omni", "old"),
+    ],
+)
+def test_patch_source_binds_selected_component(scenario, tmp_path, component, claim):
+    old, target, patch_text = patch_sources(scenario)
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    # Revision mode can retain an existing engine or plugin combination.
+    context["identity"].update(
+        mode="revise",
+        pr_number=1,
+        command_id=1,
+        command_digest="a" * 64,
+    )
+    context["command"] = {"id": 1, "body": ""}
+    context["identity"]["command_digest"] = hashlib.sha256(b"").hexdigest()
+    raw = proposal(scenario, context)
+    row = raw["groups"][0]["rows"][0]
+    name = "vllm-project/vllm"
+    selected = row["engine_version"]
+    if component == "vllm_ascend":
+        row.update(backend="cann", variant="a3", plugin_version="0.30.0rc1")
+        name, selected = run.discovery.ASCEND, row["plugin_version"]
+        raw["groups"][0]["patch"] = raw["groups"][0]["patch"].replace(
+            "pack/cuda/",
+            "pack/cann/",
+        )
+        raw["candidates"][0].update(status="unchanged", groups=[])
+        raw["candidates"][4].update(status="ready", groups=["cuda-vllm"])
+    elif component == "vllm_omni":
+        name = "vllm-project/vllm-omni"
+        row["packages"].append(
+            {
+                "name": "vllm-omni",
+                "version": target,
+                "decision": "source",
+                "reason": "Use the selected source pin.",
+                "sources": row["sources"],
+            },
+        )
+    decision = {
+        "path": f"pack/{row['backend']}/patches/{component}/fix.patch",
+        "disposition": "remove" if claim == "remove" else "add",
+        "reason": "Update the selected source.",
+        "versions": ["0.29.0" if claim == "version" else selected],
+        "platforms": [row["platform"]],
+        "sources": row["sources"],
+        "source_repository": "sgl-project/sglang" if claim == "repository" else name,
+        "source_revision": old
+        if claim == "old"
+        else None
+        if claim == "unknown"
+        else target,
+    }
+    row["patches"] = [decision]
+    if claim == "unavailable":
+        scenario[2].source_revisions[(name, "v0.30.0")] = None
+    data, sources, _ = _acquire_candidate(raw, context, tmp_path / "acquisition")
+    group = data["groups"][0]
+    if claim in {"old", "repository", "version"}:
+        assert group["status"] == "failed"
+        assert not sources
+        return
+    assert group["status"] == "ready"
+    work = tmp_path / "patched"
+    path = work / decision["path"]
+    path.parent.mkdir(parents=True)
+    if claim != "remove":
+        path.write_text(patch_text)
+    outcomes = source_patch_checks(
+        work,
+        group,
+        sources,
+        tmp_path / "checks",
+        _env(tmp_path / "home"),
+    )
+    assert outcomes[0]["status"] == (
+        "unverified" if claim in {"unknown", "unavailable"} else "passed"
+    )
+    if claim == "exact":
+        assert outcomes[0]["source_revision"] == target
+        assert (
+            tmp_path / "checks/source-1/selected.txt"
+        ).read_text() == "patched release\n"
+    assert scenario[3].requests
+    assert all(method == "GET" for method, _, _ in scenario[2].requests)
+
+
+def test_unavailable_selected_release_cannot_borrow_same_repository_source(
+    scenario,
+    tmp_path,
+):
+    old, _, patch_text = patch_sources(scenario)
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    raw = proposal(scenario, context)
+    # Two backend groups share upstream objects but select different releases.
+    context["identity"].update(
+        mode="revise",
+        pr_number=1,
+        command_id=1,
+        command_digest=hashlib.sha256(b"").hexdigest(),
+    )
+    context["command"] = {"id": 1, "body": ""}
+    raw["identity"] = context["identity"]
+    row = raw["groups"][0]["rows"][0]
+    patch = {
+        "path": "pack/cuda/patches/vllm/fix.patch",
+        "disposition": "add",
+        "reason": "Patch the selected source.",
+        "versions": ["0.30.0"],
+        "platforms": [row["platform"]],
+        "sources": row["sources"],
+        "source_repository": "vllm-project/vllm",
+        "source_revision": old,
+    }
+    row["patches"] = [patch]
+    other = copy.deepcopy(row)
+    other.update(backend="rocm", engine_version="0.29.0")
+    other["patches"][0].update(
+        path="pack/rocm/patches/vllm/fix.patch",
+        versions=["0.29.0"],
+    )
+    raw["groups"][0]["rows"].append(other)
+    raw["candidates"][2].update(status="ready", groups=["cuda-vllm"])
+    api = scenario[2]
+    api.source_revisions[("vllm-project/vllm", "v0.30.0")] = None
+    api.source_revisions[("vllm-project/vllm", "v0.29.0")] = old
+    data, sources, _ = _acquire_candidate(raw, context, tmp_path / "acquisition")
+    assert "vllm-project/vllm" in sources
+    group = data["groups"][0]
+    work = tmp_path / "patched"
+    for entry in (patch, other["patches"][0]):
+        path = work / entry["path"]
+        path.parent.mkdir(parents=True)
+        path.write_text(patch_text.replace("selected release", "old release"))
+    outcomes = source_patch_checks(
+        work,
+        group,
+        sources,
+        tmp_path / "checks",
+        _env(tmp_path / "home"),
+    )
+    assert [outcome["status"] for outcome in outcomes] == ["unverified", "passed"]
+    assert group["rows"][0]["patches"][0]["source_revision"] is None
+    assert group["rows"][1]["patches"][0]["source_revision"] == old
+
+
+@pytest.mark.parametrize("claim", ["exact", "old"])
+def test_validation_applies_patch_only_to_selected_release(scenario, tmp_path, claim):
+    old, target, patch_text = patch_sources(scenario)
+    prepared = prepare(scenario, tmp_path)
+    research = research_bundle(scenario, tmp_path, prepared)
+    raw = json.loads((research / "proposal.json").read_text())
+    path = "pack/cuda/patches/vllm/fix.patch"
+    if claim == "old":
+        patch_text = patch_text.replace("selected release", "old release")
+        old_work = tmp_path / "old-release"
+        env = _env(tmp_path / "old-home")
+        clone_source(scenario[4], old, old_work, env)
+        source_git(env, old_work, "apply", "--check", "-", text=patch_text)
+    add_source_patch(raw, path, target if claim == "exact" else old, patch_text)
+    (research / "proposal.json").write_text(json.dumps(raw))
+    checked = tmp_path / "checked"
+    code = invoke(
+        "validate",
+        "--repo",
+        scenario[0],
+        "--bundle",
+        research,
+        "--output",
+        checked,
+    )
+    artifact = json.loads((checked / "artifact.json").read_text())
+    result = json.loads((checked / "result.json").read_text())
+    if claim == "exact":
+        assert code == 0
+        assert result["publishable"] is True
+        assert artifact["groups"][0]["validation"]["patches"][0]["status"] == "passed"
+        assert (
+            artifact["groups"][0]["validation"]["patches"][0]["source_revision"]
+            == target
+        )
+    else:
+        assert code == 1
+        assert result["publishable"] is False
+        assert artifact["patch"] == ""
+        assert "selected component revision" in artifact["groups"][0]["reason"]
+
+
+@pytest.mark.parametrize(
+    "pin",
+    ["exact", "short", "missing", "mismatch", "override", "unknown"],
+)
+def test_omni_patch_uses_effective_candidate_package_pin(scenario, tmp_path, pin):
+    old, target, patch_text = patch_sources(scenario)
+    repo, _, api, *_ = scenario
+    selected = target[:7] if pin == "short" else target
+    api.source_revisions[("vllm-project/vllm-omni", selected)] = target
+    recipe = repo / "pack/cuda/Dockerfile.vllm"
+    if pin not in {"missing", "unknown"}:
+        recipe.write_text(
+            recipe.read_text().replace(
+                "FROM ",
+                f"ARG VLLM_OMNI_COMMIT={old if pin == 'mismatch' else selected}\nFROM ",
+            ),
+        )
+    if pin == "override":
+        matrix = repo / "pack/matrix.yaml"
+        matrix.write_text(
+            matrix.read_text().replace(
+                "args: [VLLM_VERSION=0.29.0]",
+                f"args: [VLLM_VERSION=0.29.0, VLLM_OMNI_COMMIT={old}]",
+            ),
+        )
+    if pin not in {"missing", "unknown"}:
+        scenario = (repo, commit(repo), *scenario[2:])
+    prepared = prepare(scenario, tmp_path)
+    research = research_bundle(scenario, tmp_path, prepared)
+    raw = json.loads((research / "proposal.json").read_text())
+    if pin == "override":
+        for engine in ("0.29.0", "0.30.0"):
+            raw["groups"][0]["patch"] = raw["groups"][0]["patch"].replace(
+                f"args: [VLLM_VERSION={engine}]",
+                f"args: [VLLM_VERSION={engine}, VLLM_OMNI_COMMIT={old}]",
+            )
+    row = raw["groups"][0]["rows"][0]
+    row["packages"].append(
+        {
+            "name": "vllm-omni",
+            "version": selected,
+            "decision": "source",
+            "reason": "Retain the selected Omni source.",
+            "sources": row["sources"],
+        },
+    )
+    path = "pack/cuda/patches/vllm_omni/fix.patch"
+    add_source_patch(
+        raw,
+        path,
+        None if pin == "unknown" else target,
+        patch_text,
+        repository="vllm-project/vllm-omni",
+    )
+    (research / "proposal.json").write_text(json.dumps(raw))
+    checked = tmp_path / "checked"
+    code = invoke("validate", "--repo", repo, "--bundle", research, "--output", checked)
+    artifact = json.loads((checked / "artifact.json").read_text())
+    group = artifact["groups"][0]
+    if pin in {"exact", "short", "unknown"}:
+        assert code == 0
+        assert group["validation"]["patches"][0]["status"] == (
+            "unverified" if pin == "unknown" else "passed"
+        )
+    else:
+        assert code == 1
+        assert artifact["patch"] == ""
+        assert group["status"] == "failed"
+        assert "effective" in group["validation"]["error"]
+
+
 def test_upstream_failure_keeps_independent_candidate_outcomes(scenario, tmp_path):
     scenario[2].outages.add("vllm-project/vllm")
     prepared = prepare(scenario, tmp_path)
@@ -501,7 +829,7 @@ def test_all_represented_means_no_agent_without_model_secrets(scenario, tmp_path
     for backend, service, variants in run.discovery.SUBSCRIPTIONS:
         for variant in variants:
             rows.append(
-                f"| {backend} | {'8.3.0' if backend == 'cann' else '13.0.1'} | {service} | {variant or '-'} | {'0.30.0' if service == 'vllm' else '0.5.0'} | {'0.30.0rc1' if (backend, service) == ('cann', 'vllm') else '-'} | linux/amd64 | prepared |\n",
+                f"| {backend} | {'8.3' if backend == 'cann' else '13.0'} | {service} | {variant or '-'} | {'0.30.0' if service == 'vllm' else '0.5.0'} | {'0.30.0rc1' if (backend, service) == ('cann', 'vllm') else '-'} | linux/amd64 | prepared |\n",
             )
     support.write_text(
         support.read_text().replace(
@@ -559,6 +887,192 @@ def test_repeat_and_unauthorized_revision_never_require_research(scenario, tmp_p
     scenario[2].permission = "read"
     unauthorized = prepare(scenario, tmp_path / "unauthorized", event)
     assert json.loads((unauthorized / "result.json").read_text())["status"] == "ignored"
+
+
+def no_change_revision(scenario, tmp_path, status):
+    prepared = prepare(scenario, tmp_path)
+    checked = validate_bundle(scenario, tmp_path, prepared)
+    assert (
+        invoke(
+            "publish",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            checked,
+            "--output",
+            tmp_path / "initial.json",
+        )
+        == 0
+    )
+    event = scenario[2].comment_event(
+        "/auto-sync\nKeep all versions. Explain the outcome.",
+    )
+    root = tmp_path / "revision"
+    prepared = prepare(scenario, root, event)
+    research = research_bundle(scenario, root, prepared)
+    raw = json.loads((research / "proposal.json").read_text())
+    raw["groups"] = []
+    for candidate in raw["candidates"]:
+        candidate.update(
+            status=status,
+            groups=[],
+            reason="No source changes are needed.",
+        )
+    (research / "proposal.json").write_text(json.dumps(raw))
+    checked = root / "checked"
+    assert (
+        invoke(
+            "validate",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            research,
+            "--output",
+            checked,
+        )
+        == 0
+    )
+    return checked, event
+
+
+def test_discovery_without_source_patch_remains_nonpublishable(scenario, tmp_path):
+    prepared = prepare(scenario, tmp_path)
+    research = research_bundle(scenario, tmp_path, prepared)
+    raw = json.loads((research / "proposal.json").read_text())
+    raw["groups"] = []
+    for candidate in raw["candidates"]:
+        candidate.update(status="unchanged", groups=[], reason="No source changes.")
+    (research / "proposal.json").write_text(json.dumps(raw))
+    checked = tmp_path / "checked"
+    assert (
+        invoke(
+            "validate",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            research,
+            "--output",
+            checked,
+        )
+        == 0
+    )
+    assert json.loads((checked / "result.json").read_text())["publishable"] is False
+    assert (
+        invoke(
+            "publish",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            checked,
+            "--output",
+            tmp_path / "result.json",
+        )
+        == 0
+    )
+    assert json.loads((tmp_path / "result.json").read_text())["status"] == "no_changes"
+    assert not scenario[2].prs
+    assert all(method == "GET" for method, _, _ in scenario[2].requests)
+
+
+@pytest.mark.parametrize("status", ["blocked", "unchanged"])
+def test_valid_no_change_revision_reports_once_and_records_command(
+    scenario,
+    tmp_path,
+    status,
+):
+    checked, event = no_change_revision(scenario, tmp_path, status)
+    result = json.loads((checked / "result.json").read_text())
+    assert result["status"] == status
+    assert result["publishable"] is True
+    api = scenario[2]
+    head = api.current_pr(1)["head"]["sha"]
+    before = len(api.requests)
+    assert (
+        invoke(
+            "publish",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            checked,
+            "--output",
+            tmp_path / "reply.json",
+        )
+        == 0
+    )
+    publication = json.loads((tmp_path / "reply.json").read_text())
+    assert publication["status"] == "no_changes"
+    assert publication["revalidation"]["patch"] == ""
+    assert (
+        publication["revalidation"]["identity"]
+        == json.loads((checked / "artifact.json").read_text())["identity"]
+    )
+    assert api.current_pr(1)["head"]["sha"] == head
+    replies = [c for c in api.comments if c["user"]["login"] == BOT]
+    assert len(replies) == 1
+    assert status in replies[0]["body"]
+    marker = replies[0]["body"].splitlines()[0]
+    record = json.loads(marker[len(run.publish.MARKER) : -4])
+    assert record["identity"]["command_id"] == event["comment"]["id"]
+    assert (
+        record["identity"]["command_digest"]
+        == hashlib.sha256(event["comment"]["body"].encode()).hexdigest()
+    )
+    assert record["commit_sha"] is None
+    assert marker in api.prs[1]["body"]
+    assert not any(
+        method != "GET" and "/git/" in path for method, path, _ in api.requests[before:]
+    )
+    before = len(api.requests)
+    assert (
+        invoke(
+            "publish",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            checked,
+            "--output",
+            tmp_path / "duplicate.json",
+        )
+        == 0
+    )
+    assert (
+        json.loads((tmp_path / "duplicate.json").read_text())["status"] == "duplicate"
+    )
+    assert all(method == "GET" for method, _, _ in api.requests[before:])
+    repeated = prepare(scenario, tmp_path / "repeated", event)
+    assert json.loads((repeated / "result.json").read_text())["ready"] is False
+    assert len([c for c in api.comments if c["user"]["login"] == BOT]) == 1
+
+
+@pytest.mark.parametrize("change", ["command", "authorization", "head"])
+def test_no_change_revision_defers_changed_authority(scenario, tmp_path, change):
+    checked, _ = no_change_revision(scenario, tmp_path, "blocked")
+    assert json.loads((checked / "result.json").read_text())["publishable"] is True
+    api = scenario[2]
+    if change == "command":
+        api.comments[-1]["body"] += "\nUse another combination."
+    elif change == "authorization":
+        api.permission = "read"
+    else:
+        api.human_commit("README.md", "A maintainer changed the head.\n")
+    head = api.current_pr(1)["head"]["sha"]
+    before = len(api.requests)
+    assert (
+        invoke(
+            "publish",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            checked,
+            "--output",
+            tmp_path / "deferred.json",
+        )
+        == 0
+    )
+    assert json.loads((tmp_path / "deferred.json").read_text())["status"] == "deferred"
+    assert api.current_pr(1)["head"]["sha"] == head
+    assert all(method == "GET" for method, _, _ in api.requests[before:])
+    assert not any(c["user"]["login"] == BOT for c in api.comments)
 
 
 @pytest.mark.parametrize("point", ["ref", "pr"])
@@ -913,7 +1427,7 @@ def test_empty_and_ambiguous_feedback_stays_bounded(scenario, tmp_path):
         == 0
     )
     assert json.loads((checked / "result.json").read_text())["status"] == "blocked"
-    assert not json.loads((checked / "result.json").read_text())["publishable"]
+    assert json.loads((checked / "result.json").read_text())["publishable"] is True
 
 
 def test_later_jobs_bind_default_repository_and_keep_original_output(
@@ -1321,7 +1835,8 @@ def test_simulated_merge_prepared_dedup_and_measured_promotion(scenario, tmp_pat
     assert "0.30.0 | - | linux/amd64 | prepared" in support
     job = {
         "backend": "cuda",
-        "backend_version": "13.0.1",
+        "backend_version": "13.0",
+        "original_backend_version": "13.0.1",
         "service": "vllm",
         "backend_variant": "",
         "service_version": "0.30.0",

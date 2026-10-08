@@ -1,6 +1,6 @@
 # Spec: Service Dockerfiles and Automated Runner Updates
 
-Status: Built
+Status: Shipped
 Type: Feature
 
 ## Summary
@@ -1373,6 +1373,21 @@ The revised controller suite passed 52 checks on macOS. Four actual workflow set
 All-file hooks, workflow lint, strict documentation, and Python source distribution and wheel builds passed.
 Actual GitHub Actions, App permissions, model providers, registry publication, native service images, and GPU behavior remain unverified.
 Image production and final-image measurements remain post-merge Pack tasks.
+
+Ship validation: Final review found four bounded defects, corrected with positive and negative fixtures.
+Support records now use the catalog runtime line while compatibility rows retain the full build version.
+The promotion fixture reads actual Pack matrix expansion rather than supplying a handwritten runtime identity.
+Patch checks bind declared repositories and commits to independently resolved component releases or effective Omni pins.
+Unavailable source remains unverified and cannot borrow another acquired revision.
+Valid no-patch revisions report outcomes, preserve the head, and record the processed command.
+Publication retains the original artifact and report identity while recording fresh revalidation separately.
+Recovery rejects changed accepted patches, wrong landed trees, and changed authorization.
+Independent changed-scope Standards and Spec review found no further defects; its 39 focused checks passed.
+The complete macOS offline suite passed 933 checks in 534.17 seconds; ten Linux-specific checks were skipped.
+Original Ubuntu validation predates these final corrections. Current native Linux acceptance belongs to PR CI.
+All-file hooks, strict documentation, and workflow lint, including the upstream OTA workflow, passed.
+The branch was rebased onto the fetched default branch without source conflicts.
+No provider calls, GitHub writes, service-image builds, or GPU execution were part of these offline checks.
 
 ### Test Plan
 

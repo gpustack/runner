@@ -498,35 +498,91 @@ def _acquire_candidate(
                     "candidate manifest differs from trusted registry acquisition",
                 )
                 for patch in row["patches"]:
-                    revision = patch["source_revision"]
-                    if revision:
-                        try:
-                            tree, _ = _source(
-                                api,
-                                patch["source_repository"],
-                                revision,
-                                scratch / "sources",
-                                env,
-                            )
-                        except (ValueError, OSError, KeyError, TypeError):
-                            continue  # T10 preserves unavailable patch source as unverified.
-                        name = patch["source_repository"]
-                        if name in sources and sources[name] != tree:
-                            _git(
-                                env,
-                                sources[name],
-                                "fetch",
-                                "--quiet",
-                                "--",
-                                str(tree),
-                                revision,
-                            )
-                        else:
-                            sources[name] = tree
+                    if patch["disposition"] == "remove":
+                        continue
+                    name, selected = _patch_source(patch, row)
+                    if patch["source_revision"] is None:
+                        continue
+                    if name != "vllm-project/vllm-omni":
+                        release = next(
+                            (
+                                r
+                                for r in releases.get(name, [])
+                                if not r["draft"]
+                                and re.match(r"v?\d", r["tag_name"])
+                                and discovery.version(r["tag_name"])
+                                == discovery.version(selected)
+                            ),
+                            None,
+                        )
+                        selected = release["tag_name"] if release else None
+                    try:
+                        proposal.require(
+                            selected is not None,
+                            "patch source pin is unknown",
+                        )
+                        tree, revision = _source(
+                            api,
+                            name,
+                            selected,
+                            scratch / "sources",
+                            env,
+                        )
+                    except (ValueError, OSError, KeyError, TypeError):
+                        # Unknown targets cannot borrow another patch's acquired source.
+                        patch["source_revision"] = None
+                        continue
+                    proposal.require(
+                        patch["source_revision"] == revision,
+                        "patch source differs from the selected component revision",
+                    )
+                    if name in sources and sources[name] != tree:
+                        _git(
+                            env,
+                            sources[name],
+                            "fetch",
+                            "--quiet",
+                            "--",
+                            str(tree),
+                            revision,
+                        )
+                    else:
+                        sources[name] = tree
         except (ValueError, OSError, TypeError, KeyError) as exc:
             group.update(status="failed", reason=f"Trusted acquisition failed: {exc}")
     _statuses(data)
     return data, sources, pairs
+
+
+def _patch_source(patch: dict, row: dict) -> tuple[str, str | None]:
+    component = Path(patch["path"]).parts[3]
+    applicable = row["engine_version"]
+    if component == "vllm_ascend":
+        name, selected = discovery.ASCEND, row["plugin_version"]
+        applicable = selected
+    elif component == "vllm_omni":
+        name = "vllm-project/vllm-omni"
+        # Omni versions describe engine applicability; its package selects the source pin.
+        package = next(
+            (p for p in row["packages"] if p["name"].lower() == "vllm-omni"),
+            None,
+        )
+        selected = (
+            package["version"] if package and package["decision"] != "disable" else None
+        )
+    else:
+        name, selected = discovery.UPSTREAMS[row["service"]], row["engine_version"]
+    proposal.require(
+        patch["source_repository"] == name,
+        "patch repository differs from the selected component repository",
+    )
+    proposal.require(
+        applicable is not None
+        and discovery.version(applicable)
+        in {discovery.version(v) for v in patch["versions"]},
+        "patch versions do not cover the selected component version",
+    )
+    return name, selected
 
 
 def _candidates(found: list, *, failed=False, reason=None) -> list:
@@ -878,7 +934,7 @@ def _validate(args, scratch):
         status,
         "Trusted acquisition and credential-free static checks completed.",
         candidates=candidates,
-        publishable=bool(checked["patch"]),
+        publishable=bool(checked["patch"]) or context["identity"]["mode"] == "revise",
         durations={"checks_seconds": round(time.monotonic() - checks_started, 3)},
     )
 
@@ -911,7 +967,9 @@ def _publish(args, scratch):
         ascend_pairs=pairs,
         engine_prereleases=_permissions(context),
     )
-    fields = {k: result[k] for k in ("pr_number", "commit_sha") if k in result}
+    fields = {
+        k: result[k] for k in ("pr_number", "commit_sha", "revalidation") if k in result
+    }
     return _result(
         "publish",
         result["status"],
