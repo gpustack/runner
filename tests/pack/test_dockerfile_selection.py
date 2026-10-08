@@ -234,6 +234,30 @@ def test_explicit_historical_operation_uses_its_matrix_and_defaults(tmp_path):
 
 
 @pytest.mark.parametrize("service", ["vllm", "sglang"])
+def test_musa_matrix_matches_the_existing_service_runtime(tmp_path, service):
+    catalog = json.loads((REPO_ROOT / "gpustack_runner/runner.py.json").read_text())
+    supported = [
+        row
+        for row in catalog
+        if row["backend"] == "musa"
+        and row["service"] == service
+        and not row["deprecated"]
+    ]
+    assert supported
+    result, output = _expand(PACK_DIR, tmp_path, service=service, backend="musa")
+    assert result.returncode == 0, result.stdout + result.stderr
+    jobs = output["build_jobs"]
+    assert jobs
+    assert {
+        (job["original_backend_version"], job["service_version"], job["platform"])
+        for job in jobs
+    } == {
+        (row["original_backend_version"], row["service_version"], row["platform"])
+        for row in supported
+    }
+
+
+@pytest.mark.parametrize("service", ["vllm", "sglang"])
 def test_repository_matrix_expands_every_supported_pair(tmp_path, service):
     matrix = subprocess.run(  # noqa: S603
         ["yq", "--output-format", "json", ".rules", str(PACK_DIR / "matrix.yaml")],  # noqa: S607
