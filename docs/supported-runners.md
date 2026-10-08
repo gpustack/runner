@@ -21,23 +21,6 @@ Rows with the same identity and platform set must be unique.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 <!-- runner-support-records:end -->
 
-## Discovery identity
-
-Weekly discovery covers vLLM and SGLang on CUDA, ROCm, and CANN.
-It selects only the newest stable engine release, including post releases.
-CANN vLLM selects the newest released Ascend plugin, including prereleases, and its documented stable vLLM engine.
-A missing engine pairing blocks that candidate. Discovery does not fall back to an older release.
-
-An exact entry in either the generated catalog or this document prevents another proposal.
-Discovery reads both sources from the frozen default branch. Unmerged proposal rows do not count.
-It compares backend, service, accelerator variant, engine version, and actual Ascend plugin version.
-Runtime lines and CPU platforms are evaluated when preparing the proposal and promoting its support record.
-A source read or parse failure is a failed inspection, never evidence of absence.
-
-CANN aliases follow the packaging matrix: `950`, `A5`, and `950/A5` mean `950`.
-`A3`, `910C`, and `A3/910C` mean `a3`. `910B` means `910b`; `310P` means `310p`.
-Other hardware names are not inferred as aliases.
-
 ## Historical support tables
 
 The tables below retain the original support information and annotations.

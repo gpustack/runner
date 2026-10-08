@@ -24,6 +24,7 @@ from boundaries import ExhaustedModel, GitHTTP, Registry, Upstreams, encoded
 from test_agent import _local_cli_process
 
 from tools.auto_sync import run
+from tools.auto_sync.agent import ProcessResult
 from tools.auto_sync.checks import _clone as clone_source
 from tools.auto_sync.checks import _git as source_git
 from tools.auto_sync.checks import _run as run_command
@@ -1727,6 +1728,179 @@ def test_exhausted_tokens_fail_before_agent_and_retain_six_outcomes(
     assert {c["status"] for c in result["candidates"]} == {"failed"}
     assert "fake-first" not in json.dumps(result)
     assert "fake-second" not in json.dumps(result)
+
+
+@pytest.mark.usefixtures("pinned_tools")
+@pytest.mark.parametrize("header", ['fake-header"value', "false"])
+def test_turn_exhaustion_retains_redacted_research_diagnostics(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    header,
+):
+    prepared = prepare(scenario, tmp_path)
+    real = run.agent.run_agent
+
+    def bounded(*args, **kwargs):
+        return real(*args, **kwargs, max_turns=1)
+
+    monkeypatch.setattr(run.agent, "run_agent", bounded)
+    command = shlex.join(["printf", "%s", f"fake-token {header}"])
+    with server.endpoint(
+        "openai",
+        calls=[("run_shell_command", {"command": command})],
+    ) as (url, requests):
+        monkeypatch.setenv("AUTO_SYNC_LLM_URL", url + "/v1")
+        monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+        monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+        monkeypatch.setenv("AUTO_SYNC_LLM_EXTRA_HEADERS", "X-Fixture=" + header)
+        output = tmp_path / "research"
+        assert (
+            invoke(
+                "research",
+                "--repo",
+                scenario[0],
+                "--bundle",
+                prepared,
+                "--output",
+                output,
+            )
+            == 1
+        )
+    assert len(requests) == 1
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert diagnostic["returncode"] == 53
+    assert not diagnostic["timed_out"]
+    events = diagnostic["events"]
+    assert any(event["type"] == "assistant" for event in events)
+    assert "[REDACTED]" in json.dumps(events)
+    decoded = json.dumps(events, ensure_ascii=False) + diagnostic["stderr"]
+    assert "fake-token" not in decoded
+    assert "fake-header" not in decoded
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "failed"
+    assert len(result["candidates"]) == 6
+    assert {candidate["status"] for candidate in result["candidates"]} == {"failed"}
+
+
+def test_streamed_error_is_reported_without_stderr_warning(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    event = {
+        "type": "result",
+        "subtype": "error_during_execution",
+        "is_error": True,
+        "error": {"message": "[API Error: Request timed out.]"},
+    }
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    monkeypatch.setattr(
+        run.agent,
+        "run_agent",
+        lambda *_a, **_k: ProcessResult(
+            1,
+            json.dumps(event) + "\n",
+            "Warning: headless process",
+        ),
+    )
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "failed"
+    assert not result["publishable"]
+    assert "Request timed out" in result["reason"]
+    assert "Warning:" not in result["reason"]
+
+
+def test_final_artifact_redaction_preserves_nested_proposal(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    nested = {"identity": {"pr_number": None}, "echo": "null"}
+    event = {"type": "result", "result": json.dumps(nested)}
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    monkeypatch.setenv("AUTO_SYNC_LLM_EXTRA_HEADERS", "X-Fixture=null")
+    monkeypatch.setattr(
+        run.agent,
+        "run_agent",
+        lambda *_a, **_k: ProcessResult(53, json.dumps(event) + "\n", "failed"),
+    )
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert json.loads(diagnostic["events"][0]["result"]) == {
+        "identity": {"pr_number": None},
+        "echo": "[REDACTED]",
+    }
+
+
+def test_diagnostics_keep_one_event_per_protocol_frame(scenario, tmp_path, monkeypatch):
+    prepared = prepare(scenario, tmp_path)
+    stdout = json.dumps(
+        {"type": "assistant", "message": {"content": "a\u2028b\u2029c\u0085d"}},
+        ensure_ascii=False,
+    )
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    monkeypatch.setattr(
+        run.agent,
+        "run_agent",
+        lambda *_a, **_k: ProcessResult(
+            53,
+            stdout + "\nnot json\n",
+            "stale",
+        ),
+    )
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert diagnostic["returncode"] == 53
+    assert diagnostic["events"] == [
+        {"type": "assistant", "message": {"content": "a\u2028b\u2029c\u0085d"}},
+        {"type": "unparsed", "text": "not json"},
+    ]
 
 
 @pytest.mark.usefixtures("pinned_tools")

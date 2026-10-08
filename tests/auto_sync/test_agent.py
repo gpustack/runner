@@ -23,9 +23,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(FIXTURES))
 from server import endpoint
 
-from tools.auto_sync import agent
+from tools.auto_sync import agent, proposal
 from tools.auto_sync.agent import ProcessResult, run_agent, run_process, tool_guard
 from tools.auto_sync.model import ConfigurationError, normalize_inputs
+from tools.auto_sync.proposal import parse_agent_output, stream_lines
 
 
 @pytest.fixture
@@ -342,11 +343,15 @@ def test_real_cli_request_timeout_is_seconds(tool_bin, workspace, tmp_path, prot
     assert requests
     assert result.returncode != 0
     assert 0.05 <= requests[0]["closed_after"] < 0.5
-    assert (
-        result.timed_out
-        or "timeout" in result.stderr.lower()
-        or "timed out" in result.stderr.lower()
-    )
+    errors = [
+        event.get("error", {}).get("message", "")
+        for line in stream_lines(result.stdout)
+        if line.strip()
+        for event in [json.loads(line)]
+        if event.get("type") == "result" and event.get("is_error") is True
+    ]
+    error_text = (result.stderr + " ".join(errors)).lower()
+    assert result.timed_out or "timeout" in error_text or "timed out" in error_text
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Requires the Linux supervisor")
@@ -547,6 +552,120 @@ def test_real_cli_session_budgets(tool_bin, workspace, tmp_path, limits):
     count = len(requests)
     assert count <= 2
     assert not result.timed_out
+
+
+def test_turn_limit_preserves_completed_tool_events(tool_bin, workspace, tmp_path):
+    with endpoint(
+        "openai",
+        calls=[("run_shell_command", {"command": "printf 'fake-contract-token'"})],
+    ) as (url, requests):
+        result = run_agent(
+            config(url, "openai"),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Exercise the tool, then return the assessment.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+            max_turns=1,
+        )
+    assert result.returncode == 53
+    assert len(requests) == 1
+    assert not result.timed_out
+    events = [json.loads(line) for line in result.stdout.splitlines() if line.strip()]
+    blocks = [
+        block
+        for event in events
+        for block in event.get("message", {}).get("content", [])
+        if isinstance(block, dict)
+    ]
+    call = next(block for block in blocks if block.get("type") == "tool_use")
+    response = next(block for block in blocks if block.get("type") == "tool_result")
+    assert call["name"] == "run_shell_command"
+    assert response["tool_use_id"] == call["id"]
+    assert "fake-contract-token" not in result.stdout + result.stderr
+    assert "[REDACTED]" in json.dumps(response)
+
+
+def _streamed(stdout, returncode=0, stderr=""):
+    """Pretend the pinned process already produced this captured stdout."""
+
+    def runner(*_args, **_kwargs):
+        return ProcessResult(returncode, stdout, stderr)
+
+    return lambda: runner
+
+
+@pytest.mark.parametrize("header", ["null", "false", "true", "42", 'quoted"value'])
+def test_header_redaction_preserves_nested_proposal_scalars(header, monkeypatch):
+    # A header value that is also a JSON scalar word must not rewrite the nested
+    # proposal; an actual echo of the value is still scrubbed as text.
+    proposal = json.loads(
+        (Path(__file__).parent / "fixtures/proposals/ready.json").read_text(),
+    )
+    events = [
+        {"type": "assistant", "message": {"content": f"echo {header} here"}},
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "result": json.dumps(proposal),
+        },
+    ]
+    stdout = "".join(json.dumps(item) + "\n" for item in events)
+    monkeypatch.setattr(agent, "_process_runner", _streamed(stdout))
+    result = run_process(["qwen"], cwd=Path.cwd(), env={}, deadline=1, secrets=[header])
+    parsed = parse_agent_output(result)
+    assert parsed == proposal
+    assert parsed["identity"]["pr_number"] is None
+    assert parsed["groups"][0]["rows"][0]["torch"] is None
+    echoed = json.loads(stream_lines(result.stdout)[0])
+    assert echoed["message"]["content"] == "echo [REDACTED] here"
+
+
+@pytest.mark.parametrize(
+    "secret, scalar",
+    [("null", None), ("false", False), ("true", True), ("0", 0)],
+)
+def test_every_json_scalar_word_survives_nested_redaction(secret, scalar):
+    document = {"value": scalar, "list": [scalar], "echo": f"literal {secret}"}
+    event = {"type": "result", "result": json.dumps(document)}
+    scrubbed = proposal.redact(event, proposal.ordered_secrets([secret]))
+    nested = json.loads(scrubbed["result"])
+    assert nested == {"value": scalar, "list": [scalar], "echo": "literal [REDACTED]"}
+
+
+def test_process_redaction_keeps_literal_unicode_inside_one_event(monkeypatch):
+    event = {"type": "assistant", "text": "a\u2028b\u2029c\u0085d"}
+    stdout = json.dumps(event, ensure_ascii=False) + "\n"
+    monkeypatch.setattr(agent, "_process_runner", _streamed(stdout))
+    result = run_process(
+        ["qwen"],
+        cwd=Path.cwd(),
+        env={},
+        deadline=1,
+        secrets=["never"],
+    )
+    assert json.loads(result.stdout) == event
+
+
+def test_secret_header_redaction_preserves_json_booleans(tool_bin, workspace, tmp_path):
+    with endpoint(
+        "openai",
+        calls=[("run_shell_command", {"command": "printf false"})],
+    ) as (url, requests):
+        result = run_agent(
+            config(url, "openai", **{"llm-extra-headers": "X-Fixture=false"}),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Read the evidence, then return the assessment.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr
+    assert len(requests) == 2
+    events = [json.loads(line) for line in result.stdout.splitlines()]
+    assert events[-1]["is_error"] is False
+    assert "[REDACTED]" in result.stdout
 
 
 @pytest.mark.parametrize(

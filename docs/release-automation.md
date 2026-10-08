@@ -38,8 +38,13 @@ Read both `gpustack_runner/runner.py.json` and [Supported runners](supported-run
 An exact identity in either source prevents another discovery proposal.
 A merged `prepared` record counts while Pack is pending; an unmerged proposal does not.
 Compare structured backend, service, accelerator variant, engine version, and actual Ascend plugin version.
+Runtime lines and CPU platforms are evaluated when preparing the proposal and promoting its support record.
 Dockerfile pins help prepare changes but do not replace the detection sources.
 A failed read or parse is a failed inspection, not an absent version or an unchanged result.
+
+CANN aliases follow the packaging matrix: `950`, `A5`, and `950/A5` mean `950`.
+`A3`, `910C`, and `A3/910C` mean `a3`. `910B` means `910b`; `310P` means `310p`.
+Other hardware names are not inferred as aliases.
 
 At most one managed auto-sync upgrade PR remains open.
 Weekly and manual discovery report newer findings in the job summary while that PR is pending.
@@ -315,15 +320,31 @@ Candidate settings, environment files, and Git hooks cannot replace the frozen c
 | --- | --- |
 | Unchanged tool failure | At most two retries |
 | External command | 300 seconds |
-| Qwen session | 60 turns and 180 tool calls |
+| Qwen session | 180 turns and 180 tool calls |
 | Qwen wall time | 2400 seconds |
 | Outer deadline | 2700 seconds |
 | Actions job | 60 minutes |
 
 The outer deadline takes precedence over a longer model-request timeout.
+The turn budget matches the tool budget so sequential tool calls can use the available allowance.
 Cleanup must adopt, terminate, and reap orphaned descendants. Unconfirmed cleanup remains failed.
 Missing configuration, exhausted credentials, upstream timeouts, and commands waiting for input must end within their bounds.
 Unresolved decisions go in the job summary or existing PR. A later maintainer command starts a fresh run.
+
+Reserve the final quarter of session turns for edits and complete JSON. Reuse frozen release notes and acquired source trees.
+Batch independent reads and manifest queries. Complete independent groups before expanding research.
+Record specific missing facts for blocked groups and retain completed groups. Trusted validation runs in its separate job.
+
+Research uses streaming JSON so completed tool events survive an error or exhausted budget.
+Its artifact contains `diagnostics.json` with the exit code, timeout flag, elapsed agent time, parsed events, and stderr.
+Model tokens, GitHub tokens, and configured secret header values are redacted before upload.
+Inspect this file to locate repeated requests and tool failures. A diagnostic event is not an accepted proposal.
+Research failure reasons use structured CLI errors when available. Stderr remains in the diagnostic artifact.
+These artifacts follow the workflow's retention policy. Do not cache them or authentication settings.
+
+Actions summaries show the stage outcome, elapsed time, latest discovered versions, candidate outcomes, and PR link.
+The tool summary shows the cache outcome and installation time. Full transport JSON remains in artifacts.
+A session-wide failure is described once; candidate rows show its affected subscriptions without repeating the traceback.
 
 ## Runner and caches
 

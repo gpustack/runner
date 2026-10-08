@@ -25,6 +25,13 @@ from tools.auto_sync.model import (
     ModelConfig,
     select_token,
 )
+from tools.auto_sync.proposal import (
+    ProposalError,
+    load_json,
+    ordered_secrets,
+    redact,
+    stream_lines,
+)
 
 # Remove every built-in route to questions, planning, agents, or persistent work.
 DISABLED_TOOLS = [
@@ -51,6 +58,8 @@ DISABLED_TOOLS = [
     "propose_goal",
     "update_goal",
 ]
+MAX_SESSION_TURNS = 180
+MAX_TOOL_CALLS = 180
 
 
 @dataclass(frozen=True)
@@ -192,18 +201,19 @@ def run_process(
         stop_file=stop_file,
         input_text=input_text,
     )
-    stdout, stderr = result.stdout, result.stderr
-    redactions = {
-        value
-        for secret in secrets
-        if secret
-        for value in (secret, json.dumps(secret)[1:-1])
-    }
-    for secret in sorted(redactions, key=len, reverse=True):
-        stdout, stderr = (
-            stdout.replace(secret, "[REDACTED]"),
-            stderr.replace(secret, "[REDACTED]"),
-        )
+    ordered = ordered_secrets(secrets)
+
+    # Redact parsed events so JSON scalars keep their types, and frame only on
+    # the protocol LF; a nested proposal must survive redaction as JSON.
+    lines = []
+    for line in stream_lines(result.stdout):
+        try:
+            data = load_json(line)
+        except ProposalError:  # noqa: PERF203 - Preserve non-JSON or truncated process output.
+            lines.append(redact(line, ordered))
+        else:
+            lines.append(json.dumps(redact(data, ordered)))
+    stdout, stderr = "\n".join(lines), redact(result.stderr, ordered)
     if result.timed_out:
         stderr += "\nauto-sync: outer process deadline exceeded\n"
     return ProcessResult(result.returncode, stdout, stderr, result.timed_out)
@@ -284,8 +294,8 @@ def run_agent(
     runtime_dir: Path,
     mcp_servers: dict | None = None,
     deadline: float = 2700,
-    max_turns: int = 60,
-    max_tool_calls: int = 180,
+    max_turns: int = MAX_SESSION_TURNS,
+    max_tool_calls: int = MAX_TOOL_CALLS,
     wall_time: int = 2400,
 ) -> ProcessResult:
     """
@@ -432,7 +442,7 @@ def run_agent(
         "--advisor",
         "off",
         "--output-format",
-        "json",
+        "stream-json",
         "--max-session-turns",
         str(max_turns),
         "--max-tool-calls",
@@ -442,7 +452,7 @@ def run_agent(
         "--prompt",
         "Follow the task supplied on stdin.",
     ]
-    secrets = [*config.tokens]
+    secrets = [*config.tokens, *config.headers.values()]
     for server in (mcp_servers or {}).values():
         secrets.extend(server.get("env", {}).values())
     try:

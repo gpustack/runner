@@ -119,16 +119,80 @@ def validate_identity(identity):
         )
 
 
+def stream_lines(text: str) -> list[str]:
+    """
+    Frame NDJSON on its protocol LF boundary.
+
+    A JSON string may carry a literal U+2028, U+2029, or U+0085; the pinned CLI
+    emits only LF between events, so str.splitlines() would tear one event apart.
+    """
+    return text.split("\n")
+
+
+def ordered_secrets(secrets) -> list[str]:
+    """Match the longest secret first, including its JSON-escaped spelling."""
+    return sorted(
+        {
+            value
+            for secret in secrets
+            if secret
+            for value in (secret, json.dumps(secret)[1:-1])
+        },
+        key=len,
+        reverse=True,
+    )
+
+
+def redact(value, ordered: list[str]):
+    """
+    Scrub secret text from parsed data without disturbing JSON scalar types.
+
+    A nested JSON document inside a string field is redacted as structure, so a
+    secret such as ``null`` or ``false`` cannot rewrite its scalar values into
+    text and make the document unparsable.
+    """
+    if isinstance(value, str):
+        nested = _nested_json(value)
+        if nested is not None:
+            return json.dumps(redact(nested, ordered))
+        for secret in ordered:
+            value = value.replace(secret, "[REDACTED]")
+        return value
+    if isinstance(value, dict):
+        return {
+            redact(key, ordered): redact(item, ordered) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [redact(item, ordered) for item in value]
+    return value
+
+
+def _nested_json(value: str):
+    """Return a nested JSON document carried inside a string field, else None."""
+    stripped = value.strip()
+    if not stripped or stripped[0] not in "{[":
+        return None
+    try:
+        parsed = load_json(stripped)
+    except ProposalError:
+        return None
+    return parsed if isinstance(parsed, (dict, list)) else None
+
+
 def parse_agent_output(result) -> dict:
     """Extract schema data from T1's ProcessResult and the pinned Qwen event log."""
     require(
         result.returncode == 0 and not result.timed_out,
         "agent process failed or timed out",
     )
-    events = load_json(result.stdout)
+    events = (
+        load_json(result.stdout)
+        if result.stdout.lstrip().startswith("[")
+        else [load_json(line) for line in stream_lines(result.stdout) if line.strip()]
+    )
     require(
         isinstance(events, list) and bool(events),
-        "Qwen output must be an event array",
+        "Qwen output must contain events",
     )
     require(all(isinstance(event, dict) for event in events), "malformed Qwen event")
     final = events[-1]
