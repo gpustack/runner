@@ -678,7 +678,7 @@ Each task lists its focused tests; run the broader suite at the integration chec
 | `uv run pytest` | Run the complete project suite at integration checkpoints |
 | `uv run pre-commit run --all-files --show-diff-on-failure` | Run repository checks; inspect changes from fixing hooks |
 | `uv run mkdocs build --strict` | Build and validate documentation |
-| `actionlint .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml` | Validate affected workflows with configured custom runner labels |
+| `uv run python tools/auto_sync/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml` | Validate affected workflows with configured custom runner labels |
 | `make build` | Build the Python distribution; inspect generated version metadata |
 | `make package` | Local image packaging; excluded from auto-sync and pre-merge verification |
 
@@ -701,6 +701,16 @@ Three image-format examples are parsed as unresolved Markdown links.
 T12 fixes these documentation defects without changing public function behavior or suppressing warnings.
 Baseline actionlint also reports 18 ShellCheck findings in Pack metadata and manifest scripts.
 T7 corrects the affected variable quoting and grouped output redirection as it changes those steps.
+
+The pinned actionlint 1.7.12 rejects the documented `concurrency.queue` field.
+The upstream support change remains unreleased: [actionlint issue 657](https://github.com/rhysd/actionlint/issues/657).
+Keep the accepted `queue: max` workflow behavior.
+A small validation entry point must check queue values and their cancellation constraint before running actionlint.
+Reject dynamic queue values, invalid types, duplicate keys, and `max` with cancellation other than literal false.
+For actionlint only, remove the verified queue field from a temporary copy without modifying the workflow.
+Pass the repository runner-label configuration and preserve all other actionlint findings.
+Test valid queue configurations, invalid combinations, and unrelated syntax and shell errors.
+This compatibility step must not suppress unrelated lint diagnostics.
 
 ### Project Structure
 
@@ -1136,13 +1146,13 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Blocked by: T12
 
-  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_bootstrap.py`
+  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_bootstrap.py`, `tools/auto_sync/lint_workflows.py`
 
   Gate: review
 
-  Acceptance: Wire frozen-default-branch research, separate credential-free validation, and clean publication jobs. Expose the agreed model interface and variable/secret mapping. Use Monday 01:23 UTC, configurable Ubuntu runner, repository-wide queued concurrency, verified tool caching, restore-only revisions, and bounded execution. Fix CI path coverage for automation, skills, and docs. Simulate discover/propose/repeat/revise/fail without real GitHub writes or service builds; require Linux CLI contract tests to run, not skip.
+  Acceptance: Wire frozen-default-branch research, separate credential-free validation, and clean publication jobs. Expose the agreed model interface and variable/secret mapping. Use Monday 01:23 UTC, configurable Ubuntu runner, repository-wide queued concurrency, verified tool caching, restore-only revisions, and bounded execution. Fix CI path coverage for automation, skills, and docs. Validate queued concurrency through the strict actionlint compatibility entry point. Simulate discover/propose/repeat/revise/fail without real GitHub writes or service builds; require Linux CLI contract tests to run, not skip.
 
-  Verify: `uv run pytest tests/auto_sync/test_bootstrap.py tests/auto_sync/test_workflow.py tests/auto_sync/test_e2e.py`; `actionlint .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml`
+  Verify: `uv run pytest tests/auto_sync/test_bootstrap.py tests/auto_sync/test_workflow.py tests/auto_sync/test_e2e.py`; `uv run python tools/auto_sync/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml`
 
 - [x] **T14 · Add contribution certification and the adopter registry**
 
