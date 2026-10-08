@@ -60,4 +60,4 @@ PRUNED_RUNNERS="$(jq -cr \
 echo "[INFO] Pruned Runners:"
 jq -r '.' <<<"${PRUNED_RUNNERS}" | tee "${INPUT_FILE}" || true
 
-"${INPUT_WORKSPACE}"/merge_runner.sh
+INPUT_CATALOG_REFRESH=true "${INPUT_WORKSPACE}"/merge_runner.sh

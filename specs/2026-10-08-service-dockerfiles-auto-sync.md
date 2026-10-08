@@ -706,7 +706,8 @@ The pinned actionlint 1.7.12 rejects the documented `concurrency.queue` field.
 The upstream support change remains unreleased: [actionlint issue 657](https://github.com/rhysd/actionlint/issues/657).
 Keep the accepted `queue: max` workflow behavior.
 A small validation entry point must check queue values and their cancellation constraint before running actionlint.
-Reject dynamic queue values, invalid types, duplicate keys, and `max` with cancellation other than literal false.
+Reject dynamic queue values, invalid types, and duplicate keys.
+For `max`, require absent cancellation or literal false; GitHub defaults cancellation to false.
 For actionlint only, remove the verified queue field from a temporary copy without modifying the workflow.
 Pass the repository runner-label configuration and preserve all other actionlint findings.
 Test valid queue configurations, invalid combinations, and unrelated syntax and shell errors.
@@ -1072,15 +1073,15 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack/test_dockerfile_selection.py tests/pack/test_probe_wiring.py`
 
-- [ ] **T7 · Connect final-image receipts to manifest and catalog publication**
+- [x] **T7 · Connect final-image receipts to manifest and catalog publication**
 
   Blocked by: T2, T6
 
-  Owns: `.github/workflows/pack.yml`, `pack/collect_dependencies.py`, `pack/merge_runner.sh`, `tests/pack/test_collect_dependencies.py`, `tests/pack/test_merge_runner.py`, `tests/pack/test_probe_wiring.py`, `tests/pack/fixtures/dependencies/**`
+  Owns: `.github/workflows/pack.yml`, `pack/collect_dependencies.py`, `pack/merge_runner.sh`, `pack/prune_runner.sh`, `pack/discard_runner.sh`, `tests/pack/test_collect_dependencies.py`, `tests/pack/test_merge_runner.py`, `tests/pack/test_probe_wiring.py`, `tests/pack/fixtures/dependencies/**`
 
   Gate: review
 
-  Acceptance: Capture Package digest; collect on each native platform; assemble manifests from the exact verified digests; verify descriptors before atomic catalog replacement. Reject stale/missing/mismatched receipts and never reuse old dependencies for changed images. Preserve untouched rows and the exactly-one-row post-operation rule. Define partial-rerun receipt replacement. Replace export-stage workflow use while retaining old Dockerfile context until T8. Resolve baseline ShellCheck findings in the affected workflow scripts without suppressing checks.
+  Acceptance: Capture Package digest; collect on each native platform; assemble manifests from the exact verified digests; verify descriptors before atomic catalog replacement. Reject stale/missing/mismatched receipts and never reuse old dependencies for changed images. Preserve untouched rows and the exactly-one-row post-operation rule. Define partial-rerun receipt replacement. Replace export-stage workflow use while retaining old Dockerfile context until T8. Resolve baseline ShellCheck findings in the affected workflow scripts without suppressing checks. Preserve catalog-only refresh for existing prune/discard callers through an explicit mode that cannot replace Pack receipt validation.
 
   Verify: `uv run pytest tests/pack`
 
@@ -1088,7 +1089,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Blocked by: T7
 
-  Owns: `pack/*/Dockerfile.*`, `pack/shared/probe_dependencies.sh`, `.github/workflows/pack.yml`, `tests/pack/test_probe_wiring.py`, `pack/.post_operation/README.md`
+  Owns: `pack/*/Dockerfile.*`, `pack/shared/probe_dependencies.sh`, `.github/workflows/pack.yml`, `tests/pack/test_probe_wiring.py`, `tests/pack/test_dependencies.py` (docstring only), `pack/.post_operation/README.md`
 
   Gate: review
 
@@ -1200,6 +1201,13 @@ Independent review confirmed strict active selection and all 17 retained service
 Full active job and manifest output matches the baseline, including 31 jobs and 21 manifests.
 Sampled historical operations preserve selection and output; all historical source files remain unchanged.
 Scoped hooks and Bash checks passed. Image execution and Ubuntu CI remain unverified.
+
+T7 validation: 332 packaging checks passed, including complete-set publication and maintenance caller regressions.
+Independent review and lead reproduction found the same prune/discard regression; an explicit catalog-refresh mode fixes it.
+Lead comparison confirmed complete catalog and fixture parity with the previous maintenance behavior.
+Invalid receipt sets prevent registry publication and leave both output files unchanged.
+Pack, prune, and discard workflow lint checks passed, as did scoped hooks and Bash syntax checks.
+Real image collection, registry publication, and Actions reruns remain unverified.
 
 T14 validation: DCO matches the supplied committed reference byte for byte.
 The LICENSE diff changes only the project copyright year.

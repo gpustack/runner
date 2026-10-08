@@ -1,18 +1,14 @@
-"""Structural invariant tests for the dependency-probe wiring in pack/.
+"""Central collection wiring and recipe checks during the staged migration.
 
-pack.yml is `workflow_dispatch` only, so no pull request ever builds an image: a
-missing or mis-wired probe produces no CI signal at all, and surfaces only when
-someone dispatches a build or cuts a release. This file is that missing signal.
-
-Coverage is derived, not hardcoded. The (backend, service) pairs come from
-pack/matrix.yaml, and each pair is resolved by the shared Dockerfile selector.
-So only the targets that are actually buildable are required to carry the probe,
-and a merged Dockerfile left stale by the per-service split is not. Adding a
-backend, a service, or a matrix rule extends this coverage on its own.
+The workflow must retain Package digests and collect on each native build job.
+The old recipe mounts remain checked until their removal in the next task.
+Buildable recipe pairs come from the matrix and the shared Dockerfile selector.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -348,4 +344,174 @@ def test_every_buildable_target_is_wired():
         f"{len(unwired)} of {len(BUILD_TARGETS)} buildable target(s) across "
         f"{len(PACK_DOCKERFILES)} Dockerfile(s) are not wired for dependency "
         f"probing: {unwired}"
+    )
+
+
+@pytest.fixture
+def pack_workflow():
+    result = subprocess.run(  # noqa: S603
+        ["yq", "-o=json", ".", str(REPO_ROOT / ".github/workflows/pack.yml")],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(result.stdout)
+
+
+def test_workflow_collects_final_package_digest_on_native_build_job(pack_workflow):
+    build = pack_workflow["jobs"]["build"]
+    steps = {step["name"]: step for step in build["steps"]}
+    assert build["runs-on"] == "${{ matrix.runner }}"
+    assert steps["Package"]["id"] == "package"
+    assert (
+        steps["Record Package Output"]["env"]["PACKAGE_DIGEST"]
+        == "${{ steps.package.outputs.digest }}"
+    )
+    assert (
+        steps["Record Package Output"]["env"]["BUILD_ATTEMPT"]
+        == "${{ github.run_attempt }}"
+    )
+    assert "collect-record" in steps["Collect Dependencies"]["run"]
+    assert (
+        steps["Collect Dependencies"]["if"]
+        == "${{ github.event.inputs.dry_run == 'false' }}"
+    )
+    assert "Export Dependencies" not in steps
+    names = list(steps)
+    assert (
+        names.index("Package")
+        < names.index("Record Package Output")
+        < names.index("Upload Package Output")
+        < names.index("Collect Dependencies")
+        < names.index("Upload Dependencies")
+    )
+
+
+def test_workflow_reruns_replace_only_the_selected_job_artifacts(pack_workflow):
+    steps = {step["name"]: step for step in pack_workflow["jobs"]["build"]["steps"]}
+    for name, prefix in (
+        ("Upload Package Output", "builds"),
+        ("Upload Dependencies", "dependencies"),
+    ):
+        upload = steps[name]
+        assert upload["with"]["name"] == prefix + "-${{ matrix.platform_tag }}"
+        assert upload["with"]["overwrite"] is True
+        assert upload["with"]["if-no-files-found"] == "error"
+    assert "always()" in steps["Upload Dependencies"]["if"]
+    assert "invocation" not in steps["Upload Dependencies"]["with"]["name"]
+    outputs = pack_workflow["jobs"]["expand-matrix"]["outputs"]
+    assert outputs["context"] == "${{ steps.freeze.outputs.context }}"
+
+
+def test_workflow_serializes_and_verifies_manifest_before_catalog(pack_workflow):
+    assert pack_workflow["concurrency"]["cancel-in-progress"] is False
+    manifest = pack_workflow["jobs"]["manifest"]
+    steps = {step["name"]: step for step in manifest["steps"]}
+    assert "build" in manifest["needs"]
+    assert " publish " in steps["Manifest"]["run"]
+    assert (
+        steps["Manifest"]["env"]["INPUT_CONTEXT"]
+        == "${{ needs.expand-matrix.outputs.context }}"
+    )
+    merge = pack_workflow["jobs"]["merge-runner"]
+    assert "manifest" in merge["needs"]
+    steps = {step["name"]: step for step in merge["steps"]}
+    env = steps["Merge Runner"]["env"]
+    assert env["INPUT_CONTEXT"] == "${{ needs.expand-matrix.outputs.context }}"
+    assert env["INPUT_MANIFESTS_FILE"].endswith("/manifests/manifests.json")
+    assert {step.get("with", {}).get("pattern") for step in merge["steps"]} >= {
+        "builds-*",
+        "dependencies-*",
+    }
+
+
+def test_workflow_freeze_and_record_commands_execute(tmp_path, pack_workflow):
+    job = {
+        "backend": "cuda",
+        "service": "vllm",
+        "platform": "linux/amd64",
+        "platform_tag": "cuda-vllm-linux-amd64",
+        "tag": "cuda-vllm",
+    }
+    steps = {
+        step["name"]: step for step in pack_workflow["jobs"]["expand-matrix"]["steps"]
+    }
+    env = {
+        **os.environ,
+        "RUNNER_TEMP": str(tmp_path),
+        "GITHUB_OUTPUT": str(tmp_path / "output"),
+        "GITHUB_RUN_ID": "123",
+        "GITHUB_RUN_ATTEMPT": "1",
+        "GITHUB_SHA": "b" * 40,
+        "INPUT_NAMESPACE": "gpustack",
+        "INPUT_REPOSITORY": "runner",
+        "BUILD_JOBS": json.dumps([job]),
+        "MANIFEST_JOBS": json.dumps({job["tag"]: [job["platform_tag"]]}),
+    }
+    result = subprocess.run(  # noqa: S603
+        ["bash", "-c", steps["Freeze Invocation"]["run"]],  # noqa: S607
+        env=env,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    context = json.loads((tmp_path / "output").read_text().removeprefix("context="))
+    assert context["matrix"]["build_jobs"] == [job]
+    assert context["invocation"]["source_revision"] == env["GITHUB_SHA"]
+    assert context["invocation"]["workflow_run"] == env["GITHUB_RUN_ID"]
+    steps = {step["name"]: step for step in pack_workflow["jobs"]["build"]["steps"]}
+    env.update(
+        INPUT_CONTEXT=json.dumps(context),
+        PACKAGE_DIGEST="sha256:" + "a" * 64,
+        BUILD_JOB=job["platform_tag"],
+        BUILD_ATTEMPT="2",
+    )
+    command = ["bash", "-c", steps["Record Package Output"]["run"]]
+    result = subprocess.run(  # noqa: S603 - Executes the repository workflow against fake inputs.
+        command,
+        env=env,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    record_path = tmp_path / "build.json"
+    record = json.loads(record_path.read_text())
+    assert record["invocation"] == context["invocation"]
+    assert record["build"]["image_digest"] == env["PACKAGE_DIGEST"]
+    assert record["build"]["attempt"] == 2
+    assert record["build"]["platform"] == job["platform"]
+    before = record_path.read_bytes()
+    env["PACKAGE_DIGEST"] = ""
+    result = subprocess.run(  # noqa: S603 - Executes the repository workflow against fake inputs.
+        command,
+        env=env,
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode != 0
+    assert "invalid build image_digest" in result.stderr
+    assert record_path.read_bytes() == before
+
+
+def test_workflow_keeps_first_invocation_immutable(pack_workflow):
+    steps = {
+        step["name"]: step for step in pack_workflow["jobs"]["expand-matrix"]["steps"]
+    }
+    assert steps["Download Frozen Invocation"]["if"] == "${{ github.run_attempt > 1 }}"
+    upload = steps["Upload Frozen Invocation"]
+    assert upload["if"] == "${{ github.run_attempt == 1 }}"
+    assert upload["with"]["name"] == "pack-context"
+    assert upload["with"].get("overwrite", False) is False
+    assert (
+        '--previous "$RUNNER_TEMP/invocation/context.json"'
+        in steps["Freeze Invocation"]["run"]
     )

@@ -64,4 +64,4 @@ DISCARDED_RUNNERS="$(jq -cr \
 echo "[INFO] Discarded Runners:"
 jq -r '.' <<<"${DISCARDED_RUNNERS}" | tee "${INPUT_FILE}" || true
 
-"${INPUT_WORKSPACE}"/merge_runner.sh
+INPUT_CATALOG_REFRESH=true "${INPUT_WORKSPACE}"/merge_runner.sh

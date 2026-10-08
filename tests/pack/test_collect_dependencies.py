@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -772,3 +773,413 @@ def test_docker_timeout_removes_named_container(
         assert "cleanup failed" in receipt["error"]
     run = calls[2]
     assert calls[3] == ["docker", "rm", "--force", run[run.index("--name") + 1]]
+
+
+@pytest.fixture
+def publication(tmp_path):
+    jobs = [
+        {
+            "backend": "cuda",
+            "service": "vllm",
+            "platform": f"linux/{arch}",
+            "platform_tag": f"linux-{arch}-cuda13.0-vllm0.29.0",
+            "tag": "cuda13.0-vllm0.29.0",
+        }
+        for arch in ("amd64", "arm64")
+    ]
+    matrix = {
+        "repository": "gpustack/runner",
+        "build_jobs": jobs,
+        "manifest_jobs": {jobs[0]["tag"]: [job["platform_tag"] for job in jobs]},
+    }
+    context = {
+        "invocation": {
+            "workflow_run": "123",
+            "source_revision": "b" * 40,
+            "matrix_digest": collector.content_digest(matrix),
+            "mapping_digest": collector.content_digest(MAPPING),
+        },
+        "matrix": matrix,
+    }
+    for index, job in enumerate(jobs):
+        build = {
+            "job": job["platform_tag"],
+            "attempt": 1,
+            "backend": job["backend"],
+            "service": job["service"],
+            "image": f"gpustack/runner:{job['platform_tag']}",
+            "platform": job["platform"],
+            "image_digest": "sha256:" + str(index + 1) * 64,
+        }
+        for prefix, filename, value in (
+            (
+                "builds",
+                "build.json",
+                {"invocation": context["invocation"], "build": build},
+            ),
+            (
+                "dependencies",
+                "receipt.json",
+                {
+                    "schema_version": 1,
+                    "invocation": context["invocation"],
+                    "build": build,
+                    "status": "succeeded",
+                    "distributions": {"torch": f"2.9.0+{index}"},
+                    "interpreter": "/opt/venv/bin/python",
+                    "prefix": "/opt/venv",
+                },
+            ),
+        ):
+            directory = tmp_path / f"{prefix}-{build['job']}"
+            directory.mkdir()
+            (directory / filename).write_text(json.dumps(value))
+    return context, tmp_path
+
+
+def test_full_matrix_is_required_independently_of_arrived_outputs(publication):
+    context, directory = publication
+    receipts = collector.validate_artifacts(context, MAPPING, directory)
+    assert [r["build"]["platform"] for r in receipts] == [
+        "linux/amd64",
+        "linux/arm64",
+    ]
+    for prefix, filename in (
+        ("builds", "build.json"),
+        ("dependencies", "receipt.json"),
+    ):
+        path = (
+            directory / f"{prefix}-{context['matrix']['build_jobs'][1]['platform_tag']}"
+        )
+        (path / filename).unlink()
+        path.rmdir()
+    with pytest.raises(ValueError, match="expected matrix"):
+        collector.validate_artifacts(context, MAPPING, directory)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["workflow_run", "source_revision", "matrix_digest", "mapping_digest"],
+)
+def test_package_output_invocation_is_independently_checked(publication, field):
+    context, directory = publication
+    path = next(directory.glob("builds-*/build.json"))
+    record = json.loads(path.read_text())
+    record["invocation"][field] = "stale"
+    path.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="invocation"):
+        collector.validate_artifacts(context, MAPPING, directory)
+
+
+def test_partial_rerun_replaces_only_selected_job(publication):
+    context, directory = publication
+    job = context["matrix"]["build_jobs"][0]["platform_tag"]
+    record_path = directory / f"builds-{job}" / "build.json"
+    record = collector.record_build(context, MAPPING, job, 2, "sha256:" + "f" * 64)
+    record_path.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match="stale receipt build"):
+        collector.validate_artifacts(context, MAPPING, directory)
+    receipt_path = directory / f"dependencies-{job}" / "receipt.json"
+    receipt = json.loads(receipt_path.read_text())
+    receipt["build"] = record["build"]
+    receipt_path.write_text(json.dumps(receipt))
+    receipts = collector.validate_artifacts(context, MAPPING, directory)
+    assert [r["build"]["attempt"] for r in receipts] == [2, 1]
+    assert receipts[1]["distributions"] == {"torch": "2.9.0+1"}
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["platform", "digest", "missing", "extra", "duplicate", "single"],
+)
+def test_manifest_descriptor_gate_rejects_wrong_children(publication, change):
+    context, directory = publication
+    receipts = collector.validate_artifacts(context, MAPPING, directory)
+    builds = [r["build"] for r in receipts]
+    manifest = {
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "manifests": [
+            {
+                "digest": b["image_digest"],
+                "platform": {
+                    "os": "linux",
+                    "architecture": b["platform"].split("/")[1],
+                },
+            }
+            for b in builds
+        ],
+    }
+    collector.verify_manifest(manifest, builds)
+    if change == "platform":
+        manifest["manifests"][0]["platform"]["architecture"] = "arm64"
+    elif change == "digest":
+        manifest["manifests"][0]["digest"] = "sha256:" + "e" * 64
+    elif change == "missing":
+        manifest["manifests"].pop()
+    elif change == "extra":
+        manifest["manifests"].append(
+            {"digest": DIGEST, "platform": {"os": "linux", "architecture": "s390x"}},
+        )
+    elif change == "duplicate":
+        manifest["manifests"].append(copy.deepcopy(manifest["manifests"][0]))
+    else:
+        manifest = {"schemaVersion": 2, "config": {"digest": DIGEST}}
+    with pytest.raises(ValueError, match="manifest"):
+        collector.verify_manifest(manifest, builds)
+
+
+def test_publish_uses_package_digests_and_rechecks_published_tag(
+    publication,
+    monkeypatch,
+):
+    context, directory = publication
+    calls = []
+    manifest = {
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "manifests": [
+            {
+                "digest": "sha256:" + str(index + 1) * 64,
+                "platform": {"os": "linux", "architecture": arch},
+            }
+            for index, arch in enumerate(("amd64", "arm64"))
+        ],
+    }
+
+    def docker(command, *, timeout, binary=False):
+        assert timeout > 0
+        calls.append(command)
+        if "create" in command:
+            return ""
+        assert binary
+        return json.dumps(manifest).encode()
+
+    monkeypatch.setattr(collector, "run_command", docker)
+    published = collector.publish_manifests(context, MAPPING, directory)
+    create = calls[0]
+    assert create[-2:] == ["gpustack/runner@sha256:" + n * 64 for n in ("1", "2")]
+    assert not any("linux-amd64-" in arg for arg in create)
+    dependencies = collector.catalog_dependencies(
+        context,
+        MAPPING,
+        directory,
+        published,
+    )
+    assert list(dependencies.values()) == [{"torch": "2.9.0+0"}, {"torch": "2.9.0+1"}]
+    # A different manifest, even with the same children, no longer identifies
+    # the manifest whose publication was validated.
+    manifest["annotations"] = {"changed": "after-publication"}
+    with pytest.raises(ValueError, match="published tag changed"):
+        collector.catalog_dependencies(context, MAPPING, directory, published)
+
+
+def test_context_accepts_actual_expanded_matrix_order(tmp_path):
+    output = tmp_path / "outputs"
+    subprocess.run(
+        ["bash", str(ROOT / "pack" / "expand_matrix.sh")],  # noqa: S607
+        env={
+            **os.environ,
+            "INPUT_BACKEND": "cuda",
+            "INPUT_TARGET": "vllm",
+            "INPUT_FOR_RELEASE": "true",
+            "INPUT_ARGS": "",
+            "INPUT_POST_OPERATION": "",
+            "INPUT_WORKSPACE": str(ROOT / "pack"),
+            "INPUT_TEMPDIR": str(tmp_path),
+            "GITHUB_OUTPUT": str(output),
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    expanded = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    matrix = {
+        "repository": "gpustack/runner",
+        **{key: json.loads(expanded[key]) for key in ("build_jobs", "manifest_jobs")},
+    }
+    context = {
+        "matrix": matrix,
+        "invocation": {
+            "workflow_run": "123",
+            "source_revision": "b" * 40,
+            "matrix_digest": collector.content_digest(matrix),
+            "mapping_digest": collector.content_digest(MAPPING),
+        },
+    }
+    assert set(collector.validate_context(context, MAPPING)) == {
+        job["platform_tag"] for job in matrix["build_jobs"]
+    }
+
+
+def test_manifest_identity_hashes_original_registry_bytes(publication, monkeypatch):
+    context, directory = publication
+    builds = [
+        r["build"] for r in collector.validate_artifacts(context, MAPPING, directory)
+    ]
+    manifest = {
+        "schemaVersion": 2,
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "manifests": [
+            {
+                "digest": b["image_digest"],
+                "platform": {
+                    "os": "linux",
+                    "architecture": b["platform"].split("/")[1],
+                },
+            }
+            for b in builds
+        ],
+    }
+    raw = json.dumps(manifest, indent=2).replace("\n", "\r\n").encode()
+    binary = directory / "bin"
+    binary.mkdir()
+    docker = binary / "docker"
+    docker.write_text(
+        f"#!{sys.executable}\nimport sys\nsys.stdout.buffer.write({raw!r})\n",
+    )
+    docker.chmod(0o755)
+    monkeypatch.setenv("PATH", str(binary) + os.pathsep + os.environ["PATH"])
+    assert (
+        collector.inspect_manifest("gpustack/runner:tag", builds)
+        == "sha256:" + hashlib.sha256(raw).hexdigest()
+    )
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["matrix_digest", "manifest_members", "duplicate_job", "duplicate_platform"],
+)
+def test_frozen_context_rejects_inconsistent_selection(publication, failure):
+    context, _ = publication
+    if failure == "matrix_digest":
+        context["matrix"]["build_jobs"][0]["backend"] = "rocm"
+    else:
+        matrix = context["matrix"]
+        if failure == "manifest_members":
+            matrix["manifest_jobs"][matrix["build_jobs"][0]["tag"]].pop()
+        elif failure == "duplicate_job":
+            matrix["build_jobs"].append(copy.deepcopy(matrix["build_jobs"][0]))
+        else:
+            matrix["build_jobs"][1]["platform"] = "linux/amd64"
+        context["invocation"]["matrix_digest"] = collector.content_digest(matrix)
+    with pytest.raises(ValueError, match=r"matrix|manifest"):
+        collector.validate_context(context, MAPPING)
+
+
+def test_missing_receipt_blocks_manifest_writes(publication, monkeypatch):
+    context, directory = publication
+    next(directory.glob("dependencies-*/receipt.json")).unlink()
+    calls = []
+    monkeypatch.setattr(
+        collector,
+        "run_command",
+        lambda *args, **_kwargs: calls.append(args),
+    )
+    with pytest.raises(ValueError, match="artifact files"):
+        collector.publish_manifests(context, MAPPING, directory)
+    assert calls == []
+
+
+def test_collect_record_cli_uses_the_independent_package_output(
+    publication,
+    monkeypatch,
+):
+    context, directory = publication
+    context_path = directory / "context.json"
+    context_path.write_text(json.dumps(context))
+    record_path = next(directory.glob("builds-*/build.json"))
+    record = json.loads(record_path.read_text())
+    output = directory / "receipt.json"
+    calls = []
+
+    def execute(image_ref, platform, backend, service, mapping, timeout):
+        calls.append((image_ref, platform, backend, service, mapping, timeout))
+        return {
+            "interpreter": "/usr/bin/python3",
+            "prefix": "/usr",
+            "distributions": {"torch": "2.9.0+local"},
+        }
+
+    monkeypatch.setattr(collector, "run_image", execute)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "collect_dependencies.py",
+            "collect-record",
+            "--context",
+            str(context_path),
+            "--mapping",
+            str(ROOT / "pack" / "dependencies.json"),
+            "--build",
+            str(record_path),
+            "--output",
+            str(output),
+        ],
+    )
+    assert collector.main() == 0
+    receipt = json.loads(output.read_text())
+    assert receipt["build"] == record["build"]
+    assert calls[0][:4] == (
+        "gpustack/runner@" + record["build"]["image_digest"],
+        record["build"]["platform"],
+        "cuda",
+        "vllm",
+    )
+    assert receipt["distributions"] == {"torch": "2.9.0+local"}
+    before = output.read_bytes()
+    record["build"]["platform"] = (
+        "linux/arm64" if record["build"]["platform"] == "linux/amd64" else "linux/amd64"
+    )
+    record_path.write_text(json.dumps(record))
+    assert collector.main() == 1
+    assert output.read_bytes() == before
+    assert len(calls) == 1
+
+
+def test_duplicate_receipt_file_is_not_silently_ignored(publication):
+    context, directory = publication
+    path = next(directory.glob("dependencies-*/receipt.json"))
+    (path.parent / "receipt-old.json").write_bytes(path.read_bytes())
+    with pytest.raises(ValueError, match="unexpected artifact files"):
+        collector.validate_artifacts(context, MAPPING, directory)
+
+
+def test_freeze_rerun_requires_the_original_invocation(publication, monkeypatch):
+    context, directory = publication
+    original = directory / "original.json"
+    original.write_text(json.dumps(context))
+    matrix = directory / "matrix.json"
+    matrix.write_text(json.dumps(context["matrix"]))
+    output = directory / "context.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "collect_dependencies.py",
+            "freeze",
+            "--matrix",
+            str(matrix),
+            "--mapping",
+            str(ROOT / "pack" / "dependencies.json"),
+            "--workflow-run",
+            "123",
+            "--source-revision",
+            "b" * 40,
+            "--previous",
+            str(original),
+            "--output",
+            str(output),
+        ],
+    )
+    assert collector.main() == 0
+    assert json.loads(output.read_text()) == context
+    before = output.read_bytes()
+    context["matrix"]["build_jobs"][0]["args"] = ["CHANGED=1"]
+    matrix.write_text(json.dumps(context["matrix"]))
+    assert collector.main() == 1
+    assert output.read_bytes() == before
+    original.unlink()
+    assert collector.main() == 1
+    assert output.read_bytes() == before
