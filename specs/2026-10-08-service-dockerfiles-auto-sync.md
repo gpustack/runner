@@ -324,7 +324,7 @@ The contract below is self-contained and does not depend on that integration's s
 | --- | --- |
 | `llm-url` | Required provider base URL; normalize it for the selected protocol without duplicating API path segments |
 | `llm-model` | Required provider model identifier; no hardcoded provider or implicit model fallback |
-| `llm-protocol` | Optional explicit `openai`, `openai-responses`, or `anthropic`; overrides the legacy selector |
+| `llm-protocol` | Optional explicit `openai`, `openai-responses`, or `anthropic`; overrides the legacy selector; effective default is `openai` |
 | `llm-use-anthropic` | Legacy string selector; default `false`; documented true values select Anthropic when no explicit protocol exists |
 | `llm-thinking` | Provider thinking setting, `enabled` or `disabled`; default `disabled` for the OpenAI-compatible GLM profile |
 | `llm-thinking-clear` | Provider-specific boolean string; default `false` for the OpenAI-compatible GLM profile |
@@ -340,6 +340,38 @@ The contract below is self-contained and does not depend on that integration's s
 Provide a reusable invocation interface using these names.
 Scheduled and manual runs must resolve the same settings from repository or organization variables and secrets.
 Document a GLM-5.3 example with a maintainer-supplied endpoint and model identifier.
+
+Scheduled and manual runs use the following repository or organization configuration names.
+The reusable workflow retains the `llm-*` interface and maps these values explicitly.
+
+| Configuration | Kind | Interface or purpose |
+| --- | --- | --- |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL` | Variable, required | `llm-url` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL` | Variable, required | `llm-model` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN` | Secret, required | `llm-auth-token` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL` | Variable, optional | `llm-protocol`; effective default `openai` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC` | Variable, optional | `llm-use-anthropic` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING` | Variable, optional | `llm-thinking` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR` | Variable, optional | `llm-thinking-clear` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE` | Variable, optional | `llm-temperature` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P` | Variable, optional | `llm-top-p` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT` | Variable, optional | `llm-reasoning-effort` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT` | Variable, optional | `llm-timeout` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER` | Variable, optional | `llm-auth-header`, the header name only |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS` | Secret, optional | `llm-extra-headers`, which can contain credentials |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` | Variable, optional | `llm-extra-body`, without credentials |
+| `CI_PRT_GENERATOR_ID` | Secret, required | Existing repository GitHub App ID |
+| `CI_PRT_GENERATOR_KEY` | Secret, required | Existing repository GitHub App private key |
+| `AUTOSYNC_RUNNER` | Variable, optional | Runner label; defaults to `ubuntu-22.04-4x` |
+
+Use uppercase names with underscores for GitHub configuration.
+Derive the bot account from the existing GitHub App authentication step's `app-slug` output, followed by `[bot]`.
+Do not require a separate bot-login variable or another GitHub App.
+Before research, a trusted credential step may mint a repository-scoped App token with explicit read-only permissions.
+Pass only that read token to Qwen and GitHub MCP.
+Keep the App private key in trusted credential steps and out of the agent process, workspace, and artifacts.
+Mint the App write token only in the clean publication job after validation.
+Verify that its App identity matches the account recorded before research.
 
 Configuration requirements:
 
@@ -362,6 +394,9 @@ Configuration requirements:
 - Trim surrounding whitespace from comma-separated tokens and discard empty entries.
 - Reject embedded token whitespace and an empty usable-token list.
 - If multiple equivalent tokens are supplied, use bounded, protocol-aware selection.
+- Before starting Qwen, try tokens in configured order and select the first successful probe.
+- Skip tokens whose probe reports exhausted quota, rate limits, or invalid authentication.
+- Keep the selected token for that single agent invocation; a later run selects again.
 - Fail if no token succeeds; do not select a token merely because a transport request failed.
 - Mask each token and treat transport failure as failure, not evidence of a usable credential.
 - Do not fall back to an interactive login or an unconfigured model.
@@ -468,9 +503,9 @@ Also verify that the headless run actually loads the project instructions and re
 
 #### F8. Runner and cache behavior
 
-Use `ubuntu-22.04` as the default runner.
-Allow maintainers to select a runner through `AUTO_SYNC_RUNNER`.
-Support the supplied `ubuntu-22.04-4x` and `ubuntu-22.04-8x` labels when the repository can access them.
+Use `ubuntu-22.04-4x` as the default auto-sync runner.
+Allow maintainers to select a runner through `AUTOSYNC_RUNNER`.
+Support `ubuntu-22.04` and the supplied `ubuntu-22.04-8x` label as explicit alternatives when the repository can access them.
 
 This task uses remote model inference and static repository checks.
 It does not require a GPU or one automation runner per target CPU architecture.
@@ -963,6 +998,7 @@ Validate these constraints before issuing write credentials.
 Do not pass an agent worktree or executable artifact to the publication job.
 Apply the validated patch to a clean checkout with hooks disabled.
 Create the GitHub App write token only in that job.
+The research credential step uses the same App with explicit read-only permissions and supplies its derived bot identity.
 Use the repository's existing App credential pattern.
 Never expose that token to the agent.
 
@@ -1130,7 +1166,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/auto_sync/test_proposal.py tests/auto_sync/test_checks.py`
 
-- [ ] **T11 · Implement single-PR publication and focused revision**
+- [x] **T11 · Implement single-PR publication and focused revision**
 
   Blocked by: T10
 
@@ -1166,13 +1202,45 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Blocked by: T12
 
-  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_bootstrap.py`, `tools/auto_sync/lint_workflows.py`
+  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_bootstrap.py`, `tools/auto_sync/lint_workflows.py`, `tests/auto_sync/test_lint_workflows.py`
 
   Gate: review
 
   Acceptance: Wire frozen-default-branch research, separate credential-free validation, and clean publication jobs. Expose the agreed model interface and variable/secret mapping. Use Monday 01:23 UTC, configurable Ubuntu runner, repository-wide queued concurrency, verified tool caching, restore-only revisions, and bounded execution. Fix CI path coverage for automation, skills, and docs. Validate queued concurrency through the strict actionlint compatibility entry point. Simulate discover/propose/repeat/revise/fail without real GitHub writes or service builds; require Linux CLI contract tests to run, not skip.
 
   Verify: `uv run pytest tests/auto_sync/test_bootstrap.py tests/auto_sync/test_workflow.py tests/auto_sync/test_e2e.py`; `uv run python tools/auto_sync/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml`
+
+T13 uses three disjoint implementation tasks. Accept the integrated result only after all three pass together.
+
+- [ ] **T13a · Connect trusted discovery, research, validation, and publication**
+
+  Blocked by: T12
+
+  Owns: `tools/auto_sync/run.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`
+
+  Acceptance: Implement the three-job controller with automatic upstream, Ascend pairing, manifest, and source acquisition. Persist frozen context for publication recovery. Verify the real project instructions and MCP loading. Publish the CLI contract before workflow wiring.
+
+  Verify: `uv run pytest tests/auto_sync/test_e2e.py`
+
+- [ ] **T13b · Wire workflow triggers, credentials, cache, and Linux CI**
+
+  Blocked by: T12
+
+  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_bootstrap.py`
+
+  Acceptance: Wire the T13a CLI into the three jobs. Use the agreed configuration, automatic App identity, weekly schedule, queued concurrency, and verified caches. Require Linux contract tests to execute in CI. Coordinate against the written CLI contract while T13a progresses.
+
+  Verify: `uv run pytest tests/auto_sync/test_workflow.py tests/auto_sync/test_bootstrap.py`
+
+- [ ] **T13c · Validate queued concurrency before workflow linting**
+
+  Blocked by: T12
+
+  Owns: `tools/auto_sync/lint_workflows.py`, `tests/auto_sync/test_lint_workflows.py`
+
+  Acceptance: Reject invalid queue values, duplicate keys, and cancellation conflicts. Lint temporary copies with pinned actionlint. Preserve unrelated diagnostics, ShellCheck checks, and custom runner labels. Never rewrite source workflows.
+
+  Verify: `uv run pytest tests/auto_sync/test_lint_workflows.py`; run the T13 workflow lint command after integration.
 
 - [x] **T14 · Add contribution certification and the adopter registry**
 
@@ -1227,6 +1295,13 @@ Lead comparison confirmed complete catalog and fixture parity with the previous 
 Invalid receipt sets prevent registry publication and leave both output files unchanged.
 Pack, prune, and discard workflow lint checks passed, as did scoped hooks and Bash syntax checks.
 Real image collection, registry publication, and Actions reruns remain unverified.
+
+T11 validation: Publication, model configuration, proposal, checks, and discovery suites passed all 268 cases.
+Independent review found nullable commit authors could interrupt context recovery; both affected paths now have regression coverage.
+Stateful GitHub fixtures verify one formal PR, focused revisions, human-work preservation, concurrent updates, and partial recovery.
+A fresh process recovered publication from persisted original context and artifact; regenerating context is not equivalent.
+Token preflight checks cover authentication, quota, and rate-limit failures for all three protocols.
+Scoped hooks passed. Real GitHub publication, model providers, and Actions execution remain unverified.
 
 T14 validation: DCO matches the supplied committed reference byte for byte.
 The LICENSE diff changes only the project copyright year.

@@ -169,7 +169,8 @@ def test_token_selection_masks_every_token_and_rejects_transport_failure():
         ("anthropic", "/v1/messages", "content"),
     ],
 )
-def test_real_token_probe_uses_native_protocol(protocol, path, key):
+@pytest.mark.parametrize("failure_status", [401, 402, 403, 429])
+def test_real_token_probe_uses_native_protocol(protocol, path, key, failure_status):
     captured = []
 
     class Handler(BaseHTTPRequestHandler):
@@ -180,12 +181,14 @@ def test_real_token_probe_uses_native_protocol(protocol, path, key):
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             captured.append((self.path, self.headers["X-Token"], body))
             accepted = self.headers["X-Token"] == "fake-second"
-            self.send_response(200 if accepted else 401)
+            self.send_response(200 if accepted else failure_status)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(
                 json.dumps(
-                    {key: [{"text": "OK"}]} if accepted else {"error": "invalid token"},
+                    {key: [{"text": "OK"}]}
+                    if accepted
+                    else {"error": "token unavailable"},
                 ).encode(),
             )
 
