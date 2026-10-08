@@ -219,7 +219,9 @@ Release selection:
 - Treat vLLM-Ascend prereleases as normal plugin candidates for GPUStack Runner.
 - Pair each Ascend plugin candidate with the stable vLLM version supported by upstream.
 - Preserve the actual Ascend prerelease version instead of relabeling it as an upstream stable release.
-- Explain this project policy in README and the release guide.
+- Use the stable vLLM version for Runner CANN/vLLM releases and image tags.
+- Mark CANN/vLLM support as RC in README and explain the policy in the release guide.
+- Keep that RC display marker separate from the engine and actual plugin versions.
 - Handle other engine prereleases only when a maintainer explicitly requests them.
 
 For every candidate, the skill must:
@@ -1116,7 +1118,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/auto_sync/test_discovery.py tests/pack/test_merge_runner.py`
 
-- [ ] **T10 · Validate complete release proposals as data**
+- [x] **T10 · Validate complete release proposals as data**
 
   Blocked by: T9
 
@@ -1245,6 +1247,14 @@ Checkpoints:
 Tasks with overlapping ownership run in dependency order.
 Keep the system working between migration steps.
 Do not remove the old recipe or probe path before its replacement is covered.
+
+T10 validation: Independent review found five defects; lead reproductions confirmed them and exposed two related consistency gaps.
+Corrections bind reports to effective configurations, actual base-image stages, accepted support records, and sourced Ascend pairing evidence.
+Patch checks now apply each source patch sequence in order. LMCache checks include matrix overrides.
+The proposal and discovery regression suites passed 168 tests; scoped hooks passed.
+Six offline proposals against the repository's actual recipe layout passed, covering 22 compatibility rows.
+Registry and pairing values in those layout fixtures are synthetic; they do not establish upstream or runtime compatibility.
+CANN fixtures accept a stable engine with an actual rc plugin without deriving the plugin from tag spelling or the README RC marker.
 
 T12a validation: Strict MkDocs and scoped text/Python hooks passed.
 AST comparison confirmed that both Python files changed only in docstrings; a runtime-change negative control was rejected.
