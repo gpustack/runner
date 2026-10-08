@@ -24,10 +24,6 @@ on:
       - "v*-dev"
     paths-ignore:
       - "!.github/workflows/ci.yml"
-      - "docs/**"
-      - "tools/**"
-      - "**.md"
-      - "**.mdx"
       - "**.png"
       - "**.jpg"
       - "**.jpeg"
@@ -39,10 +35,6 @@ on:
       - "v*-dev"
     paths-ignore:
       - "!.github/workflows/ci.yml"
-      - "docs/**"
-      - "tools/**"
-      - "**.md"
-      - "**.mdx"
       - "**.png"
       - "**.jpg"
       - "**.jpeg"
@@ -78,7 +70,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Make
         run: |
-          make ci
+          make deps install lint
+          uv run pytest tests/gpustack_runner tests/pack
+          make clean build
         env:
           LINT_DIRTY: "true"
       - name: Upload Assets
@@ -87,3 +81,60 @@ jobs:
           retention-days: 5
           path: dist/*
           name: gputack-runner-${{ matrix.os }}-${{ matrix.python-version }}
+
+  # Production process supervision and pinned CLI contracts require Linux.
+  auto-sync-contract:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.24"
+          enable-cache: true
+          python-version: "3.10"
+      - name: Install locked Python dependencies
+        run: |
+          make prepare
+          uv sync --locked --all-packages
+      - name: Identify tool cache
+        id: tool-key
+        run: |
+          key=$(bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" --cache-key)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore tool installation
+        id: restore-tools
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: ${{ steps.tool-key.outputs.key }}
+      - name: Install or verify pinned tools
+        id: tools
+        run: |
+          bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
+          jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
+      - name: Save verified tools from trusted runs
+        if: github.event_name != 'pull_request' && steps.restore-tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: ${{ steps.tool-key.outputs.key }}
+      - name: Run all offline automation contracts
+        id: contracts
+        env:
+          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+        run: uv run pytest tests/auto_sync
+      - name: Validate workflows
+        id: workflow-lint
+        env:
+          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+        run: |
+          export PATH="$AUTO_SYNC_TOOL_BIN:$PATH"
+          uv run python tools/auto_sync/lint_workflows.py \
+            .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
+      - name: Validate documentation
+        run: uv run mkdocs build --strict

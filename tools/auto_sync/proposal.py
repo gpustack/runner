@@ -281,7 +281,7 @@ def _patch_decision(patch, row):
     )
 
 
-def _row(row, ready):
+def _row(row, ready, engine_prereleases):
     fields = {
         "backend",
         "service",
@@ -313,7 +313,11 @@ def _row(row, ready):
     row["variant"] = canonical_variant(row["backend"], row["variant"])
     engine = version(row["engine_version"])
     require(
-        not (engine.is_prerelease or engine.is_devrelease or engine.local),
+        not (engine.is_devrelease or engine.local)
+        and (
+            not engine.is_prerelease
+            or (row["backend"], row["service"], str(engine)) in engine_prereleases
+        ),
         "engine must use the stable release policy",
     )
     for field in ("runtime", "old_engine_version", "python", "torch"):
@@ -405,7 +409,12 @@ def _row(row, ready):
     )
 
 
-def validate_proposal(data: dict, expected_identity: dict) -> dict:
+def validate_proposal(
+    data: dict,
+    expected_identity: dict,
+    *,
+    engine_prereleases: set | None = None,
+) -> dict:
     """Return a normalized copy or fail closed before any candidate file is read."""
     try:
         require(
@@ -422,6 +431,28 @@ def validate_proposal(data: dict, expected_identity: dict) -> dict:
             "proposal identity differs from frozen identity",
         )
         validate_identity(expected_identity)
+        permission = engine_prereleases if engine_prereleases is not None else set()
+        require(isinstance(permission, set), "invalid engine prerelease permission")
+        require(
+            not permission or expected_identity["mode"] == "revise",
+            "prerelease permission requires an authorized revision",
+        )
+        for item in permission:
+            require(
+                isinstance(item, tuple)
+                and len(item) == 3
+                and item[0] in {"cuda", "rocm"}
+                and item[1] in {"vllm", "sglang"},
+                "invalid engine prerelease permission scope",
+            )
+            parsed = version(item[2])
+            require(
+                parsed.is_prerelease
+                and not parsed.is_devrelease
+                and not parsed.local
+                and str(parsed) == item[2],
+                "invalid exact engine prerelease permission",
+            )
         data = copy.deepcopy(data)
         require(isinstance(data["groups"], list), "invalid compatibility groups")
         groups = {}
@@ -448,7 +479,7 @@ def validate_proposal(data: dict, expected_identity: dict) -> dict:
             )
             ready = group["status"] == "ready"
             for row in group["rows"]:
-                _row(row, ready)
+                _row(row, ready, permission)
                 manifest = row["manifest"]
                 if manifest is not None:
                     image = row["base_image"]

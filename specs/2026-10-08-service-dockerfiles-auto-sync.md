@@ -1,6 +1,6 @@
 # Spec: Service Dockerfiles and Automated Runner Updates
 
-Status: Building
+Status: Built
 Type: Feature
 
 ## Summary
@@ -716,11 +716,13 @@ Do not infer its behavior from a different Node version already installed on the
 
 These commands are validation requirements, not evidence that they have already passed.
 Run them from the repository root.
-Install locked dependencies first.
+Run `make prepare` before installing locked dependencies.
+It generates the ignored version appendix required by the package builder.
 Each task lists its focused tests; run the broader suite at the integration checkpoints.
 
 | Command | Purpose and constraint |
 | --- | --- |
+| `make prepare` | Generate version metadata required by a fresh checkout |
 | `uv sync --locked --all-packages` | Install locked dependencies without updating the lockfile |
 | `bash tools/auto_sync/bootstrap.sh` | Proposed T1 entry point; install and verify tools in a dedicated temporary prefix |
 | `uv run pytest tests/pack` | Exercise Dockerfile selection, collection, and catalog behavior |
@@ -1221,11 +1223,11 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/auto_sync/test_project_instructions.py`; `uv run mkdocs build --strict`
 
-- [ ] **T13 · Wire weekly, manual, and comment workflows with offline end-to-end gates**
+- [x] **T13 · Wire weekly, manual, and comment workflows with offline end-to-end gates**
 
   Blocked by: T1b, T12
 
-  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_bootstrap.py`, `tools/auto_sync/lint_workflows.py`, `tests/auto_sync/test_lint_workflows.py`
+  Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tools/auto_sync/proposal.py`, `tools/auto_sync/checks.py`, `tools/auto_sync/publish.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_proposal.py`, `tests/auto_sync/test_checks.py`, `tests/auto_sync/test_publish.py`, `tests/auto_sync/test_bootstrap.py`, `tools/auto_sync/lint_workflows.py`, `tests/auto_sync/test_lint_workflows.py`
 
   Gate: review
 
@@ -1235,17 +1237,17 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
 T13 uses three disjoint implementation tasks. Accept the integrated result only after all three pass together.
 
-- [ ] **T13a · Connect trusted discovery, research, validation, and publication**
+- [x] **T13a · Connect trusted discovery, research, validation, and publication**
 
   Blocked by: T12
 
-  Owns: `tools/auto_sync/run.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`
+  Owns: `tools/auto_sync/run.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tools/auto_sync/proposal.py`, `tools/auto_sync/checks.py`, `tools/auto_sync/publish.py`, `tests/auto_sync/test_proposal.py`, `tests/auto_sync/test_checks.py`, `tests/auto_sync/test_publish.py` (trusted prerelease authorization propagation only)
 
   Acceptance: Implement the three-job controller with automatic upstream, Ascend pairing, manifest, and source acquisition. Persist frozen context for publication recovery. Verify the real project instructions and MCP loading. Publish the CLI contract before workflow wiring.
 
   Verify: `uv run pytest tests/auto_sync/test_e2e.py`
 
-- [ ] **T13b · Wire workflow triggers, credentials, cache, and Linux CI**
+- [x] **T13b · Wire workflow triggers, credentials, cache, and Linux CI**
 
   Blocked by: T1b, T12
 
@@ -1255,7 +1257,7 @@ T13 uses three disjoint implementation tasks. Accept the integrated result only 
 
   Verify: `uv run pytest tests/auto_sync/test_workflow.py tests/auto_sync/test_bootstrap.py`
 
-- [ ] **T13c · Validate queued concurrency before workflow linting**
+- [x] **T13c · Validate queued concurrency before workflow linting**
 
   Blocked by: T12
 
@@ -1359,9 +1361,22 @@ AST comparison confirmed that both Python files changed only in docstrings; a ru
 The guides were checked against the collector, query matcher, resolver, and support-promotion code.
 Navigation and README integration remain in T12.
 
+T13 validation: The complete offline suite passed 904 checks without skips in Ubuntu 22.04 on emulated amd64.
+It used locked Python 3.10 dependencies, pinned tools, a read-only source mount, and no external network.
+Real Qwen, crane, Git, HTTP, and MCP fixtures verified all three protocols and the trusted stage controller.
+The first full run exposed a test environment error: a global PYTHONPATH defeated an isolation check.
+Removing that injection restored the isolated environment; the final complete run passed.
+Independent review found two defects, both reproduced and corrected with positive and negative controls.
+The controller now preserves trusted discovery failures and prevents already represented identities or variants from becoming updates.
+Registry checks normalize default CPU variants while rejecting non-default variants and ambiguous descriptors.
+The revised controller suite passed 52 checks on macOS. Four actual workflow setup steps passed from fresh offline clones.
+All-file hooks, workflow lint, strict documentation, and Python source distribution and wheel builds passed.
+Actual GitHub Actions, App permissions, model providers, registry publication, native service images, and GPU behavior remain unverified.
+Image production and final-image measurements remain post-merge Pack tasks.
+
 ### Test Plan
 
-- [ ] I/we understand the owners of the involved components may require updates to existing tests before implementation is complete.
+- [x] I/we understand the owners of the involved components may require updates to existing tests before implementation is complete.
 
 #### Prerequisite testing updates
 

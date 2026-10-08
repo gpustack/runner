@@ -52,6 +52,7 @@ Pack owns digest-bound collection and catalog updates. Local image builds do not
 Run commands from the repository root:
 
 ```sh
+make prepare
 uv sync --locked --all-packages
 uv run pytest tests/gpustack_runner
 uv run pytest tests/pack

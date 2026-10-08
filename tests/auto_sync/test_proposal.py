@@ -241,3 +241,56 @@ def test_same_image_reference_cannot_have_conflicting_manifest_evidence(proposal
     proposal["groups"][0]["rows"].append(row)
     with pytest.raises(ProposalError, match="manifest"):
         validate_proposal(proposal, proposal["identity"])
+
+
+def test_explicit_prerelease_permission_is_exact_scoped_and_revision_only(proposal):
+    raw = copy.deepcopy(proposal)
+    raw["identity"].update(
+        mode="revise",
+        pr_number=1,
+        command_id=7,
+        command_digest="b" * 64,
+    )
+    raw["groups"][0]["rows"][0]["engine_version"] = "0.30.0rc1"
+    permission = {("cuda", "vllm", "0.30.0rc1")}
+    with pytest.raises(ProposalError, match="stable"):
+        validate_proposal(raw, raw["identity"])
+    accepted = validate_proposal(raw, raw["identity"], engine_prereleases=permission)
+    assert accepted["groups"][0]["rows"][0]["engine_version"] == "0.30.0rc1"
+    with pytest.raises(ProposalError, match="stable"):
+        validate_proposal(
+            raw,
+            raw["identity"],
+            engine_prereleases={("rocm", "vllm", "0.30.0rc1")},
+        )
+    raw["identity"].update(
+        mode="discover",
+        pr_number=None,
+        command_id=None,
+        command_digest=None,
+    )
+    with pytest.raises(ProposalError, match="revision"):
+        validate_proposal(raw, raw["identity"], engine_prereleases=permission)
+
+
+def test_forged_output_permission_and_cann_prerelease_are_rejected(proposal):
+    raw = copy.deepcopy(proposal)
+    raw["identity"].update(
+        mode="revise",
+        pr_number=1,
+        command_id=7,
+        command_digest="b" * 64,
+    )
+    row = raw["groups"][0]["rows"][0]
+    row["engine_version"] = "0.30.0rc1"
+    raw["engine_prereleases"] = [["cuda", "vllm", "0.30.0rc1"]]
+    with pytest.raises(ProposalError, match="fields"):
+        validate_proposal(raw, raw["identity"])
+    del raw["engine_prereleases"]
+    row.update(backend="cann", variant="310p", plugin_version="0.30.0rc1")
+    with pytest.raises(ProposalError, match="permission"):
+        validate_proposal(
+            raw,
+            raw["identity"],
+            engine_prereleases={("cann", "vllm", "0.30.0rc1")},
+        )

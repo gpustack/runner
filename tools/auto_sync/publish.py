@@ -851,7 +851,16 @@ def _discover(github, repo, context, checked):
     )
 
 
-def publish(github, repo, context, artifact, *, sources=None, ascend_pairs=None):
+def publish(
+    github,
+    repo,
+    context,
+    artifact,
+    *,
+    sources=None,
+    ascend_pairs=None,
+    engine_prereleases=None,
+):
     """
     Recheck an artifact with trusted code and publish only its accepted patch.
 
@@ -864,13 +873,14 @@ def publish(github, repo, context, artifact, *, sources=None, ascend_pairs=None)
     try:
         identity = context["identity"]
         validate_identity(identity)
-        raw = verify_artifact(artifact, identity)
+        raw = verify_artifact(artifact, identity, engine_prereleases=engine_prereleases)
         checked = validate_candidate(
             Path(repo),
             raw,
             identity,
             sources=sources,
             ascend_pairs=ascend_pairs,
+            engine_prereleases=engine_prereleases,
         )
         if context["status"] != "ready":
             return _result(context["status"], context["reason"], checked)

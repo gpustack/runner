@@ -715,7 +715,12 @@ def report_digest(artifact):
     ).hexdigest()
 
 
-def verify_artifact(artifact: dict, expected_identity: dict) -> dict:
+def verify_artifact(
+    artifact: dict,
+    expected_identity: dict,
+    *,
+    engine_prereleases: set | None = None,
+) -> dict:
     """
     Check transport integrity and return proposal data for clean-runner rechecks.
 
@@ -771,7 +776,11 @@ def verify_artifact(artifact: dict, expected_identity: dict) -> dict:
                     and validation.get("runtime") == "unverified",
                     "ready group lacks trusted static checks",
                 )
-        return validate_proposal(raw, expected_identity)
+        return validate_proposal(
+            raw,
+            expected_identity,
+            engine_prereleases=engine_prereleases,
+        )
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         if isinstance(exc, ProposalError):
             raise
@@ -786,6 +795,7 @@ def validate_candidate(
     *,
     sources: dict | None = None,
     ascend_pairs: dict | None = None,
+    engine_prereleases: set | None = None,
 ) -> dict:
     """
     Return checked data and only accepted groups' patch; malformed data raises.
@@ -799,7 +809,11 @@ def validate_candidate(
     Individual static failures remain in their group's report and assessment.
     Publication must verify identity and recompute checks on its clean runner.
     """
-    data = validate_proposal(proposal, expected_identity)
+    data = validate_proposal(
+        proposal,
+        expected_identity,
+        engine_prereleases=engine_prereleases,
+    )
     with tempfile.TemporaryDirectory(prefix="runner-proposal-") as temporary:
         scratch = Path(temporary)
         home = scratch / "home"

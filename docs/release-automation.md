@@ -344,6 +344,7 @@ Weekly discovery cannot assume retention; follow [GitHub's cache limits and evic
 Run from the repository root with fake credentials and local endpoints only:
 
 ```sh
+make prepare
 uv sync --locked --all-packages
 ```
 

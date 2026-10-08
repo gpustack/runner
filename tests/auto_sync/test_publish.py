@@ -479,7 +479,9 @@ def test_publication_recheck_receives_independent_upstream_sources_and_pairs(
         ]
         == "published"
     )
-    assert observed == [{"sources": sources, "ascend_pairs": pairs}]
+    assert observed == [
+        {"sources": sources, "ascend_pairs": pairs, "engine_prereleases": None},
+    ]
 
 
 @pytest.mark.parametrize("change", ["permission", "closed", "fork", "owner", "branch"])
@@ -558,3 +560,56 @@ def test_discovery_preserves_unclaimed_branch_with_nullable_author(scenario):
     assert result["status"] == "deferred"
     assert git(repo, "rev-parse", BRANCH) == human
     assert not service.prs
+
+
+def test_publication_revalidates_exact_prerelease_permission(scenario):
+    repo, _, api, _, _ = scenario
+    initial(scenario)
+    _event, context, _ = revision(scenario, "/auto-sync\nUse vLLM 0.31.0rc1 for CUDA.")
+    raw = json.loads(
+        (Path(__file__).parent / "fixtures/proposals/ready.json").read_text(),
+    )
+    raw["identity"] = context["identity"]
+    row = raw["groups"][0]["rows"][0]
+    row.update(
+        old_engine_version="0.30.0",
+        engine_version="0.31.0rc1",
+        base_image="vllm/vllm-openai:v0.31.0rc1",
+    )
+    patches = []
+    for path in ("pack/cuda/Dockerfile.vllm", "pack/matrix.yaml", SUPPORT):
+        old = git(repo, "show", context["identity"]["head_sha"] + ":" + path) + "\n"
+        if path == SUPPORT:
+            new = old.replace(
+                "<!-- runner-support-records:end -->",
+                "| cuda | 13.0.1 | vllm | - | 0.31.0rc1 | - | linux/amd64 | prepared |\n<!-- runner-support-records:end -->",
+            )
+        else:
+            new = old.replace("0.30.0", "0.31.0rc1")
+        patches.append(
+            f"diff --git a/{path} b/{path}\n"
+            + "".join(
+                difflib.unified_diff(
+                    old.splitlines(keepends=True),
+                    new.splitlines(keepends=True),
+                    fromfile="a/" + path,
+                    tofile="b/" + path,
+                ),
+            ),
+        )
+    raw["groups"][0]["patch"] = "".join(patches)
+    permission = {("cuda", "vllm", "0.31.0rc1")}
+    checked = validate_candidate(
+        repo,
+        raw,
+        raw["identity"],
+        engine_prereleases=permission,
+    )
+    assert checked["patch"]
+    head = git(repo, "rev-parse", context["branch"])
+    rejected = publish(api, repo, context, checked)
+    assert rejected["status"] == "failed"
+    assert git(repo, "rev-parse", context["branch"]) == head
+    accepted = publish(api, repo, context, checked, engine_prereleases=permission)
+    assert accepted["status"] == "published"
+    assert git(repo, "rev-parse", context["branch"] + "^") == head

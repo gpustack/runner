@@ -748,3 +748,31 @@ def test_ascend_plugin_uses_sourced_pairing_not_image_tag_spelling(
         assert (
             validate(candidate, ascend_pairs=pairs)["groups"][0]["status"] == "failed"
         )
+
+
+def test_prerelease_checks_and_transport_require_same_trusted_permission(candidate):
+    repo, raw = candidate
+    raw = json.loads(json.dumps(raw).replace("0.30.0", "0.30.0rc1"))
+    raw["identity"].update(
+        mode="revise",
+        pr_number=1,
+        command_id=7,
+        command_digest="b" * 64,
+    )
+    permission = {("cuda", "vllm", "0.30.0rc1")}
+    checked = validate_candidate(
+        repo,
+        raw,
+        raw["identity"],
+        engine_prereleases=permission,
+    )
+    assert checked["patch"]
+    assert checked["groups"][0]["validation"]["status"] == "passed"
+    with pytest.raises(ProposalError, match="stable"):
+        verify_artifact(checked, raw["identity"])
+    assert (
+        verify_artifact(checked, raw["identity"], engine_prereleases=permission)[
+            "groups"
+        ][0]["status"]
+        == "ready"
+    )
