@@ -304,7 +304,9 @@ macOS can run local protocol fixtures with a bounded private test driver.
 Those fixtures verify actual requests and instruction loading, not Linux process cleanup.
 Linux CI must run the supervisor and fast-orphan checks without skipping them.
 
-Qwen uses closed stdin, preconfigured authentication, automatic approval of enabled task tools, and finite budgets.
+Qwen receives task context on finite stdin with EOF. Authentication is configured before startup.
+Enabled task tools use automatic approval and finite budgets.
+Task context stays out of process arguments. Reject UTF-8 input above the pinned CLI's 8 MiB limit before authentication probes.
 Question tools, interactive planning, nested agents, interactive login, and persistent sessions are disabled.
 Project instructions, skill discovery, and read-only MCP remain active; safe mode is unsuitable because it disables required customizations.
 Candidate settings, environment files, and Git hooks cannot replace the frozen controlling policy.

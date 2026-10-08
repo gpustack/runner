@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -53,17 +54,20 @@ def tool_bin(tmp_path, monkeypatch):
     return path
 
 
-def _local_cli_process(argv, *, cwd, env, deadline, stop_file):
-    process = subprocess.Popen(  # noqa: S603 - controlled fixture CLI only.
-        argv,
-        cwd=cwd,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        start_new_session=True,
-    )
+def _local_cli_process(argv, *, cwd, env, deadline, stop_file, input_text):
+    with tempfile.TemporaryFile() as input_stream:
+        input_stream.write(input_text.encode("utf-8"))
+        input_stream.seek(0)
+        process = subprocess.Popen(  # noqa: S603 - controlled fixture CLI only.
+            argv,
+            cwd=cwd,
+            env=env,
+            stdin=input_stream,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
     expires = time.monotonic() + deadline
     timed_out = False
     try:
@@ -156,6 +160,59 @@ def test_stdin_eof_and_secret_redaction(tmp_path):
     assert result.returncode == 0
     assert not result.timed_out
     assert result.stdout.strip() == "[REDACTED]"
+
+
+def test_real_cli_receives_large_prompt_without_argv_limit(
+    tool_bin,
+    workspace,
+    tmp_path,
+):
+    prompt = (
+        "START_OF_RELEASE_CONTEXT\n"
+        + "x" * (2 * 1024 * 1024)
+        + "\nEND_OF_RELEASE_CONTEXT"
+    )
+    with endpoint("openai", tools=False) as (url, requests):
+        result = run_agent(
+            config(url, "openai", **{"llm-context-window-size": "1000000"}),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt=prompt,
+            runtime_dir=tmp_path / "runtime",
+            deadline=30,
+        )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not result.timed_out
+    body = requests[-1]["body"]
+    user = [message for message in body["messages"] if message["role"] == "user"]
+    contents = [message["content"] for message in user]
+    text = "\n".join(
+        content
+        if isinstance(content, str)
+        else "\n".join(block["text"] for block in content if block["type"] == "text")
+        for content in contents
+    )
+    assert prompt in text
+
+
+def test_prompt_over_cli_stdin_limit_rejects_before_token_probe(
+    tool_bin,
+    workspace,
+    tmp_path,
+):
+    with (
+        endpoint("openai", tools=False) as (url, requests),
+        pytest.raises(ConfigurationError, match="prompt exceeds"),
+    ):
+        run_agent(
+            config(url, "openai"),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="界" * (3 * 1024 * 1024),
+            runtime_dir=tmp_path / "runtime",
+        )
+    assert requests == []
+    assert not (tmp_path / "runtime").exists()
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="Requires the Linux supervisor")
@@ -645,7 +702,7 @@ def test_real_cli_stop_hook_reports_effective_context_window(
     observed = tmp_path / "context.json"
     runner = agent._process_runner()  # noqa: SLF001 - controlled fixture boundary.
 
-    def capture_context(argv, *, cwd, env, deadline, stop_file):
+    def capture_context(argv, *, cwd, env, deadline, stop_file, input_text):
         settings_path = Path(env["QWEN_HOME"]) / "settings.json"
         settings = json.loads(settings_path.read_text())
         settings["hooks"]["Stop"] = [
@@ -666,7 +723,14 @@ def test_real_cli_stop_hook_reports_effective_context_window(
             },
         ]
         settings_path.write_text(json.dumps(settings))
-        return runner(argv, cwd=cwd, env=env, deadline=deadline, stop_file=stop_file)
+        return runner(
+            argv,
+            cwd=cwd,
+            env=env,
+            deadline=deadline,
+            stop_file=stop_file,
+            input_text=input_text,
+        )
 
     monkeypatch.setattr(agent, "_process_runner", lambda: capture_context)
     with endpoint(protocol, tools=False) as (url, requests):

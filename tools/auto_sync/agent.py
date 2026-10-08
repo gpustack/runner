@@ -77,10 +77,13 @@ def _supervise(request: dict) -> dict:
         raise OSError(ctypes.get_errno(), msg)
     children = Path(f"/proc/self/task/{os.getpid()}/children")
     children.read_text()  # Check procfs before launching any agent process.
-    process = subprocess.Popen(  # noqa: S603 - trusted controller argv.
-        request["argv"],
-        stdin=subprocess.DEVNULL,
-    )
+    with tempfile.TemporaryFile() as input_stream:
+        input_stream.write(request["input_text"].encode("utf-8"))
+        input_stream.seek(0)
+        process = subprocess.Popen(  # noqa: S603 - trusted controller argv.
+            request["argv"],
+            stdin=input_stream,
+        )
     expires = time.monotonic() + request["deadline"]
     stop_file = Path(request["stop_file"]) if request["stop_file"] else None
     timed_out = False
@@ -115,7 +118,7 @@ def _supervise(request: dict) -> dict:
     }
 
 
-def _linux_process(argv, *, cwd, env, deadline, stop_file):
+def _linux_process(argv, *, cwd, env, deadline, stop_file, input_text):
     # Regular files cannot leave communicate() waiting on an orphan's pipe.
     with (
         tempfile.TemporaryFile() as stdout,
@@ -142,6 +145,7 @@ def _linux_process(argv, *, cwd, env, deadline, stop_file):
                 "argv": argv,
                 "deadline": deadline,
                 "stop_file": str(stop_file) if stop_file else None,
+                "input_text": input_text,
             },
         ).encode()
         result = {"returncode": 1, "timed_out": False, "cleaned": False}
@@ -174,8 +178,9 @@ def run_process(
     deadline: float,
     secrets: list[str] | tuple[str, ...] = (),
     stop_file: Path | None = None,
+    input_text: str = "",
 ) -> ProcessResult:
-    """Close stdin and bound execution plus orphan cleanup on Linux."""
+    """Provide finite stdin with EOF and bound execution plus orphan cleanup."""
     if deadline <= 0:
         msg = "The process deadline must be positive"
         raise ConfigurationError(msg)
@@ -185,6 +190,7 @@ def run_process(
         env=env,
         deadline=deadline,
         stop_file=stop_file,
+        input_text=input_text,
     )
     stdout, stderr = result.stdout, result.stderr
     redactions = {
@@ -299,6 +305,10 @@ def run_agent(
         raise ConfigurationError(msg)
     if not prompt.strip() or not (workspace / "AGENTS.md").is_file():
         msg = "Task and trusted AGENTS.md are required"
+        raise ConfigurationError(msg)
+    # Qwen 0.25.0 truncates stdin above 8 MiB; never lose frozen task context.
+    if len(prompt.encode("utf-8")) > 8 * 1024 * 1024:
+        msg = "Agent prompt exceeds the pinned CLI stdin limit"
         raise ConfigurationError(msg)
     # Reject automatic startup configuration instead of trusting its precedence.
     for name in (
@@ -430,7 +440,7 @@ def run_agent(
         "--max-wall-time",
         str(wall_time),
         "--prompt",
-        prompt,
+        "Follow the task supplied on stdin.",
     ]
     secrets = [*config.tokens]
     for server in (mcp_servers or {}).values():
@@ -443,6 +453,7 @@ def run_agent(
             deadline=deadline,
             secrets=secrets,
             stop_file=guard_state.with_suffix(".failed"),
+            input_text=prompt,
         )
         if guard_state.with_suffix(".failed").exists():
             return ProcessResult(
