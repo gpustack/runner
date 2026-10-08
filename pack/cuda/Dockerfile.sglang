@@ -9,7 +9,7 @@ ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## Keep >= 0.4.6 and in sync with the ROCm and vLLM pins: SGLang's lmc_radix_cache.py imports
 ## `lmcache.integration.sglang.multi_process_adapter`, added in 0.4.6, and the MP wire protocol
 ## has no version handshake. The SGLang base ships no lmcache, so it is always built from source.
-ARG SGLANG_LMCACHE_VERSION=0.5.4
+ARG SGLANG_LMCACHE_VERSION=0.5.5
 ARG SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda13
 ARG SGLANG_AWS_EFA_VERSION=1.46.0
 
@@ -192,6 +192,10 @@ RUN <<EOF
     ## Note: don't pin cuda-bindings —— cu129 base has 12.9.4, cu130 base has 13.2.0,
     ## both compatible with their respective torch. Hardcoding 12.9.4 on cu130 downgrades
     ## and breaks `torch -> cuda-bindings<14,>=13.0.3` requirement.
+    ## 0.5.5 generates its gRPC stubs at build time (setup.py _BuildPyWithGrpcStubs);
+    ## provide the pinned codegen tools its build-system requirements name, since
+    ## `--no-isolation` skips installing them.
+    uv pip install grpcio==1.84.0 grpcio-tools==1.84.0
     pushd /tmp/lmcache \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
         && cat /tmp/lmcache/pyproject.toml \
@@ -373,7 +377,7 @@ RUN <<EOF
     # both share the same cupy/ tree, so uninstalling one breaks the other. Purge both, then
     # reinstall only the variant matching the CUDA major we build for, at the version already
     # present in the image. Since 0.4.6 lmcache splits its requirements per CUDA major, so our
-    # 0.5.4 pin agrees with this reinstall (see LMCACHE_CUDA_MAJOR in the build stage above),
+    # 0.5.5 pin agrees with this reinstall (see LMCACHE_CUDA_MAJOR in the build stage above),
     # leaving MSCCL++ as the only source that has to be corrected here.
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"

@@ -2,17 +2,22 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.1
 ARG CUDA_ARCHS
-ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-ubuntu2404
-ARG VLLM_VERSION=0.29.0
-ARG VLLM_TORCH_VERSION=2.13.0
+ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-ubuntu2404
+ARG VLLM_VERSION=0.30.0
+ARG VLLM_TORCH_VERSION=2.14.0
+## torchvision released in lockstep with torch (0.29.0 pairs with 2.14.0); torchaudio
+## has no 2.12.0 release, so the base's 2.11.0 stays on both cu129 and cu130.
+ARG VLLM_TORCHVISION_VERSION=0.29.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## Built from source, replacing the base's own lmcache: that one is a PyPI wheel compiled
 ## against lmcache's build-time torch pin, which need not match the torch this base ships, and
 ## on a mismatch lmcache silently degrades to its torch baseline (vllm-project/vllm#53424).
 ## Keep in sync with the ROCm and SGLang pins —— the MP wire protocol has no version handshake.
-ARG VLLM_LMCACHE_VERSION=0.5.4
+ARG VLLM_LMCACHE_VERSION=0.5.5
 ARG VLLM_ROUTER_VERSION=0.1.15
-ARG VLLM_OMNI_COMMIT=aff7d64948f6
+## A tag, not a commit: v0.30.0rc1 is the omni release rebased onto vLLM 0.30.0
+## (the previous commit pinned a 0.29.0-era tree).
+ARG VLLM_OMNI_COMMIT=v0.30.0rc1
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
@@ -121,11 +126,55 @@ ENV UV_SYSTEM_PYTHON=1 \
 
 ARG VLLM_VERSION
 ARG VLLM_TORCH_VERSION
+ARG VLLM_TORCHVISION_VERSION
 ARG VLLM_TORCH_CUDA_VERSION
 
 ENV VLLM_VERSION=${VLLM_VERSION} \
     VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION} \
     VLLM_TORCH_CUDA_VERSION=${VLLM_TORCH_CUDA_VERSION}
+
+## Upgrade Torch
+#
+# The base image ships the torch it was built against (2.13.0 for the v0.30.0
+# bases). When a rule targets a newer torch, install it from the matching
+# PyTorch wheel index; the base's prebuilt wheels (vllm, flashinfer, fa3-fwd)
+# were compiled against the older torch and rely on torch's C++ ABI staying
+# stable within the major version. A rule whose base already ships the target
+# torch (cu129: 2.14.0 is published for cu130 only) passes VLLM_TORCH_VERSION
+# equal to the base's, and the step is a no-op.
+
+ARG VLLM_TORCH_VERSION
+ARG VLLM_TORCHVISION_VERSION
+ARG VLLM_TORCH_CUDA_VERSION
+
+RUN <<EOF
+    # Torch
+
+    INSTALLED_TORCH="$(python -c 'import torch; print(torch.__version__)')"
+    if [[ "${INSTALLED_TORCH}" == "${VLLM_TORCH_VERSION}"* ]]; then
+        echo "Torch ${INSTALLED_TORCH} already matches ${VLLM_TORCH_VERSION}; skipping the upgrade."
+        exit 0
+    fi
+
+    IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${VLLM_TORCH_CUDA_VERSION}"
+
+    ## `--extra-index-url`, not `--index-url`: the PyTorch index carries torch/torchvision
+    ## only, while the transitive deps (filelock, sympy, ...) and the nvidia-* wheels
+    ## resolve from PyPI. The `+cu${CUDA_MAJOR}${CUDA_MINOR}` local versions pin the
+    ## index wheels exactly, so the PyPI copy of the same version can never win.
+    uv pip install \
+        "torch==${VLLM_TORCH_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR}" \
+        "torchvision==${VLLM_TORCHVISION_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR}" \
+        --extra-index-url "https://download.pytorch.org/whl/cu${CUDA_MAJOR}${CUDA_MINOR}"
+
+    # Review
+    uv pip show torch torchvision
+    python -c 'import torch; print("torch", torch.__version__, "cuda", torch.version.cuda)'
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
 
 
 FROM vllm-build AS vllm-build-omni
@@ -260,10 +309,20 @@ RUN <<EOF
     ## and breaks `torch -> cuda-bindings<14,>=13.0.3` requirement.
     ## Note: separate statements, not an `&&` chain —— `bash -e` ignores a failing non-final
     ## command of a list, which would leave /workspace empty and fail later at install time.
+    ## 0.5.5 generates its gRPC stubs at build time (setup.py _BuildPyWithGrpcStubs);
+    ## provide the pinned codegen tools its build-system requirements name, since
+    ## `--no-isolation` skips installing them.
+    uv pip install grpcio==1.84.0 grpcio-tools==1.84.0
     cd /tmp/lmcache
     ## Drop the build-time torch pin: we compile against the base's own torch on purpose.
     sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml
     cat /tmp/lmcache/pyproject.toml
+    ## torch 2.14's headers require C++20 (#error in torch/all.h), but lmcache 0.5.5
+    ## hardcodes -std=c++17 for its g++ sources (pybind.cpp); nvcc already defaults
+    ## to C++20 under CUDA 13. Harmless on the cu129 base's torch 2.13.
+    sed -i 's/-std=c++17/-std=c++20/g' \
+        /tmp/lmcache/setup_extensions/common_cpp.py \
+        /tmp/lmcache/setup_extensions/build_profiles/cuda.py
     ## `--skip-dependency-check`: the base does not ship torch's full dependency closure.
     python -m build --no-isolation --skip-dependency-check --wheel
     tree -hs /tmp/lmcache/dist
@@ -473,7 +532,7 @@ soundfile
 mistral_common[audio]
 
 # tokenizer extras
-fastokens==0.2.0
+fastokens==0.3.2
 EOT
     uv pip install \
         -r /tmp/requirements.txt

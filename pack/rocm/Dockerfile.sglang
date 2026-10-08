@@ -8,7 +8,7 @@ ARG SGLANG_TORCH_VERSION=2.9.1
 ARG SGLANG_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ## Keep >= 0.4.6 and in sync with the CUDA pin —— see pack/cuda/Dockerfile.sglang.
 ## Always built from source: upstream's ROCm wheel targets torch 2.11.0+rocm7.2.
-ARG SGLANG_LMCACHE_VERSION=0.5.4
+ARG SGLANG_LMCACHE_VERSION=0.5.5
 
 FROM ${SGLANG_BASE_IMAGE} AS sglang-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
@@ -198,6 +198,10 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${SGLANG_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache
+    ## 0.5.5 generates its gRPC stubs at build time (setup.py _BuildPyWithGrpcStubs);
+    ## provide the pinned codegen tools its build-system requirements name, since
+    ## `--no-isolation` skips installing them.
+    uv pip install grpcio==1.84.0 grpcio-tools==1.84.0
     pushd /tmp/lmcache \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
         && cat /tmp/lmcache/pyproject.toml \
