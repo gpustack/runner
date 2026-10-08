@@ -1,8 +1,7 @@
-"""Central collection wiring and recipe checks during the staged migration.
+"""Check service recipe selection and collection from final Package digests.
 
-The workflow must retain Package digests and collect on each native build job.
-The old recipe mounts remain checked until their removal in the next task.
-Buildable recipe pairs come from the matrix and the shared Dockerfile selector.
+Only explicit historical operations receive the legacy shared build context.
+Active recipes need no dependency instrumentation.
 """
 
 from __future__ import annotations
@@ -10,8 +9,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
-from dataclasses import dataclass
+import sys
 from pathlib import Path
 
 import pytest
@@ -84,267 +84,77 @@ def _resolve_dockerfile(backend: str, service: str) -> Path:
     return Path(result.stdout.strip())
 
 
-# The buildable (Dockerfile, service target) pairs -- the only ones that must
-# carry the probe. A merged Dockerfile that every service has since outgrown a
-# split file for resolves to nothing here and is left alone.
 BUILD_TARGETS = sorted(
     (_resolve_dockerfile(backend, service), service)
     for backend, service in _matrix_build_pairs()
 )
-
-# `AS` is matched case-insensitively even though the repo currently always uppercases
-# it -- don't assume that stays true forever.
-FROM_RE = re.compile(r"^FROM\s+(\S+)(?:\s+AS\s+(\S+))?\s*$", re.IGNORECASE)
-ARG_DEPS_RE = re.compile(r"^ARG\s+DEPENDENCY_PACKAGES(?:=.*)?\s*$")
-COPY_FROM_RE = re.compile(r"^COPY\s+--from=(\S+)\s")
-BUILD_STEP_RE = re.compile(r"^(RUN|COPY|ADD)\b", re.IGNORECASE)
-# Matching the mounted script name too, not just the shared context: mounting
-# pack/shared/ to run something else is not a probe call.
-PROBE_RUN_PREFIX = "RUN --mount=type=bind,from=shared,source=probe_dependencies.sh"
-
-
-@dataclass
-class Stage:
-    name: str
-    base: str
-    from_line: int  # 1-indexed line number of the `FROM` instruction itself
-    body: list[tuple[int, str]]  # (line_no, text) for lines strictly after FROM,
-    # up to (not including) the next FROM, or EOF for the last stage.
-
-
-@dataclass
-class ParsedDockerfile:
-    path: Path
-    preamble: list[tuple[int, str]]  # lines before the first FROM
-    stages: list[Stage]
-
-    def stage(self, name: str) -> Stage | None:
-        for s in self.stages:
-            if s.name == name:
-                return s
-        return None
-
-
-def parse_dockerfile(path: Path) -> ParsedDockerfile:
-    lines = path.read_text(encoding="utf-8").splitlines()
-    froms: list[tuple[int, str, str | None]] = []
-    for i, line in enumerate(lines, start=1):
-        m = FROM_RE.match(line)
-        if m:
-            froms.append((i, m.group(1), m.group(2)))
-
-    first_from_line = froms[0][0] if froms else len(lines) + 1
-    preamble = [(i, lines[i - 1]) for i in range(1, first_from_line)]
-
-    stages = []
-    for idx, (from_line, base, name) in enumerate(froms):
-        end = froms[idx + 1][0] if idx + 1 < len(froms) else len(lines) + 1
-        body = [(j, lines[j - 1]) for j in range(from_line + 1, end)]
-        if name is not None:
-            stages.append(Stage(name=name, base=base, from_line=from_line, body=body))
-
-    return ParsedDockerfile(path=path, preamble=preamble, stages=stages)
+ACTIVE_DOCKERFILES = sorted(PACK_DIR.glob("*/Dockerfile.*"))
+HISTORICAL_PROBE_RECIPES = sorted(
+    path
+    for path in (PACK_DIR / ".post_operation").rglob("Dockerfile*")
+    if "probe_dependencies.sh" in path.read_text(encoding="utf-8")
+)
+FROM_RE = re.compile(r"^FROM\s+(\S+)\s+AS\s+(\S+)\s*$", re.IGNORECASE | re.MULTILINE)
 
 
 def _rel(path: Path) -> str:
     return str(path.relative_to(REPO_ROOT))
 
 
-def _probe_lines(body: list[tuple[int, str]]) -> list[int]:
-    return [ln for ln, text in body if text.lstrip().startswith(PROBE_RUN_PREFIX)]
-
-
-def _arg_lines(body: list[tuple[int, str]]) -> list[int]:
-    return [ln for ln, text in body if ARG_DEPS_RE.match(text.strip())]
-
-
-PACK_DOCKERFILES = sorted({path for path, _ in BUILD_TARGETS})
-PARSED = {p: parse_dockerfile(p) for p in PACK_DOCKERFILES}
-
-# The service targets each Dockerfile is actually built for. A file may define
-# more stages than this -- only the buildable ones are held to the invariants.
-TARGET_NAMES = {
-    path: {service for p, service in BUILD_TARGETS if p == path}
-    for path in PACK_DOCKERFILES
-}
-
-
-def _service_targets(parsed: ParsedDockerfile) -> list[Stage]:
-    names = TARGET_NAMES[parsed.path]
-    return [s for s in parsed.stages if s.name in names]
-
-
-def _deps_stages(parsed: ParsedDockerfile) -> list[Stage]:
-    """The `-deps` export stages belonging to this file's buildable targets."""
-    wanted = {f"{name}-deps" for name in TARGET_NAMES[parsed.path]}
-    return [s for s in parsed.stages if s.name in wanted]
+def _assert_runtime_recipe(text: str, service: str):
+    instructions = "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
+    for token in (
+        "DEPENDENCY_PACKAGES",
+        "probe_dependencies.sh",
+        "/etc/gpustack-runner/dependencies.json",
+        "from=shared",
+    ):
+        assert token not in instructions, f"active recipe contains {token}"
+    stages = list(FROM_RE.finditer(instructions))
+    assert stages, "recipe has no named stages"
+    assert all(not stage[2].endswith("-deps") for stage in stages), (
+        "dependency export stage"
+    )
+    assert stages[-1][2] == service, "default output is not the service target"
+    assert stages[-1][1].lower() != "scratch", "service target is an empty export"
+    entrypoint = re.search(
+        r"^ENTRYPOINT\s",
+        instructions[stages[-1].end() :],
+        re.MULTILINE,
+    )
+    assert entrypoint, "service entrypoint is missing"
 
 
 def test_discovery_found_build_targets():
-    # If this ever comes back empty, every other test here passes vacuously.
-    assert BUILD_TARGETS, (
-        f"no buildable (Dockerfile, service) pair resolved from {MATRIX_YAML}"
-    )
-    missing = sorted(_rel(p) for p in PACK_DOCKERFILES if not p.is_file())
-    assert not missing, (
-        f"matrix.yaml names backends whose Dockerfile does not exist: {missing}"
-    )
-
-
-@pytest.mark.parametrize("path", PACK_DOCKERFILES, ids=_rel)
-def test_every_service_target_has_a_deps_export_stage(path: Path):
-    """Invariant 1: every service target has a matching `<service>-deps` stage."""
-    parsed = PARSED[path]
-    for stage in _service_targets(parsed):
-        deps_name = f"{stage.name}-deps"
-        assert parsed.stage(deps_name) is not None, (
-            f"{_rel(path)}:{stage.from_line}: service target '{stage.name}' has "
-            f"no matching export stage '{deps_name}' -- the dependency probe "
-            f"export is missing for this target"
-        )
-
-
-@pytest.mark.parametrize("path", PACK_DOCKERFILES, ids=_rel)
-def test_deps_stage_is_scratch_and_names_a_real_target(path: Path):
-    """Invariant 2: every `-deps` stage is `FROM scratch` and names a real target."""
-    parsed = PARSED[path]
-    service_names = {s.name for s in _service_targets(parsed)}
-    for stage in _deps_stages(parsed):
-        assert stage.base.lower() == "scratch", (
-            f"{_rel(path)}:{stage.from_line}: export stage '{stage.name}' must "
-            f"be 'FROM scratch', found 'FROM {stage.base}'"
-        )
-        target_name = stage.name[: -len("-deps")]
-        assert target_name in service_names, (
-            f"{_rel(path)}:{stage.from_line}: export stage '{stage.name}' does "
-            f"not correspond to a real service target named '{target_name}' in "
-            f"this file (service targets found: {sorted(service_names)})"
-        )
-
-
-@pytest.mark.parametrize("path", PACK_DOCKERFILES, ids=_rel)
-def test_deps_stage_copies_from_its_own_target(path: Path):
-    """Invariant 3: a `-deps` stage's `COPY --from=X` must be its own target.
-
-    This guards against cross-target copy-paste in a multi-service file such as
-    pack/musa/Dockerfile, which defines vllm and sglang side by side.
-    """
-    parsed = PARSED[path]
-    for stage in _deps_stages(parsed):
-        target_name = stage.name[: -len("-deps")]
-        copy_from = None
-        copy_line = None
-        for ln, text in stage.body:
-            m = COPY_FROM_RE.match(text.strip())
-            if m:
-                copy_from, copy_line = m.group(1), ln
-                break
-        assert copy_from is not None, (
-            f"{_rel(path)}:{stage.from_line}: export stage '{stage.name}' has "
-            f"no 'COPY --from=...' instruction"
-        )
-        assert copy_from == target_name, (
-            f"{_rel(path)}:{copy_line}: export stage '{stage.name}' copies "
-            f"from '{copy_from}', expected '{target_name}' -- looks like a "
-            f"cross-target copy-paste mistake"
-        )
-
-
-@pytest.mark.parametrize("path", PACK_DOCKERFILES, ids=_rel)
-def test_probe_call_count_and_arg_placement(path: Path):
-    """Invariant 4: probe-call count == service-target count, each preceded by
-    its own `ARG DEPENDENCY_PACKAGES`."""
-    parsed = PARSED[path]
-    targets = _service_targets(parsed)
-
-    all_probe_lines = [ln for s in parsed.stages for ln in _probe_lines(s.body)]
-    assert len(all_probe_lines) == len(targets), (
-        f"{_rel(path)}: found {len(all_probe_lines)} probe_dependencies.sh "
-        f"invocation(s) at line(s) {all_probe_lines}, but {len(targets)} "
-        f"service target(s) ({sorted(s.name for s in targets)}) -- every "
-        f"service target must call the probe exactly once, with no "
-        f"extra/missing calls"
-    )
-
-    for stage in targets:
-        probe_lines = _probe_lines(stage.body)
-        assert len(probe_lines) == 1, (
-            f"{_rel(path)}:{stage.from_line}: service target '{stage.name}' "
-            f"has {len(probe_lines)} probe_dependencies.sh invocation(s), "
-            f"expected exactly 1"
-        )
-        probe_line = probe_lines[0]
-        arg_lines = _arg_lines(stage.body)
-        assert (probe_line - 1) in arg_lines, (
-            f"{_rel(path)}:{probe_line}: the probe call in service target "
-            f"'{stage.name}' is not immediately preceded (line "
-            f"{probe_line - 1}) by 'ARG DEPENDENCY_PACKAGES'"
-        )
-
-
-@pytest.mark.parametrize("path", PACK_DOCKERFILES, ids=_rel)
-def test_no_file_level_dependency_packages_arg(path: Path):
-    """Invariant 5: no file-level (pre-first-FROM) `ARG DEPENDENCY_PACKAGES`.
-
-    A file-level ARG would make every whitelist edit invalidate the Docker build
-    cache for the entire file, not just the probe step.
-    """
-    parsed = PARSED[path]
-    bad_lines = _arg_lines(parsed.preamble)
-    assert not bad_lines, (
-        f"{_rel(path)}: found file-level 'ARG DEPENDENCY_PACKAGES' before the "
-        f"first FROM at line(s) {bad_lines} -- this invalidates the cache for "
-        f"every stage in the file on every whitelist edit; declare it inside "
-        f"each service target instead, immediately before the probe RUN"
-    )
-
-
-@pytest.mark.parametrize("path", PACK_DOCKERFILES, ids=_rel)
-def test_probe_call_is_last_build_step_in_its_stage(path: Path):
-    """Invariant 6: the probe call is the last RUN/COPY/ADD in its stage.
-
-    The probe's mount cache key covers the script's content, which every backend
-    shares, so keeping it last makes editing the script cost a re-probe rather
-    than a rebuild of the business layers above it.
-    """
-    parsed = PARSED[path]
-    for stage in _service_targets(parsed):
-        probe_lines = _probe_lines(stage.body)
-        if not probe_lines:
-            continue  # already reported by test_probe_call_count_and_arg_placement
-        probe_line = probe_lines[0]
-        for ln, text in stage.body:
-            if ln <= probe_line:
-                continue
-            stripped = text.strip()
-            m = BUILD_STEP_RE.match(stripped)
-            if m:
-                pytest.fail(
-                    f"{_rel(path)}:{ln}: found a '{m.group(1).upper()}' "
-                    f"instruction after the probe call (line {probe_line}) in "
-                    f"service target '{stage.name}' -- the probe must be the "
-                    f"last build step in its stage",
-                )
-
-
-def test_every_buildable_target_is_wired():
-    """Aggregate sanity check: total wired targets == total buildable targets.
-
-    The count is deliberately not hardcoded, so a new matrix rule grows the
-    denominator on its own rather than failing on a stale magic number.
-    """
-    unwired = []
+    assert BUILD_TARGETS, f"no build targets resolved from {MATRIX_YAML}"
+    assert ACTIVE_DOCKERFILES, "no active service recipes found"
+    assert HISTORICAL_PROBE_RECIPES, "no historical probe callers found"
     for path, service in BUILD_TARGETS:
-        parsed = PARSED[path]
-        if parsed.stage(service) is None:
-            unwired.append(f"{_rel(path)}: no '{service}' stage")
-        elif parsed.stage(f"{service}-deps") is None:
-            unwired.append(f"{_rel(path)}: '{service}' has no '{service}-deps' stage")
-    assert not unwired, (
-        f"{len(unwired)} of {len(BUILD_TARGETS)} buildable target(s) across "
-        f"{len(PACK_DOCKERFILES)} Dockerfile(s) are not wired for dependency "
-        f"probing: {unwired}"
-    )
+        assert path in ACTIVE_DOCKERFILES
+        assert path.name == f"Dockerfile.{service}"
+
+
+@pytest.mark.parametrize("path", ACTIVE_DOCKERFILES, ids=_rel)
+def test_active_recipe_outputs_service_without_instrumentation(path):
+    _assert_runtime_recipe(path.read_text(encoding="utf-8"), path.suffix[1:])
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        'ARG DEPENDENCY_PACKAGES=""',
+        "RUN --mount=type=bind,from=shared,source=probe_dependencies.sh echo probe",
+        "COPY dependencies.json /etc/gpustack-runner/dependencies.json",
+        "FROM scratch AS vllm-deps",
+    ],
+)
+def test_recipe_check_rejects_instrumentation(extra):
+    recipe = 'FROM runtime AS vllm\nENTRYPOINT ["tini", "--"]\n'
+    _assert_runtime_recipe(recipe, "vllm")
+    with pytest.raises(AssertionError):
+        _assert_runtime_recipe(recipe + extra + "\n", "vllm")
 
 
 @pytest.fixture
@@ -356,6 +166,74 @@ def pack_workflow():
         check=True,
     )
     return json.loads(result.stdout)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [PACK_DIR / "cuda/Dockerfile.vllm", *HISTORICAL_PROBE_RECIPES],
+    ids=_rel,
+)
+def test_workflow_shared_context_is_only_for_historical_operations(
+    tmp_path,
+    pack_workflow,
+    path,
+):
+    steps = {step["name"]: step for step in pack_workflow["jobs"]["build"]["steps"]}
+    historical = ".post_operation" in path.parts
+    operation = path.parent.parent.name if historical else ""
+    script = steps["Get Metadata"]["run"]
+    for expression, value in (
+        ("github.workspace", str(REPO_ROOT)),
+        ("matrix.backend", path.parent.name),
+        ("matrix.service", "vllm"),
+    ):
+        script = script.replace("${{ " + expression + " }}", value)
+    assert "${{" not in script
+    output = tmp_path / "output"
+    result = subprocess.run(  # noqa: S603 - Runs the workflow with controlled inputs.
+        ["bash", "-c", script],  # noqa: S607
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "GITHUB_OUTPUT": str(output),
+            "INPUT_NAMESPACE": "gpustack",
+            "INPUT_REPOSITORY": "runner",
+            "INPUT_CACHE_REPOSITORY": "runner-cache",
+            "INPUT_POST_OPERATION": operation,
+            "INPUT_WITH_CACHE": "false",
+            "INPUT_PLATFORM_TAG": "fixture-linux-amd64",
+            "INPUT_PLATFORM_TAG_CACHE": "",
+            "INPUT_ARGS": "VLLM_VERSION=0.29.0",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    exported = output.read_text()
+    assert f"docker_file={path}\n" in exported
+    assert "build_args<<EOF\nVLLM_VERSION=0.29.0\nEOF\n" in exported
+    context = f"shared={PACK_DIR / 'shared'}\n" if historical else ""
+    assert f"build_contexts<<EOF\n{context}EOF\n" in exported
+    assert steps["Package"]["with"]["build-contexts"] == (
+        "${{ steps.metadata.outputs.build_contexts }}"
+    )
+    assert steps["Package"]["with"]["target"] == "${{ matrix.service }}"
+    if historical:
+        helper = PACK_DIR / "shared/probe_dependencies.sh"
+        assert helper.is_file()
+        legacy_output = tmp_path / "legacy.json"
+        result = subprocess.run(  # noqa: S603
+            ["bash", str(helper), str(legacy_output)],  # noqa: S607
+            env={**os.environ, "DEPENDENCY_PACKAGES": ""},
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+        assert not legacy_output.exists()
 
 
 def test_workflow_collects_final_package_digest_on_native_build_job(pack_workflow):
@@ -423,6 +301,63 @@ def test_workflow_serializes_and_verifies_manifest_before_catalog(pack_workflow)
         "builds-*",
         "dependencies-*",
     }
+
+
+def test_merge_workflow_uses_locked_runtime_dependencies(tmp_path, pack_workflow):
+    steps = {
+        step["name"]: step for step in pack_workflow["jobs"]["merge-runner"]["steps"]
+    }
+    setup = steps["Setup UV"]
+    assert setup["uses"] == "astral-sh/setup-uv@v7"
+    assert setup["with"]["version"] == "0.8.24"
+    assert setup["with"]["enable-cache"] is True
+    assert setup["with"]["python-version"] in {"3.10", "3.11", "3.12"}
+    assert not setup.get("continue-on-error", False)
+    install = steps["Install Runtime Dependencies"]
+    assert install["run"] == "uv sync --locked --no-dev --no-install-project"
+    assert not install.get("continue-on-error", False)
+    names = list(steps)
+    assert names.index("Setup UV") < names.index("Install Runtime Dependencies")
+    assert names.index("Install Runtime Dependencies") < names.index("Merge Runner")
+
+    for name in ("pyproject.toml", "uv.lock"):
+        shutil.copyfile(REPO_ROOT / name, tmp_path / name)
+    script = tmp_path / "pack/merge_runner.sh"
+    script.parent.mkdir()
+    script.write_text(
+        "python3 - <<'PY'\n"
+        "import importlib.util, json, sys\n"
+        "from packaging.version import Version\n"
+        "assert Version('1.0rc1') < Version('1.0')\n"
+        "assert importlib.util.find_spec('pytest') is None\n"
+        "assert importlib.util.find_spec('gpustack_runner') is None\n"
+        "print(json.dumps({'prefix': sys.prefix}))\n"
+        "PY\n",
+    )
+    env = {
+        **os.environ,
+        "UV_PROJECT_ENVIRONMENT": str(tmp_path / ".venv"),
+        # Exercise each CI Python without downloading another interpreter.
+        "UV_PYTHON": sys.executable,
+        "UV_OFFLINE": "1",
+    }
+    env.pop("VIRTUAL_ENV", None)
+    for command in (
+        install["run"],
+        steps["Merge Runner"]["run"].replace("${{ github.workspace }}", str(tmp_path)),
+    ):
+        result = subprocess.run(  # noqa: S603 - Runs workflow setup in a temporary project.
+            ["bash", "-c", command],  # noqa: S607
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["prefix"] == str(tmp_path / ".venv")
+    assert not (tmp_path / "gpustack_runner").exists()
 
 
 def test_workflow_freeze_and_record_commands_execute(tmp_path, pack_workflow):

@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-# Probe the versions of whitelisted Python packages installed in the image, and
-# write them to a JSON file that ships inside the image and is exported from the
-# build to feed `dependencies` in runner.py.json.
+# Legacy probe for historical operation recipes that still mount this helper.
+# It writes installed package versions to a file inside the image.
+# Central final-image collection in pack/collect_dependencies.py is authoritative
+# for catalog updates. Pack does not use this helper's embedded output.
 #
-# This is the single copy shared by every backend, reached through the buildx
-# named build context `shared`, never through a backend's own build context.
+# The named build context `shared` supplies this file only for explicit historical
+# operations. Active service recipes do not use it.
 #
 # Usage:
 #   DEPENDENCY_PACKAGES="lmcache torch ray ..." probe_dependencies.sh [OUTPUT_PATH]
@@ -13,9 +14,7 @@
 # Output is a flat map, keys PEP 503 normalized and sorted, holding only the
 # packages actually installed, under their raw distribution names:
 #   {"lmcache-ascend": "0.5.4", "lmcache": "0.4.3", "torch": "2.13.0"}
-# `pack/merge_runner.sh` folds those names onto the dependency names of
-# `pack/dependencies.json` before they reach runner.py.json; this file keeps the
-# unfolded truth for troubleshooting.
+# This legacy file keeps raw distribution names for troubleshooting.
 #
 # Three outcomes, deliberately distinguishable -- an empty map and a failed probe
 # must never look alike:

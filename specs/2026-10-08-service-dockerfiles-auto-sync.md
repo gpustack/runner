@@ -872,6 +872,8 @@ An exact match in either the catalog or authoritative support records prevents a
 A `prepared` record counts only after its proposal has merged into the default branch.
 It means configuration was prepared; it does not claim an image exists.
 Pack promotes that record to `published` only when measured results cover its declared identity and platforms.
+Collect the `vllm` and `sglang` distributions through the shared dependency mapping to verify the installed engine version.
+A missing or mismatched engine or plugin measurement leaves the record `prepared`.
 Do not publish guessed package versions while preparing the upgrade.
 
 Read only the newest eligible release for each of the six backend/service subscriptions.
@@ -1085,7 +1087,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack`
 
-- [ ] **T8 · Remove dependency instrumentation from active recipes**
+- [x] **T8 · Remove dependency instrumentation from active recipes**
 
   Blocked by: T7
 
@@ -1093,7 +1095,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Gate: review
 
-  Acceptance: Remove probe arguments, RUN mounts, embedded metadata copies, and dependency export stages from active recipes. Drop active workflow contexts and export code. Keep runtime targets usable. Retain the shared helper and context for existing historical callers, and document that central collection is authoritative. Replace wiring assertions with selection and collection behavior checks.
+  Acceptance: Remove probe arguments, RUN mounts, embedded metadata copies, and dependency export stages from active recipes. Drop active workflow contexts and export code. Keep runtime targets usable. Retain the shared helper and context for existing historical callers, and document that central collection is authoritative. Run catalog merging with locked project dependencies for T9 version normalization. Replace wiring assertions with selection and collection behavior checks.
 
   Verify: `uv run pytest tests/pack`
 
@@ -1101,7 +1103,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Blocked by: T7
 
-  Owns: `tools/auto_sync/discovery.py`, `tests/auto_sync/test_discovery.py`, `tests/auto_sync/fixtures/discovery/**`, `README.md`, `docs/supported-runners.md`, `mkdocs.yml`, `pack/merge_runner.sh`, `tests/pack/test_merge_runner.py`
+  Owns: `tools/auto_sync/discovery.py`, `tests/auto_sync/test_discovery.py`, `tests/auto_sync/fixtures/discovery/**`, `pack/dependencies.json` (main engine distribution entries), `README.md`, `docs/supported-runners.md`, `mkdocs.yml`, `pack/merge_runner.sh`, `tests/pack/test_merge_runner.py`
 
   Gate: review
 

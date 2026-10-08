@@ -268,6 +268,13 @@ jobs:
             echo "docker_context=${DOCKER_CONTEXT}"
             echo "docker_file=${DOCKER_FILE}"
 
+            # Historical recipes still mount the shared helper.
+            echo "build_contexts<<EOF"
+            if [[ -n "${INPUT_POST_OPERATION}" ]]; then
+              echo "shared=${{ github.workspace }}/pack/shared"
+            fi
+            echo "EOF"
+
           } >>"$GITHUB_OUTPUT"
       - name: Package
         id: package
@@ -286,10 +293,7 @@ jobs:
           sbom: false
           context: ${{ steps.metadata.outputs.docker_context }}
           file: ${{ steps.metadata.outputs.docker_file }}
-          # Retain the old mount while active recipes still use it.
-          # Historical recipes also use this context; central receipts are authoritative.
-          build-contexts: |
-            shared=${{ github.workspace }}/pack/shared
+          build-contexts: ${{ steps.metadata.outputs.build_contexts }}
           platforms: ${{ matrix.platform }}
           target: ${{ matrix.service }}
           tags: |
@@ -412,6 +416,14 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.24"
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install Runtime Dependencies
+        run: uv sync --locked --no-dev --no-install-project
       - name: Setup BuildX
         uses: docker/setup-buildx-action@v3
         with:
@@ -442,7 +454,7 @@ jobs:
           INPUT_DEPENDENCIES_DIR: ${{ runner.temp }}/artifacts
           INPUT_MANIFESTS_FILE: ${{ runner.temp }}/manifests/manifests.json
           INPUT_POST_OPERATION: ${{ github.event.inputs.post_operation }}
-        run: ${{ github.workspace }}/pack/merge_runner.sh
+        run: uv run --no-sync bash "${{ github.workspace }}/pack/merge_runner.sh"
       - name: Generate Pull Request Token
         id: generate-prt
         uses: actions/create-github-app-token@v2
