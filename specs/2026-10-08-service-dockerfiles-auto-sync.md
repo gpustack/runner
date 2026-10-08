@@ -472,6 +472,7 @@ The release skill must not invoke another workflow that waits for user confirmat
 Acceptance criteria:
 
 - Use a single-run headless Qwen invocation without a terminal interface.
+- Deliver task context through finite stdin with EOF; reject input beyond the pinned CLI limit before authentication probes.
 - Supply model authentication and MCP configuration before startup.
 - Automatically approve the tools enabled for the authorized task in the ephemeral runner.
 - Disable question tools and transitions into interactive planning.
