@@ -1025,7 +1025,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack/test_dockerfile_selection.py tests/pack/test_probe_wiring.py`
 
-- [ ] **T4 · Preserve CUDA VoxBox and CANN MindIE independently**
+- [x] **T4 · Preserve CUDA VoxBox and CANN MindIE independently**
 
   Blocked by: T3
 
@@ -1155,6 +1155,11 @@ Selected historical operations also match their baseline outputs.
 Independent read-only review found no verified defects.
 Scoped hooks and Bash syntax checks passed; existing Pack ShellCheck findings remain assigned to T7.
 No service image or GitHub workflow execution was performed.
+
+T4 validation: Source comparison and independent review confirmed complete retained stage bodies.
+The six extraction checks and 121 selector/probe checks passed.
+The new files preserve configurable bases, runtime outputs, platform branches, and entrypoints.
+Image builds and runtime parity remain unverified.
 
 T14 validation: DCO matches the supplied committed reference byte for byte.
 The LICENSE diff changes only the project copyright year.
