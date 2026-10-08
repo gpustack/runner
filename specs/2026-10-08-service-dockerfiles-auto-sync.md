@@ -1004,7 +1004,7 @@ Run each task's focused verification before marking it complete.
 T1 and T2 are early feasibility gates.
 Do not interpret their offline results as provider or image runtime acceptance.
 
-- [ ] **T1 · Prove the Qwen model and non-interactive contract**
+- [x] **T1 · Prove the Qwen model and non-interactive contract**
 
   Blocked by: None
 
@@ -1163,6 +1163,14 @@ Do not interpret their offline results as provider or image runtime acceptance.
   Acceptance: Preserve the DCO 1.1 text verbatim. Add a Runner-specific empty adopter table and contribution instructions. Change only the GPUStack copyright year to 2026 in LICENSE. Do not claim DCO app enforcement was configured.
 
   Verify: Compare DCO with the supplied committed reference; inspect the complete LICENSE diff; run repository text checks on all three files.
+
+T1 validation: Cold installation, verified cache reuse, and corruption controls passed.
+Independent review found three defects; all were reproduced and corrected with regression coverage.
+The fixes add Linux orphan adoption, preserve supported Responses fields, and align token-probe URL handling.
+Actual pinned Node and Qwen execution passed 83 macOS checks; ten Linux-only checks were skipped there.
+The complete model and agent suite passed all 93 checks in an offline Linux arm64 container without skips.
+Those checks used fake credentials, local model endpoints, fixture instructions, and local MCP tools.
+Scoped hooks passed. Real providers, canonical project instructions, and Ubuntu CI remain integration requirements.
 
 T2 validation: 73 collector checks and 244 packaging regression checks passed.
 Tests read real temporary distribution metadata through the selected Python environment.

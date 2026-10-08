@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "tools": {
+    "node": {
+      "version": "24.14.0",
+      "version_args": [
+        "--version"
+      ],
+      "artifacts": {
+        "darwin-arm64": {
+          "url": "https://nodejs.org/dist/v24.14.0/node-v24.14.0-darwin-arm64.tar.gz",
+          "sha256": "a1a54f46a750d2523d628d924aab61758a51c9dad3e0238beb14141be9615dd3",
+          "strip": 1
+        },
+        "linux-amd64": {
+          "url": "https://nodejs.org/dist/v24.14.0/node-v24.14.0-linux-x64.tar.gz",
+          "sha256": "dbf5b8665dec15e59e6359a517fefb47b23fdb9152d8def975b9bca3dfc6d355",
+          "strip": 1
+        },
+        "linux-arm64": {
+          "url": "https://nodejs.org/dist/v24.14.0/node-v24.14.0-linux-arm64.tar.gz",
+          "sha256": "f44740cd218de8127f1c44c41510a3a740fa5c9c8d1cdce1c3bedada79f3cde7",
+          "strip": 1
+        }
+      }
+    },
+    "qwen": {
+      "version": "0.25.0",
+      "version_args": [
+        "--version"
+      ],
+      "artifacts": {
+        "all": {
+          "url": "https://registry.npmjs.org/@qwen-code/qwen-code/-/qwen-code-0.25.0.tgz",
+          "sha256": "afeab0c85d682f201101319ce05decf3302d7ed7fb6319baa6a592051ea1a1ba",
+          "strip": 1
+        }
+      }
+    },
+    "github-mcp-server": {
+      "version": "2.0.1",
+      "version_args": [
+        "--version"
+      ],
+      "artifacts": {
+        "darwin-arm64": {
+          "url": "https://github.com/github/github-mcp-server/releases/download/v2.0.1/github-mcp-server_Darwin_arm64.tar.gz",
+          "sha256": "6a1507a139a22166ba0792ee353cac6bec771fe491a9c4bc24dd5ef70b3ac39e",
+          "strip": 0
+        },
+        "linux-amd64": {
+          "url": "https://github.com/github/github-mcp-server/releases/download/v2.0.1/github-mcp-server_Linux_x86_64.tar.gz",
+          "sha256": "f39c3cf56e9b2883b64e30215a48a120d911e4ed0cd6a83dddae1260279b02e6",
+          "strip": 0
+        },
+        "linux-arm64": {
+          "url": "https://github.com/github/github-mcp-server/releases/download/v2.0.1/github-mcp-server_Linux_arm64.tar.gz",
+          "sha256": "f7efcb41853153e2bf45df92a0a18b585b0bc21fcbf9c00bf667f48ff9743c87",
+          "strip": 0
+        }
+      }
+    },
+    "crane": {
+      "version": "0.21.9",
+      "version_args": [
+        "version"
+      ],
+      "artifacts": {
+        "darwin-arm64": {
+          "url": "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Darwin_arm64.tar.gz",
+          "sha256": "11cc3640e53473eb0d8c501068573e52a259f4d82177e6dd11b7bacb8955459e",
+          "strip": 0
+        },
+        "linux-amd64": {
+          "url": "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_x86_64.tar.gz",
+          "sha256": "5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e",
+          "strip": 0
+        },
+        "linux-arm64": {
+          "url": "https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_arm64.tar.gz",
+          "sha256": "1f4c647b7bb260ab5435661df5b526cf59950ebf95201790db7183ac189cbcbd",
+          "strip": 0
+        }
+      }
+    },
+    "actionlint": {
+      "version": "1.7.12",
+      "version_args": [
+        "-version"
+      ],
+      "artifacts": {
+        "darwin-arm64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_darwin_arm64.tar.gz",
+          "sha256": "aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f",
+          "strip": 0
+        },
+        "linux-amd64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+          "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+          "strip": 0
+        },
+        "linux-arm64": {
+          "url": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_arm64.tar.gz",
+          "sha256": "325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6",
+          "strip": 0
+        }
+      }
+    },
+    "uv": {
+      "version": "0.8.24",
+      "version_args": [
+        "--version"
+      ],
+      "artifacts": {
+        "darwin-arm64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.8.24/uv-aarch64-apple-darwin.tar.gz",
+          "sha256": "5f0d9d14b17ba3f0af4602a7a5a2e4faececf0a9463736cf8e6269c49569b2fa",
+          "strip": 1
+        },
+        "linux-amd64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.8.24/uv-x86_64-unknown-linux-gnu.tar.gz",
+          "sha256": "db8179fffd97b7557b9a519bae82eaa4f499b02ef546f738a35e74e26c47e6b7",
+          "strip": 1
+        },
+        "linux-arm64": {
+          "url": "https://github.com/astral-sh/uv/releases/download/0.8.24/uv-aarch64-unknown-linux-gnu.tar.gz",
+          "sha256": "9526f8b0eddd13f5162c18df5ecf35c21e4f96567d21849750356b60121882df",
+          "strip": 1
+        }
+      }
+    }
+  }
+}
