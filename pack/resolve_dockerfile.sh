@@ -15,11 +15,10 @@ fi
 DOCKERFILE="${WORKSPACE}/${BACKEND}/Dockerfile.${SERVICE}"
 if [[ -f "${DOCKERFILE}" ]]; then
     printf '%s\n' "${DOCKERFILE}"
-elif [[ -f "${WORKSPACE}/${BACKEND}/Dockerfile" ]]; then
-    # Keep active combined recipes until all service files have been migrated.
-    # Explicit historical operations also retain their combined filenames.
+elif [[ -n "${POST_OPERATION}" && -f "${WORKSPACE}/${BACKEND}/Dockerfile" ]]; then
+    # Only explicit historical operations retain combined filenames.
     printf '%s\n' "${WORKSPACE}/${BACKEND}/Dockerfile"
 else
-    echo "[ERROR]: Dockerfile not found for backend '${BACKEND}', service '${SERVICE}': ${DOCKERFILE} or ${WORKSPACE}/${BACKEND}/Dockerfile" >&2
+    echo "[ERROR]: Dockerfile not found for backend '${BACKEND}', service '${SERVICE}': ${DOCKERFILE}" >&2
     exit 1
 fi

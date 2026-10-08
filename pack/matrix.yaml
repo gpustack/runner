@@ -3,12 +3,12 @@
 # - backend:   (Required) The accelerated backend to pack for,
 #              used to select the packing rules and Dockerfile below `pack` directory.
 # - services:  (Required) The inference service to pack for,
-#              used to select the Docker build phase described in `pack/${backend}/Dockerfile`.
+#              used to select the service stage in `pack/${backend}/Dockerfile.${service}`.
 # - platforms: (Optional) The platforms to build for,
 #              used to select the Docker Linux build platforms.
 #              Default to `linux/amd64` and `linux/arm64`.
 # - args:      (Optional) The build arguments to pass to the Docker build,
-#              used to override the default build arguments in `pack/${backend}/Dockerfile`.
+#              used to override defaults in `pack/${backend}/Dockerfile.${service}`.
 
 rules:
 
@@ -162,7 +162,7 @@ rules:
   #
   ##
   ## Use pack flow's arguments to override the default COREX version and version extra,
-  ## which are used in `pack/corex/Dockerfile` to construct the image tags and build arguments.
+  ## which are used in `pack/corex/Dockerfile.vllm` to construct the image tags and build arguments.
   ##
   - backend: "corex"
     services:
@@ -178,7 +178,8 @@ rules:
   #
   ##
   ## Use pack flow's arguments to override the default DTK version and version extra,
-  ## which are used in `pack/dtk/Dockerfile` to construct the image tags and build arguments.
+  ## which are used in `pack/dtk/Dockerfile.vllm` and `pack/dtk/Dockerfile.sglang`
+  ## to construct the image tags and build arguments.
   ##
   - backend: "dtk"
     services:
@@ -208,7 +209,8 @@ rules:
   #
   ##
   ## Use pack flow's arguments to override the default MACA version and version extra,
-  ## which are used in `pack/maca/Dockerfile` to construct the image tags and build arguments.
+  ## which are used in `pack/maca/Dockerfile.vllm` and `pack/maca/Dockerfile.sglang`
+  ## to construct the image tags and build arguments.
   ##
   - backend: "maca"
     services:
@@ -222,7 +224,8 @@ rules:
   #
   ##
   ## Use pack flow's arguments to override the default MUSA version and version extra,
-  ## which are used in `pack/musa/Dockerfile` to construct the image tags and build arguments.
+  ## which are used in `pack/musa/Dockerfile.vllm` and `pack/musa/Dockerfile.sglang`
+  ## to construct the image tags and build arguments.
   ##
   - backend: "musa"
     services:

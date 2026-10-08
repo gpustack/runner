@@ -14,6 +14,16 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PACK_DIR = REPO_ROOT / "pack"
 RESOLVER = PACK_DIR / "resolve_dockerfile.sh"
 EXPAND_MATRIX = PACK_DIR / "expand_matrix.sh"
+ACTIVE_SERVICES = {
+    "cuda": ["vllm", "sglang", "voxbox"],
+    "rocm": ["vllm", "sglang"],
+    "cann": ["vllm", "sglang", "mindie"],
+    "corex": ["vllm"],
+    "dtk": ["vllm", "sglang"],
+    "hggc": ["vllm", "sglang"],
+    "maca": ["vllm", "sglang"],
+    "musa": ["vllm", "sglang"],
+}
 
 
 def _resolve(pack: Path, backend="cuda", service="vllm", operation=""):
@@ -44,12 +54,39 @@ def test_split_recipe_wins_over_combined_recipe(tmp_path, operation):
     assert result.stdout.strip() == str(expected)
 
 
-@pytest.mark.parametrize("operation", ["", "repair"])
-def test_combined_recipe_remains_available_during_migration(tmp_path, operation):
-    context = tmp_path / ".post_operation" / operation if operation else tmp_path
+@pytest.mark.parametrize("backend", ACTIVE_SERVICES)
+def test_active_selection_rejects_combined_recipe(tmp_path, backend):
+    _dockerfile(tmp_path, f"{backend}/Dockerfile")
+
+    result = _resolve(tmp_path, backend=backend)
+
+    assert result.returncode != 0
+    assert not result.stdout
+    assert "Dockerfile not found" in result.stderr
+    assert str(tmp_path / backend / "Dockerfile.vllm") in result.stderr
+
+
+@pytest.mark.parametrize(
+    "backend, service",
+    [
+        (backend, service)
+        for backend, services in ACTIVE_SERVICES.items()
+        for service in services
+    ],
+)
+def test_repository_active_recipes_are_service_specific(backend, service):
+    result = _resolve(PACK_DIR, backend=backend, service=service)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(PACK_DIR / backend / f"Dockerfile.{service}")
+    assert not (PACK_DIR / backend / "Dockerfile").exists()
+
+
+def test_combined_recipe_remains_available_for_explicit_historical_operation(tmp_path):
+    operation = "repair"
+    context = tmp_path / ".post_operation" / operation
     expected = _dockerfile(context, "cuda/Dockerfile")
-    if operation:
-        _dockerfile(tmp_path, "cuda/Dockerfile.vllm")
+    _dockerfile(tmp_path, "cuda/Dockerfile.vllm")
 
     result = _resolve(tmp_path, operation=operation)
 
@@ -148,9 +185,20 @@ def test_selection_with_no_supported_pair_returns_empty_jobs(tmp_path, backend):
 
 
 @pytest.mark.parametrize("backend", ["all", "cuda"])
-def test_matrix_rejects_a_supported_pair_with_no_recipe(tmp_path, backend):
+@pytest.mark.parametrize("combined_recipe", [False, True])
+def test_matrix_rejects_a_supported_pair_without_service_recipe(
+    tmp_path,
+    backend,
+    combined_recipe,
+):
     pack = tmp_path / "pack"
     _matrix(pack, [{"backend": "cuda", "services": ["vllm"]}])
+    if combined_recipe:
+        _dockerfile(
+            pack,
+            "cuda/Dockerfile",
+            "ARG CUDA_VERSION=13.0.1\nARG VLLM_VERSION=0.29.0\n",
+        )
 
     result, output = _expand(pack, tmp_path, backend=backend)
 
@@ -279,7 +327,7 @@ def test_build_entry_point_selection(tmp_path, entry_point, operation, recipe):
         check=False,
     )
     exported = output.read_text() if output.exists() else ""
-    if expected:
+    if expected and (operation or recipe == "Dockerfile.vllm"):
         assert result.returncode == 0, result.stdout + result.stderr
         assert f"docker_file={expected}\n" in exported
         assert f"docker_context={expected.parent}\n" in exported

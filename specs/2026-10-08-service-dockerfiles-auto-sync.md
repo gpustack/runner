@@ -1050,7 +1050,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack/test_dockerfile_selection.py tests/pack/test_probe_wiring.py`
 
-- [ ] **T6 · Remove active combined files and enforce strict selection**
+- [x] **T6 · Remove active combined files and enforce strict selection**
 
   Blocked by: T4, T5
 
@@ -1176,6 +1176,12 @@ T5 validation: The 19 extraction checks and 121 selector/probe checks passed.
 Independent review confirmed nine retained stages and 24 global arguments against the baseline.
 All 12 mutated stage or argument controls were rejected. Original vendor base references remain unchanged.
 The active matrix still matches all 31 baseline jobs. Scoped hooks passed; image execution remains unverified.
+
+T6 validation: 147 selector/probe checks and 270 packaging regression checks passed.
+Independent review confirmed strict active selection and all 17 retained service recipes.
+Full active job and manifest output matches the baseline, including 31 jobs and 21 manifests.
+Sampled historical operations preserve selection and output; all historical source files remain unchanged.
+Scoped hooks and Bash checks passed. Image execution and Ubuntu CI remain unverified.
 
 T14 validation: DCO matches the supplied committed reference byte for byte.
 The LICENSE diff changes only the project copyright year.
