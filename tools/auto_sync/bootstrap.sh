@@ -100,7 +100,8 @@ except (OSError, ValueError, KeyError, subprocess.SubprocessError):
                 sys.exit(f"bootstrap: {name} checksum mismatch")
             target = root / name
             target.mkdir()
-            # Validate all archive paths before extraction, including links.
+            # Validate stripped paths before extraction. Hard-link targets are
+            # stripped too; symbolic-link bodies remain relative to the member.
             with tarfile.open(archive) as bundle:
                 for member in bundle.getmembers():
                     member_path = target / member.name
@@ -108,10 +109,22 @@ except (OSError, ValueError, KeyError, subprocess.SubprocessError):
                         raise ValueError("archive path escapes installation")
                     if member.isdev() or member.isfifo():
                         raise ValueError("unsupported archive member")
+                    member_name = "/".join(member.name.split("/")[artifact["strip"]:]).lstrip("/")
+                    if not member_name:
+                        continue
+                    member_path = target / member_name
+                    if not member_path.resolve().is_relative_to(target):
+                        raise ValueError("archive path escapes installation")
                     if member.issym() or member.islnk():
                         link = (member_path.parent if member.issym() else target) / member.linkname
                         if not link.resolve().is_relative_to(target):
                             raise ValueError("archive link escapes installation")
+                        if member.islnk():
+                            link_name = "/".join(member.linkname.split("/")[artifact["strip"]:]).lstrip("/")
+                            if not link_name:
+                                continue
+                            if not (target / link_name).resolve().is_relative_to(target):
+                                raise ValueError("archive link escapes installation")
             subprocess.run(["tar", "-xzf", str(archive), "-C", str(target), f"--strip-components={artifact['strip']}"], check=True, timeout=60)
             if name == "node":
                 (root / "bin" / name).symlink_to("../node/bin/node")

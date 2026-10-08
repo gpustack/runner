@@ -540,6 +540,7 @@ Cache requirements:
 - Use a shared bootstrap path for scheduled, manual, and revision runs.
 - Select Node 24 and a pinned Qwen release whose contract tests pass.
 - Record exact tool versions and artifact checksums in the shared bootstrap manifest.
+- Validate archive member and link paths after configured path stripping, before extraction.
 - Prefer runner-provided tools and fixed-version precompiled binaries where suitable.
 - Cache the dedicated Qwen installation and supporting tool directories with Actions cache.
 - Key installed-tool caches by operating system image, CPU architecture, Node version, tool versions, and installer definition.

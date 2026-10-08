@@ -334,6 +334,7 @@ The separately configured verification CI uses Ubuntu 22.04.
 `tools/auto_sync/tool-versions.json` owns exact versions and artifact checksums.
 The initial pins include Node `24.14.0`, Qwen `0.25.0`, GitHub MCP `2.0.1`, crane `0.21.9`, actionlint `1.7.12`, and uv `0.8.24`.
 Repeat affected contract tests when changing pins. A different installed Node version is not evidence for this combination.
+Before extraction, validate stripped member and hard-link paths. Resolve symbolic links relative to their stripped member.
 
 The bootstrap cache key binds OS image, CPU architecture, Node/tool versions, and installer definition.
 Only an exact, validated installation can skip installation.

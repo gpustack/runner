@@ -227,3 +227,63 @@ def test_valid_checksum_with_wrong_tool_version_is_rejected(installer):
     assert result.returncode != 0
     assert "crane version mismatch" in result.stderr
     assert not installer["prefix"].exists()
+
+
+@pytest.mark.parametrize("link_type", ["safe", "symlink", "hardlink"])
+@pytest.mark.parametrize("archive_root", ["release", "./release"])
+def test_stripped_archive_links_are_checked_before_extraction(
+    installer,
+    link_type,
+    archive_root,
+):
+    manifest = json.loads(installer["manifest"].read_text())
+    path = Path(installer["env"]["FIXTURE_ARCHIVES"]) / "node.tgz"
+    with tarfile.open(path) as original:
+        payload = original.extractfile("bin/node").read()
+    with tarfile.open(path, "w:gz") as bundle:
+        item = tarfile.TarInfo(f"{archive_root}/bin/node")
+        item.size = len(payload)
+        item.mode = 0o755
+        bundle.addfile(item, io.BytesIO(payload))
+        for kind in (tarfile.SYMTYPE, tarfile.LNKTYPE):
+            link = tarfile.TarInfo(
+                f"{archive_root}/bin/symbolic"
+                if kind == tarfile.SYMTYPE
+                else f"{archive_root}/bin/hard",
+            )
+            link.type = kind
+            link.linkname = (
+                "node" if kind == tarfile.SYMTYPE else f"{archive_root}/bin/node"
+            )
+            if link_type == "symlink" and kind == tarfile.SYMTYPE:
+                link.linkname = "../../outside"
+            if link_type == "hardlink" and kind == tarfile.LNKTYPE:
+                link.linkname = f"{archive_root}/../outside"
+            bundle.addfile(link)
+    artifact = manifest["tools"]["node"]["artifacts"]["all"]
+    artifact["strip"] = archive_root.count("/") + 1
+    artifact["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    installer["manifest"].write_text(json.dumps(manifest))
+    real_tar = shutil.which("tar")
+    assert real_tar
+    extracted = installer["prefix"].parent / "extracted.txt"
+    tar = Path(installer["env"]["PATH"].split(os.pathsep)[0]) / "tar"
+    tar.write_text(
+        f"#!{sys.executable}\nimport os, sys\nfrom pathlib import Path\n"
+        f"Path({str(extracted)!r}).touch()\n"
+        f"os.execv({real_tar!r}, [{real_tar!r}, *sys.argv[1:]])\n",
+    )
+    tar.chmod(0o755)
+    result = run(installer)
+    if link_type == "safe":
+        success(result)
+        assert extracted.exists()
+        installed = installer["prefix"] / "node/bin"
+        assert (installed / "symbolic").read_bytes() == payload
+        assert (installed / "hard").samefile(installed / "node")
+        assert success(run(installer, "--verify"))["cache_hit"] is True
+    else:
+        assert result.returncode != 0
+        assert "archive link escapes" in result.stderr
+        assert not extracted.exists()
+        assert not installer["prefix"].exists()
