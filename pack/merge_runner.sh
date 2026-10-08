@@ -39,7 +39,8 @@ OUTPUT_FILE="${OUTPUT_DIR}/runner.py.json"
 WORK_DIR="$(mktemp -d "${INPUT_TEMPDIR}/runner-merge.XXXXXX")"
 CATALOG_CANDIDATE=""
 FIXTURES_CANDIDATE=""
-trap 'rm -rf "${WORK_DIR}"; rm -f "${CATALOG_CANDIDATE}" "${FIXTURES_CANDIDATE}"' EXIT
+SUPPORT_CANDIDATE=""
+trap 'rm -rf "${WORK_DIR}"; rm -f "${CATALOG_CANDIDATE}" "${FIXTURES_CANDIDATE}" "${SUPPORT_CANDIDATE}"' EXIT
 if [[ "${INPUT_CATALOG_REFRESH}" != "true" ]]; then
     # Validate the full frozen matrix, Package outputs, receipts and current registry
     # descriptors before rendering either output. Missing data never means reuse.
@@ -191,8 +192,20 @@ done
 echo "[INFO] Merged Fixtures:"
 jq -r '.' <<<"${OUTPUT_FIXTURES}"
 
-# Render both complete files before either replacement. Each rename is atomic
+# Render all complete files before any replacement. Each rename is atomic
 # because its candidate lives in the destination directory.
+if [[ "${INPUT_CATALOG_REFRESH}" != "true" ]]; then
+    # Only this invocation's validated measurements can confirm prepared support.
+    # Prune/discard have no collection evidence and must preserve support state.
+    SUPPORT_FILE="${INPUT_WORKSPACE}/../docs/supported-runners.md"
+    SUPPORT_CANDIDATE="$(mktemp "$(dirname "${SUPPORT_FILE}")/.support.XXXXXX")"
+    python3 "$(dirname "${BASH_SOURCE[0]}")/../tools/auto_sync/discovery.py" promote \
+        --support "${SUPPORT_FILE}" \
+        --context "${WORK_DIR}/context.json" \
+        --dependencies "${WORK_DIR}/dependencies.json" \
+        --output "${SUPPORT_CANDIDATE}"
+    chmod 644 "${SUPPORT_CANDIDATE}"
+fi
 CATALOG_CANDIDATE="$(mktemp "${OUTPUT_DIR}/.runner.XXXXXX")"
 FIXTURES_CANDIDATE="$(mktemp "${OUTPUT_FIXTURES_DIR}/.runners.XXXXXX")"
 jq '.' <<<"${MERGED_RUNNERS}" >"${CATALOG_CANDIDATE}"
@@ -200,3 +213,6 @@ jq '.' <<<"${OUTPUT_FIXTURES}" >"${FIXTURES_CANDIDATE}"
 chmod 644 "${CATALOG_CANDIDATE}" "${FIXTURES_CANDIDATE}"
 mv -f "${FIXTURES_CANDIDATE}" "${OUTPUT_FIXTURES_FILE}"
 mv -f "${CATALOG_CANDIDATE}" "${OUTPUT_FILE}"
+if [[ -n "${SUPPORT_CANDIDATE}" ]]; then
+    mv -f "${SUPPORT_CANDIDATE}" "${SUPPORT_FILE}"
+fi

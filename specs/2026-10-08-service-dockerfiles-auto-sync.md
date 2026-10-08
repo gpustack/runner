@@ -854,6 +854,8 @@ Their embedded output is not an authority for new catalog updates.
 
 Keep one authoritative support document at `docs/supported-runners.md`, linked from README.
 Preserve existing support information during migration.
+Require the linked document's explicit record markers; missing markers are a parse failure.
+Legacy README tables remain readable before migration.
 New records state backend, runtime line, service, accelerator variant, engine version, and plugin version where applicable.
 List the intended CPU platforms separately.
 
@@ -874,6 +876,9 @@ It means configuration was prepared; it does not claim an image exists.
 Pack promotes that record to `published` only when measured results cover its declared identity and platforms.
 Collect the `vllm` and `sglang` distributions through the shared dependency mapping to verify the installed engine version.
 A missing or mismatched engine or plugin measurement leaves the record `prepared`.
+For vLLM, accept upstream numeric `cu` or `rocm` local suffixes only on the corresponding backend.
+Compare the complete public engine version, retaining prerelease, post, and development distinctions.
+Keep unknown local suffixes and plugin versions exact, and preserve all raw dependency strings.
 Do not publish guessed package versions while preparing the upgrade.
 
 Read only the newest eligible release for each of the six backend/service subscriptions.
@@ -1099,7 +1104,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack`
 
-- [ ] **T9 · Implement latest-only discovery against catalog and support documentation**
+- [x] **T9 · Implement latest-only discovery against catalog and support documentation**
 
   Blocked by: T7
 

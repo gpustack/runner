@@ -44,5 +44,6 @@ extra:
 copyright: Copyright &copy; 2025, GPUStack Contributors
 
 nav:
+  - Supported runners: supported-runners.md
   - Modules:
       - gpustack_runner: modules/gpustack_runner.md

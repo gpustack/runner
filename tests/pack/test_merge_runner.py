@@ -63,6 +63,21 @@ ENTRY = {
     "deprecated": False,
 }
 
+SUPPORT_HEADER = """# Supported runners
+
+<!-- runner-support-records:start -->
+| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+"""
+SUPPORT_END = "<!-- runner-support-records:end -->\n"
+
+
+def _support(pack, rows=""):
+    path = pack.parent / "docs" / "supported-runners.md"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(SUPPORT_HEADER + rows + SUPPORT_END)
+    return path
+
 
 def _workspace(tmp_path: Path, entries: list[dict] | None) -> Path:
     """Lay out the directories merge_runner.sh expects, and return the pack dir."""
@@ -75,6 +90,7 @@ def _workspace(tmp_path: Path, entries: list[dict] | None) -> Path:
         (tmp_path / "gpustack_runner" / "runner.py.json").write_text(
             json.dumps(entries, indent=2),
         )
+    _support(pack)
     return pack
 
 
@@ -573,3 +589,300 @@ def test_invalid_publication_leaves_catalog_and_fixtures_unchanged(tmp_path, fai
     result = _run(pack, [BUILD_JOB], artifacts)
     assert result.returncode != 0, result.stdout
     assert [path.read_bytes() for path in (catalog_path, fixture_path)] == before
+
+
+@pytest.mark.parametrize("service,engine", [("vllm", "0.29.0"), ("sglang", "0.5.18")])
+def test_support_promotion_requires_measured_engine_on_all_platforms(
+    tmp_path,
+    service,
+    engine,
+):
+    pack = _workspace(tmp_path, [])
+    jobs = [
+        dict(
+            BUILD_JOB,
+            service=service,
+            service_version=engine,
+            platform=platform,
+            tag=f"cuda13.0-{service}{engine}",
+            platform_tag=f"cuda-{service}-{arch}",
+        )
+        for platform, arch in [("linux/amd64", "amd64"), ("linux/arm64", "arm64")]
+    ]
+    path = _support(
+        pack,
+        f"| cuda | 13.0 | {service} | - | {engine} | - | linux/amd64, linux/arm64 | prepared |\n"
+        f"| rocm | 7.2 | {service} | - | {engine} | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        jobs,
+        {j["platform_tag"]: {service: engine} for j in jobs},
+    )
+    result = _run(pack, jobs, artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == before.replace("prepared", "published", 1)
+    assert all(row["dependencies"][service] == engine for row in _merged(pack))
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing_engine",
+        "wrong_engine",
+        "partial_platforms",
+        "unknown_collection",
+        "dev_tag",
+        "wrong_runtime",
+        "wrong_variant",
+        "wrong_plugin",
+    ],
+)
+def test_unproven_support_stays_prepared(tmp_path, case):
+    pack = _workspace(tmp_path, [])
+    jobs = [
+        dict(
+            BUILD_JOB,
+            backend="cann",
+            backend_version="9.1",
+            backend_variant="950",
+            service_version="0.23.0",
+            platform=platform,
+            tag="cann9.1-950-vllm0.23.0",
+            platform_tag=f"cann-950-{arch}",
+        )
+        for platform, arch in [("linux/amd64", "amd64"), ("linux/arm64", "arm64")]
+    ]
+    packages = {"vllm": "0.23.0", "vllm-ascend": "0.23.0rc1"}
+    if case == "missing_engine":
+        packages.pop("vllm")
+    elif case == "wrong_engine":
+        packages["vllm"] = "0.22.0"
+    elif case == "partial_platforms":
+        jobs.pop()
+    elif case == "dev_tag":
+        for job in jobs:
+            job["tag"] += "-dev"
+    elif case == "wrong_runtime":
+        for job in jobs:
+            job["backend_version"] = "9.0"
+    elif case == "wrong_variant":
+        for job in jobs:
+            job["backend_variant"] = "a3"
+    elif case == "wrong_plugin":
+        packages["vllm-ascend"] = "0.23.0rc2"
+    path = _support(
+        pack,
+        "| cann | 9.1 | vllm | A5 | 0.23.0 | 0.23.0rc1 | linux/amd64, linux/arm64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    artifacts = _publication(
+        tmp_path,
+        jobs,
+        {j["platform_tag"]: packages for j in jobs},
+        unknown=case == "unknown_collection",
+    )
+    result = _run(pack, jobs, artifacts, allow_unknown=case == "unknown_collection")
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+
+
+def test_ascend_support_promotes_exact_measured_pair_and_alias(tmp_path):
+    pack = _workspace(tmp_path, [])
+    jobs = [
+        dict(
+            BUILD_JOB,
+            backend="cann",
+            backend_version="9.1",
+            backend_variant="950",
+            service_version="0.23.0",
+            platform=platform,
+            tag="cann9.1-950-vllm0.23.0",
+            platform_tag=f"cann-950-{arch}",
+        )
+        for platform, arch in [("linux/amd64", "amd64"), ("linux/arm64", "arm64")]
+    ]
+    path = _support(
+        pack,
+        "| cann | 9.1 | vllm | A5 | 0.23.0 | 0.23.0rc1 | linux/amd64, linux/arm64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        jobs,
+        {
+            j["platform_tag"]: {"vllm": "0.23.0", "vllm-ascend": "0.23.0rc1"}
+            for j in jobs
+        },
+    )
+    result = _run(pack, jobs, artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == before.replace("prepared", "published")
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["missing_receipt", "malformed_support", "missing_support"],
+)
+def test_invalid_publication_leaves_support_catalog_and_fixture_unchanged(
+    tmp_path,
+    invalid,
+):
+    pack = _workspace(tmp_path, [ENTRY])
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n",
+    )
+    fixture = (
+        tmp_path / "tests/gpustack_runner/fixtures/test_list_runners_by_backend.json"
+    )
+    fixture.write_text('["original fixture"]\n')
+    catalog = tmp_path / "gpustack_runner/runner.py.json"
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB],
+        {BUILD_JOB["platform_tag"]: {"vllm": "0.29.0"}},
+    )
+    if invalid == "missing_receipt":
+        next(artifacts.glob("dependencies-*/receipt.json")).unlink()
+    elif invalid == "malformed_support":
+        path.write_text(path.read_text().replace("prepared", "maybe"))
+    else:
+        path.unlink()
+    files = [catalog, fixture] + ([path] if path.exists() else [])
+    before = [p.read_bytes() for p in files]
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode != 0
+    assert [p.read_bytes() for p in files] == before
+
+
+@pytest.mark.parametrize("operation", ["prune", "discard"])
+def test_catalog_refresh_preserves_support_state_without_receipts(tmp_path, operation):
+    pack, _ = _maintenance_workspace(tmp_path, [ENTRY])
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    result = _run_maintenance(
+        pack,
+        operation + "_runner.sh",
+        INPUT_BACKEND="cuda",
+        INPUT_SERVICE="vllm",
+        INPUT_SERVICE_VERSION="0.29.0",
+    )
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+    assert not (tmp_path / "docker-called").exists()
+
+
+@pytest.mark.parametrize(
+    "installed",
+    ["0.29.0rc1", "0.29.0.post1", "0.29.0.dev1", "0.29.0+vendor"],
+)
+def test_measured_engine_suffix_cannot_be_relabelled_as_stable(tmp_path, installed):
+    pack = _workspace(tmp_path, [])
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB],
+        {BUILD_JOB["platform_tag"]: {"vllm": installed}},
+    )
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+    assert _merged(pack)[0]["dependencies"]["vllm"] == installed
+
+
+@pytest.mark.parametrize(
+    "backend,runtime,service,engine,installed,published",
+    [
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0+cu129", True),
+        ("rocm", "7.2", "vllm", "0.29.0", "0.29.0+rocm723", True),
+        ("cuda", "12.9", "vllm", "0.29.0.post1", "0.29.0.post1+cu129", True),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0rc1+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0.post1+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0.dev1+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0+rocm723", False),
+        ("rocm", "7.2", "vllm", "0.29.0", "0.29.0+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0+cu129.vendor", False),
+        ("cuda", "12.9", "sglang", "0.5.18", "0.5.18+cu129", False),
+    ],
+)
+def test_vllm_accelerator_build_suffix_preserves_release_identity(
+    tmp_path,
+    backend,
+    runtime,
+    service,
+    engine,
+    installed,
+    published,
+):
+    pack = _workspace(tmp_path, [])
+    job = dict(
+        BUILD_JOB,
+        backend=backend,
+        backend_version=runtime,
+        original_backend_version=runtime,
+        service=service,
+        service_version=engine,
+        tag=f"{backend}{runtime}-{service}{engine}",
+        platform_tag=f"{backend}-{service}-amd64",
+    )
+    path = _support(
+        pack,
+        f"| {backend} | {runtime} | {service} | - | {engine} | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        [job],
+        {job["platform_tag"]: {service: installed}},
+    )
+    result = _run(pack, [job], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == (
+        before.replace("prepared", "published") if published else before
+    )
+    assert _merged(pack)[0]["dependencies"][service] == installed
+
+
+def test_one_unmeasured_platform_cannot_borrow_engine_from_other_platform(tmp_path):
+    pack = _workspace(tmp_path, [])
+    second = dict(BUILD_JOB, platform="linux/arm64", platform_tag="cuda-vllm-arm64")
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64, linux/arm64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB, second],
+        {BUILD_JOB["platform_tag"]: {"vllm": "0.29.0"}},
+    )
+    result = _run(pack, [BUILD_JOB, second], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+
+
+def test_indented_support_rows_cannot_shift_promotion_to_another_identity(tmp_path):
+    pack = _workspace(tmp_path, [])
+    path = _support(
+        pack,
+        "  | cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n"
+        "| cuda | 13.0 | vllm | - | 0.28.0 | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB],
+        {BUILD_JOB["platform_tag"]: {"vllm": "0.29.0"}},
+    )
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == before.replace("prepared", "published", 1)
