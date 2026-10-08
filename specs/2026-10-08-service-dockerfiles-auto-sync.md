@@ -1140,13 +1140,23 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/auto_sync/test_publish.py`
 
+- [x] **T12a · Write packaging and dependency guides**
+
+  Blocked by: T8, T9
+
+  Owns: `docs/packaging.md`, `docs/dependency-metadata.md`, `gpustack_runner/__utils__.py` (docstrings only), `gpustack_runner/runner.py` (docstrings only)
+
+  Acceptance: Document the implemented service recipes and final-image dependency flow. Preserve historical exceptions and metadata semantics. Fix the six baseline docstring warnings and stale README section references without runtime changes. Keep README and navigation integration in T12. This bounded documentation task may run in parallel with proposal implementation.
+
+  Verify: `uv run mkdocs build --strict`; docstring-only AST comparison for the two Python files.
+
 - [ ] **T12 · Publish canonical release instructions and finish documentation split**
 
-  Blocked by: T1, T8, T11
+  Blocked by: T1, T8, T11, T12a
 
-  Owns: `AGENTS.md`, `.agents/skills/runner-release-sync/**`, `.claude/skills`, `.gitignore`, `README.md`, `mkdocs.yml`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/release-automation.md`, `tests/auto_sync/test_project_instructions.py`, `gpustack_runner/__utils__.py` (docstrings only), `gpustack_runner/runner.py` (docstrings only)
+  Owns: `AGENTS.md`, `.agents/skills/runner-release-sync/**`, `.claude/skills`, `.gitignore`, `README.md`, `mkdocs.yml`, `docs/release-automation.md`, `tests/auto_sync/test_project_instructions.py`
 
-  Acceptance: Add the canonical skill and relative symlink without disturbing local Claude content. Document research, compatibility, patches, headless blocked/failed outcomes, configured model use, PR commands, cache behavior, and post-merge Pack. Keep README concise with Ascend rc policy and authoritative links. Include source navigation, evidence rules, coding and testing conventions, DCO sign-off, and the adopter registry. Preserve API navigation. Fix the six baseline docstring warnings and stale README section references without public API behavior changes. Verify tracked-link behavior and instruction discovery.
+  Acceptance: Add the canonical skill and relative symlink without disturbing local Claude content. Document research, compatibility, patches, headless blocked/failed outcomes, configured model use, PR commands, cache behavior, and post-merge Pack. Keep README concise with Ascend rc policy and authoritative links. Include source navigation, evidence rules, coding and testing conventions, DCO sign-off, and the adopter registry. Integrate the T12a guides and preserve API navigation. Verify tracked-link behavior and instruction discovery.
 
   Verify: `uv run pytest tests/auto_sync/test_project_instructions.py`; `uv run mkdocs build --strict`
 
@@ -1235,6 +1245,11 @@ Checkpoints:
 Tasks with overlapping ownership run in dependency order.
 Keep the system working between migration steps.
 Do not remove the old recipe or probe path before its replacement is covered.
+
+T12a validation: Strict MkDocs and scoped text/Python hooks passed.
+AST comparison confirmed that both Python files changed only in docstrings; a runtime-change negative control was rejected.
+The guides were checked against the collector, query matcher, resolver, and support-promotion code.
+Navigation and README integration remain in T12.
 
 ### Test Plan
 
