@@ -690,6 +690,13 @@ Local and CI tests use fake credentials and local model endpoints.
 They must not invoke paid model APIs, create real pull requests, build service images, or run Pack.
 Actual provider access and native image collection remain post-merge commissioning checks.
 
+Baseline validation found six warnings in the strict documentation build.
+Three filter-method docstrings omit parameter types.
+Three image-format examples are parsed as unresolved Markdown links.
+T12 fixes these documentation defects without changing public function behavior or suppressing warnings.
+Baseline actionlint also reports 18 ShellCheck findings in Pack metadata and manifest scripts.
+T7 corrects the affected variable quoting and grouped output redirection as it changes those steps.
+
 ### Project Structure
 
 Existing paths affected by the feature:
@@ -1006,7 +1013,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/pack/test_collect_dependencies.py`
 
-- [ ] **T3 · Centralize Dockerfile selection before migration**
+- [x] **T3 · Centralize Dockerfile selection before migration**
 
   Blocked by: None
 
@@ -1058,7 +1065,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Gate: review
 
-  Acceptance: Capture Package digest; collect on each native platform; assemble manifests from the exact verified digests; verify descriptors before atomic catalog replacement. Reject stale/missing/mismatched receipts and never reuse old dependencies for changed images. Preserve untouched rows and the exactly-one-row post-operation rule. Define partial-rerun receipt replacement. Replace export-stage workflow use while retaining old Dockerfile context until T8.
+  Acceptance: Capture Package digest; collect on each native platform; assemble manifests from the exact verified digests; verify descriptors before atomic catalog replacement. Reject stale/missing/mismatched receipts and never reuse old dependencies for changed images. Preserve untouched rows and the exactly-one-row post-operation rule. Define partial-rerun receipt replacement. Replace export-stage workflow use while retaining old Dockerfile context until T8. Resolve baseline ShellCheck findings in the affected workflow scripts without suppressing checks.
 
   Verify: `uv run pytest tests/pack`
 
@@ -1114,9 +1121,9 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Blocked by: T1, T8, T11
 
-  Owns: `AGENTS.md`, `.agents/skills/runner-release-sync/**`, `.claude/skills`, `.gitignore`, `README.md`, `mkdocs.yml`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/release-automation.md`, `tests/auto_sync/test_project_instructions.py`
+  Owns: `AGENTS.md`, `.agents/skills/runner-release-sync/**`, `.claude/skills`, `.gitignore`, `README.md`, `mkdocs.yml`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/release-automation.md`, `tests/auto_sync/test_project_instructions.py`, `gpustack_runner/__utils__.py` (docstrings only), `gpustack_runner/runner.py` (docstrings only)
 
-  Acceptance: Add the canonical skill and relative symlink without disturbing local Claude content. Document research, compatibility, patches, headless blocked/failed outcomes, configured model use, PR commands, cache behavior, and post-merge Pack. Keep README concise with Ascend rc policy and authoritative links. Include source navigation, evidence rules, coding and testing conventions, DCO sign-off, and the adopter registry. Preserve API navigation. Verify tracked-link behavior and instruction discovery.
+  Acceptance: Add the canonical skill and relative symlink without disturbing local Claude content. Document research, compatibility, patches, headless blocked/failed outcomes, configured model use, PR commands, cache behavior, and post-merge Pack. Keep README concise with Ascend rc policy and authoritative links. Include source navigation, evidence rules, coding and testing conventions, DCO sign-off, and the adopter registry. Preserve API navigation. Fix the six baseline docstring warnings and stale README section references without public API behavior changes. Verify tracked-link behavior and instruction discovery.
 
   Verify: `uv run pytest tests/auto_sync/test_project_instructions.py`; `uv run mkdocs build --strict`
 
@@ -1141,6 +1148,13 @@ Do not interpret their offline results as provider or image runtime acceptance.
   Acceptance: Preserve the DCO 1.1 text verbatim. Add a Runner-specific empty adopter table and contribution instructions. Change only the GPUStack copyright year to 2026 in LICENSE. Do not claim DCO app enforcement was configured.
 
   Verify: Compare DCO with the supplied committed reference; inspect the complete LICENSE diff; run repository text checks on all three files.
+
+T3 validation: 115 focused tests and 165 packaging regression tests passed.
+Active matrix and manifest outputs match the baseline for all 15 pairs and 31 build jobs.
+Selected historical operations also match their baseline outputs.
+Independent read-only review found no verified defects.
+Scoped hooks and Bash syntax checks passed; existing Pack ShellCheck findings remain assigned to T7.
+No service image or GitHub workflow execution was performed.
 
 T14 validation: DCO matches the supplied committed reference byte for byte.
 The LICENSE diff changes only the project copyright year.

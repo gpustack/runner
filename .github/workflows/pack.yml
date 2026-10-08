@@ -218,13 +218,10 @@ jobs:
           fi
           echo "EOF" >> $GITHUB_OUTPUT
 
-          DOCKER_CONTEXT="${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}"
+          DOCKER_FILE="$("${{ github.workspace }}/pack/resolve_dockerfile.sh" \
+            "${{ github.workspace }}/pack" "${{ matrix.backend }}" "${{ matrix.service }}" "${INPUT_POST_OPERATION}")"
+          DOCKER_CONTEXT="$(dirname "${DOCKER_FILE}")"
           echo "docker_context=${DOCKER_CONTEXT}" >> $GITHUB_OUTPUT
-
-          DOCKER_FILE="${DOCKER_CONTEXT}/Dockerfile"
-          if [[ -f ${DOCKER_FILE}.${{ matrix.service }} ]]; then
-            DOCKER_FILE="${DOCKER_FILE}.${{ matrix.service }}"
-          fi
           echo "docker_file=${DOCKER_FILE}" >> $GITHUB_OUTPUT
 
           # Report whether this Dockerfile exposes the dependency export stage.

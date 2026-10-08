@@ -125,14 +125,8 @@ package:
 		if [[ "$(PACKAGE_PUSH)" == "true" ]]; then \
 			JOB_EXTRA_ARGS+=("--push"); \
 		fi; \
-		JOB_LOCATION=$(SRCDIR)/pack/$${JOB_BACKEND}; \
-		if [[ -n "$(PACKAGE_POST_OPERATION)" ]]; then \
-		    JOB_LOCATION=$(SRCDIR)/pack/.post_operation/$(PACKAGE_POST_OPERATION)/$${JOB_BACKEND}; \
-		fi; \
-		JOB_DOCKERFILE="$${JOB_LOCATION}/Dockerfile"; \
-		if [[ -f "$${JOB_DOCKERFILE}.$${JOB_TARGET}" ]]; then \
-			JOB_DOCKERFILE="$${JOB_DOCKERFILE}.$${JOB_TARGET}"; \
-		fi; \
+		JOB_DOCKERFILE=$$("$(SRCDIR)/pack/resolve_dockerfile.sh" "$(SRCDIR)/pack" "$${JOB_BACKEND}" "$${JOB_TARGET}" "$(PACKAGE_POST_OPERATION)"); \
+		JOB_LOCATION=$$(dirname "$${JOB_DOCKERFILE}"); \
 		echo "[INFO] Building '$${JOB_TAG}' for target '$${JOB_TARGET}' on platform '$${JOB_PLATFORM}' using backend '$${JOB_BACKEND}'"; \
 		set -x; \
 		docker buildx build \

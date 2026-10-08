@@ -5,8 +5,7 @@ missing or mis-wired probe produces no CI signal at all, and surfaces only when
 someone dispatches a build or cuts a release. This file is that missing signal.
 
 Coverage is derived, not hardcoded. The (backend, service) pairs come from
-pack/matrix.yaml, and each pair is resolved to a Dockerfile the same way pack.yml
-does -- `Dockerfile.<service>` wins over the merged `Dockerfile` when it exists.
+pack/matrix.yaml, and each pair is resolved by the shared Dockerfile selector.
 So only the targets that are actually buildable are required to carry the probe,
 and a merged Dockerfile left stale by the per-service split is not. Adding a
 backend, a service, or a matrix rule extends this coverage on its own.
@@ -15,6 +14,7 @@ backend, a service, or a matrix rule extends this coverage on its own.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,15 +23,11 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACK_DIR = REPO_ROOT / "pack"
 
-REPO_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "pack.yml"
 MATRIX_YAML = PACK_DIR / "matrix.yaml"
 
 _YAML_LIST_ITEM_RE = re.compile(r"^\s*-\s*\"?([A-Za-z0-9][A-Za-z0-9_.-]*)\"?\s*$")
 _YAML_KEY_RE = re.compile(r"^(\s*)([A-Za-z0-9_-]+):\s*$")
 _RULE_BACKEND_RE = re.compile(r"^\s*-\s+backend:\s*\"?([A-Za-z0-9_-]+)\"?\s*$")
-
-# The file-resolution rule this module mirrors, as it appears in pack.yml.
-_WORKFLOW_DOCKERFILE_PREFERENCE = "if [[ -f ${DOCKER_FILE}.${{ matrix.service }} ]]"
 
 
 def _yaml_list_items(lines: list[str], start: int) -> list[str]:
@@ -76,9 +72,20 @@ def _matrix_build_pairs() -> set[tuple[str, str]]:
 
 
 def _resolve_dockerfile(backend: str, service: str) -> Path:
-    """Pick the Dockerfile a build would use, mirroring pack.yml's rule."""
-    split = PACK_DIR / backend / f"Dockerfile.{service}"
-    return split if split.is_file() else PACK_DIR / backend / "Dockerfile"
+    """Ask the build selector which Dockerfile supplies this target."""
+    result = subprocess.run(  # noqa: S603
+        [  # noqa: S607
+            "bash",
+            str(PACK_DIR / "resolve_dockerfile.sh"),
+            str(PACK_DIR),
+            backend,
+            service,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return Path(result.stdout.strip())
 
 
 # The buildable (Dockerfile, service target) pairs -- the only ones that must
@@ -185,23 +192,6 @@ def test_discovery_found_build_targets():
     missing = sorted(_rel(p) for p in PACK_DOCKERFILES if not p.is_file())
     assert not missing, (
         f"matrix.yaml names backends whose Dockerfile does not exist: {missing}"
-    )
-
-
-def test_workflow_still_prefers_the_split_dockerfile():
-    """The file-resolution rule `_resolve_dockerfile` mirrors still lives in pack.yml.
-
-    Without this, a change to how the workflow picks a Dockerfile would silently
-    shift which targets get built, while this module kept checking the old set.
-    """
-    # Via a local, so a failure does not dump the whole workflow file.
-    found = _WORKFLOW_DOCKERFILE_PREFERENCE in REPO_WORKFLOW.read_text(
-        encoding="utf-8",
-    )
-    assert found, (
-        f"{_rel(REPO_WORKFLOW)} no longer contains "
-        f"'{_WORKFLOW_DOCKERFILE_PREFERENCE}' -- the Dockerfile selection rule "
-        f"changed, so `_resolve_dockerfile` in this module must change with it"
     )
 
 
