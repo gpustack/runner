@@ -307,8 +307,8 @@ def run_image(image_ref, platform, backend, service, mapping, timeout) -> dict:
         *probe[1:],
     ]
     try:
-        return json.loads(execute(command, json.dumps(mapping)))
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        stdout = execute(command, json.dumps(mapping))
+    except (OSError, subprocess.SubprocessError) as error:
         # Killing the Docker client does not stop its daemon-owned container.
         # Force removal has a separate finite budget, including on timeout.
         try:
@@ -317,6 +317,7 @@ def run_image(image_ref, platform, backend, service, mapping, timeout) -> dict:
             message = f"{execution_error(error)}; container cleanup failed: {execution_error(cleanup_error)}"
             raise RuntimeError(message) from cleanup_error
         raise
+    return json.loads(stdout)
 
 
 def collect(invocation, build, mapping, *, timeout=300, disabled=False) -> dict:
@@ -581,7 +582,19 @@ def verify_manifest(manifest, builds) -> None:
         raise ValueError(message)
     actual = []
     for descriptor in manifest["manifests"]:
-        platform = descriptor.get("platform", {})
+        platform = descriptor.get("platform") if isinstance(descriptor, dict) else None
+        if (
+            not isinstance(platform, dict)
+            or any(
+                not isinstance(platform.get(key), str) or not platform[key]
+                for key in ("os", "architecture")
+            )
+            or ("variant" in platform and not isinstance(platform["variant"], str))
+            or not isinstance(descriptor.get("digest"), str)
+            or not DIGEST_RE.fullmatch(descriptor["digest"])
+        ):
+            message = "published manifest descriptor has invalid platform or digest"
+            raise ValueError(message)
         full = "/".join(platform.get(key, "") for key in ("os", "architecture"))
         if platform.get("variant"):
             full += "/" + platform["variant"]

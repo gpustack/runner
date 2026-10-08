@@ -35,7 +35,7 @@ DIGEST = "sha256:" + "a" * 64
 def environment(tmp_path):
     def create(name, distributions):
         directory = tmp_path / name
-        venv.EnvBuilder(with_pip=False).create(directory)
+        venv.EnvBuilder(with_pip=False, symlinks=True).create(directory)
         python = directory / "bin" / "python"
         result = subprocess.run(
             [
@@ -775,6 +775,30 @@ def test_docker_timeout_removes_named_container(
     assert calls[3] == ["docker", "rm", "--force", run[run.index("--name") + 1]]
 
 
+@pytest.mark.parametrize("output", ["", "probe warning\n{}"])
+def test_successful_probe_with_invalid_json_does_not_remove_container(
+    monkeypatch,
+    invocation,
+    build,
+    output,
+):
+    calls = fake_docker(monkeypatch, cleanup_failure=True)
+    run_command = collector.run_command
+
+    def execute(command, **kwargs):
+        if command[1] == "run":
+            calls.append(command)
+            return output
+        return run_command(command, **kwargs)
+
+    monkeypatch.setattr(collector, "run_command", execute)
+    receipt = collector.collect(invocation, build, MAPPING)
+    assert receipt["status"] == "failed"
+    assert "Expecting value" in receipt["error"]
+    assert "cleanup" not in receipt["error"]
+    assert not any(command[1] == "rm" for command in calls)
+
+
 @pytest.fixture
 def publication(tmp_path):
     jobs = [
@@ -890,7 +914,17 @@ def test_partial_rerun_replaces_only_selected_job(publication):
 
 @pytest.mark.parametrize(
     "change",
-    ["platform", "digest", "missing", "extra", "duplicate", "single"],
+    [
+        "platform",
+        "digest",
+        "missing",
+        "extra",
+        "duplicate",
+        "single",
+        "null-platform",
+        "non-object",
+        "invalid-architecture",
+    ],
 )
 def test_manifest_descriptor_gate_rejects_wrong_children(publication, change):
     context, directory = publication
@@ -923,6 +957,12 @@ def test_manifest_descriptor_gate_rejects_wrong_children(publication, change):
         )
     elif change == "duplicate":
         manifest["manifests"].append(copy.deepcopy(manifest["manifests"][0]))
+    elif change == "null-platform":
+        manifest["manifests"][0]["platform"] = None
+    elif change == "non-object":
+        manifest["manifests"][0] = None
+    elif change == "invalid-architecture":
+        manifest["manifests"][0]["platform"]["architecture"] = []
     else:
         manifest = {"schemaVersion": 2, "config": {"digest": DIGEST}}
     with pytest.raises(ValueError, match="manifest"):
