@@ -475,7 +475,12 @@ It does not require a GPU or one automation runner per target CPU architecture.
 Inspecting an arm64 manifest from an amd64 runner is permitted.
 Executing final-image dependency collection remains a separate Pack responsibility.
 
+Production agent execution requires Linux process supervision that can adopt and reap orphaned descendants.
+Unsupported hosts must fail before production execution; do not provide a weaker production fallback.
 macOS can run Qwen Code, but is not a required automation platform for this feature.
+Local protocol fixtures may replace the private execution boundary with a bounded test driver.
+Those fixtures verify requests and instruction loading, not Linux process cleanup.
+Ubuntu CI must execute the supervisor and fast-orphan regression tests without skipping them.
 The custom 4x and 8x labels do not imply specific hardware specifications.
 Use actual organization configuration when comparing those machines.
 
