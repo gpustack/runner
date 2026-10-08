@@ -11,9 +11,12 @@ repository is written to.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -60,6 +63,21 @@ ENTRY = {
     "deprecated": False,
 }
 
+SUPPORT_HEADER = """# Supported runners
+
+<!-- runner-support-records:start -->
+| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+"""
+SUPPORT_END = "<!-- runner-support-records:end -->\n"
+
+
+def _support(pack, rows=""):
+    path = pack.parent / "docs" / "supported-runners.md"
+    path.parent.mkdir(exist_ok=True)
+    path.write_text(SUPPORT_HEADER + rows + SUPPORT_END)
+    return path
+
 
 def _workspace(tmp_path: Path, entries: list[dict] | None) -> Path:
     """Lay out the directories merge_runner.sh expects, and return the pack dir."""
@@ -72,30 +90,134 @@ def _workspace(tmp_path: Path, entries: list[dict] | None) -> Path:
         (tmp_path / "gpustack_runner" / "runner.py.json").write_text(
             json.dumps(entries, indent=2),
         )
+    _support(pack)
     return pack
 
 
-def _probe(tmp_path: Path, platform_tag: str, probed: dict[str, str]) -> Path:
-    """Write one downloaded artifact, laid out the way download-artifact does."""
-    directory = tmp_path / "dependencies" / f"dependencies-{platform_tag}"
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "dependencies.json").write_text(json.dumps(probed))
-    return tmp_path / "dependencies"
+def _digest(value):
+    return (
+        "sha256:"
+        + hashlib.sha256(
+            json.dumps(value, sort_keys=True, separators=(",", ":")).encode(),
+        ).hexdigest()
+    )
+
+
+def _publication(tmp_path, jobs, probed=None, *, unknown=False):
+    matrix = {
+        "repository": "gpustack/runner",
+        "build_jobs": jobs,
+        "manifest_jobs": {},
+    }
+    for job in jobs:
+        matrix["manifest_jobs"].setdefault(job["tag"], []).append(job["platform_tag"])
+    invocation = {
+        "workflow_run": "123",
+        "source_revision": "b" * 40,
+        "matrix_digest": _digest(matrix),
+        "mapping_digest": _digest(json.loads(DEPENDENCIES_FILE.read_text())),
+    }
+    context = {"invocation": invocation, "matrix": matrix}
+    artifacts = tmp_path / "artifacts"
+    registry = {}
+    for index, job in enumerate(jobs):
+        build = {
+            "job": job["platform_tag"],
+            "attempt": 1,
+            "backend": job["backend"],
+            "service": job["service"],
+            "image": f"gpustack/runner:{job['platform_tag']}",
+            "platform": job["platform"],
+            "image_digest": "sha256:" + str(index + 1) * 64,
+        }
+        record = {"invocation": invocation, "build": build}
+        receipt = {
+            **record,
+            "schema_version": 1,
+            "status": "unknown" if unknown else "succeeded",
+        }
+        if not unknown:
+            receipt.update(
+                distributions=(probed or {}).get(job["platform_tag"], {}),
+                interpreter="/opt/venv/bin/python",
+                prefix="/opt/venv",
+            )
+        for prefix, name, value in (
+            ("builds", "build.json", record),
+            ("dependencies", "receipt.json", receipt),
+        ):
+            directory = artifacts / f"{prefix}-{job['platform_tag']}"
+            directory.mkdir(parents=True)
+            (directory / name).write_text(json.dumps(value))
+        manifest = registry.setdefault(
+            "gpustack/runner:" + job["tag"],
+            {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.index.v1+json",
+                "manifests": [],
+            },
+        )
+        manifest["manifests"].append(
+            {
+                "digest": build["image_digest"],
+                "platform": {
+                    "os": "linux",
+                    "architecture": job["platform"].split("/")[1],
+                },
+            },
+        )
+    published = {
+        "invocation": invocation,
+        "manifests": {
+            tag: "sha256:"
+            + hashlib.sha256(
+                json.dumps(registry["gpustack/runner:" + tag]).encode(),
+            ).hexdigest()
+            for tag in matrix["manifest_jobs"]
+        },
+    }
+    (tmp_path / "context.json").write_text(json.dumps(context))
+    (tmp_path / "manifests.json").write_text(json.dumps(published))
+    (tmp_path / "registry.json").write_text(json.dumps(registry))
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    docker = binary / "docker"
+    docker.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "assert sys.argv[1:5] == ['buildx', 'imagetools', 'inspect', '--raw']\n"
+        "with open(os.environ['FAKE_REGISTRY']) as source: registry = json.load(source)\n"
+        "sys.stdout.write(json.dumps(registry[sys.argv[5]]))\n",
+    )
+    docker.chmod(0o755)
+    return artifacts
+
+
+def _probe(tmp_path, platform_tag, probed):
+    return _publication(tmp_path, [BUILD_JOB], {platform_tag: probed})
 
 
 def _run(
-    pack: Path,
-    build_jobs: list[dict],
-    dependencies_dir: Path | None = None,
-    post_operation: str = "",
-) -> subprocess.CompletedProcess:
+    pack,
+    build_jobs,
+    dependencies_dir=None,
+    post_operation="",
+    *,
+    allow_unknown=False,
+):
     env = {
-        "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+        "PATH": f"{pack.parent / 'bin'}:{Path(sys.executable).parent}:{os.environ['PATH']}",
         "INPUT_WORKSPACE": str(pack),
         "INPUT_BUILD_JOBS": json.dumps(build_jobs),
+        "INPUT_CONTEXT": (pack.parent / "context.json").read_text()
+        if (pack.parent / "context.json").exists()
+        else "",
         "INPUT_DEPENDENCIES_FILE": str(DEPENDENCIES_FILE),
         "INPUT_DEPENDENCIES_DIR": str(dependencies_dir) if dependencies_dir else "",
+        "INPUT_MANIFESTS_FILE": str(pack.parent / "manifests.json"),
         "INPUT_POST_OPERATION": post_operation,
+        "INPUT_ALLOW_UNKNOWN": "true" if allow_unknown else "false",
+        "FAKE_REGISTRY": str(pack.parent / "registry.json"),
     }
     return subprocess.run(  # noqa: S603
         ["bash", str(MERGE_RUNNER)],  # noqa: S607
@@ -103,6 +225,7 @@ def _run(
         capture_output=True,
         text=True,
         check=False,
+        timeout=20,
     )
 
 
@@ -111,12 +234,159 @@ def _merged(pack: Path) -> list[dict]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _maintenance_workspace(tmp_path, entries):
+    pack = _workspace(tmp_path, entries)
+    for name in ("merge_runner.sh", "prune_runner.sh", "discard_runner.sh"):
+        shutil.copy2(REPO_ROOT / "pack" / name, pack / name)
+    fixture_path = (
+        tmp_path
+        / "tests"
+        / "gpustack_runner"
+        / "fixtures"
+        / "test_list_runners_by_backend.json"
+    )
+    fixture_path.write_text(json.dumps([["cuda", {"backend": "cuda"}, entries]]))
+    # No collector, mapping, receipts, or registry are available in this workspace.
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    docker = binary / "docker"
+    docker.write_text(
+        '#!/bin/sh\nprintf "unexpected registry access\\n" >&2\n'
+        'touch "$DOCKER_CALL_LOG"\nexit 1\n',
+    )
+    docker.chmod(0o755)
+    return pack, fixture_path
+
+
+def _run_maintenance(pack, script, **inputs):
+    return subprocess.run(  # noqa: S603
+        ["bash", str(pack / script)],  # noqa: S607
+        env={
+            "PATH": f"{pack.parent / 'bin'}:{os.environ['PATH']}",
+            "INPUT_WORKSPACE": str(pack),
+            "INPUT_TEMPDIR": str(pack.parent),
+            "DOCKER_CALL_LOG": str(pack.parent / "docker-called"),
+            **inputs,
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+
+
+@pytest.mark.parametrize("operation", ["prune", "discard"])
+@pytest.mark.parametrize("dependencies", [None, {}, {"torch": "2.9.0rc1+local"}])
+def test_catalog_only_callers_refresh_fixtures(tmp_path, operation, dependencies):
+    selected = dict(ENTRY, custom={"note": "preserved", "enabled": True})
+    if dependencies is not None:
+        selected["dependencies"] = dependencies
+    untouched = dict(
+        selected,
+        backend_version="12.8",
+        original_backend_version="12.8.1",
+        docker_image="gpustack/runner:cuda12.8-vllm0.29.0",
+    )
+    pack, fixture_path = _maintenance_workspace(tmp_path, [selected, untouched])
+
+    result = _run_maintenance(
+        pack,
+        f"{operation}_runner.sh",
+        INPUT_BACKEND="cuda",
+        INPUT_BACKEND_VERSION="13.0",
+    )
+
+    assert result.returncode == 0, result.stderr
+    expected = (
+        [untouched]
+        if operation == "prune"
+        else [dict(selected, deprecated=True), untouched]
+    )
+    assert _merged(pack) == expected
+    assert json.loads(fixture_path.read_text()) == [
+        ["cuda", {"backend": "cuda"}, expected],
+    ]
+    assert not (tmp_path / "docker-called").exists()
+
+
+def test_explicit_catalog_refresh_preserves_existing_rows(tmp_path):
+    entries = [dict(ENTRY, dependencies={"torch": "2.9.0+local"}, custom=["preserved"])]
+    pack, fixture_path = _maintenance_workspace(tmp_path, entries)
+    fixture_path.write_text("[]")
+
+    result = _run_maintenance(pack, "merge_runner.sh", INPUT_CATALOG_REFRESH="true")
+
+    assert result.returncode == 0, result.stderr
+    assert _merged(pack) == entries
+    assert json.loads(fixture_path.read_text()) == [
+        ["cuda", {"backend": "cuda"}, entries],
+    ]
+    assert not (tmp_path / "docker-called").exists()
+
+
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        {},
+        {"INPUT_CONTEXT": ""},
+        {"INPUT_CONTEXT": "{invalid"},
+        {"INPUT_CONTEXT": "{}"},
+    ],
+)
+def test_pack_without_valid_context_never_refreshes_catalog(tmp_path, inputs):
+    pack, fixture_path = _maintenance_workspace(tmp_path, [ENTRY])
+    catalog_path = tmp_path / "gpustack_runner" / "runner.py.json"
+    before = [path.read_bytes() for path in (catalog_path, fixture_path)]
+
+    result = _run_maintenance(
+        pack,
+        "merge_runner.sh",
+        INPUT_DEPENDENCIES_DIR=str(tmp_path),
+        INPUT_MANIFESTS_FILE=str(tmp_path / "manifests.json"),
+        **inputs,
+    )
+
+    assert result.returncode != 0
+    assert [path.read_bytes() for path in (catalog_path, fixture_path)] == before
+    assert not (tmp_path / "docker-called").exists()
+
+
+@pytest.mark.parametrize(
+    "name, value",
+    [
+        ("INPUT_CONTEXT", "{}"),
+        ("INPUT_BUILD_JOBS", "[]"),
+        ("INPUT_DEPENDENCIES_DIR", "artifacts"),
+        ("INPUT_DEPENDENCIES_FILE", "mapping.json"),
+        ("INPUT_MANIFESTS_FILE", "manifests.json"),
+        ("INPUT_POST_OPERATION", "repair"),
+        ("INPUT_ALLOW_UNKNOWN", "true"),
+    ],
+)
+def test_catalog_refresh_rejects_build_inputs(tmp_path, name, value):
+    pack, fixture_path = _maintenance_workspace(tmp_path, [ENTRY])
+    catalog_path = tmp_path / "gpustack_runner" / "runner.py.json"
+    before = [path.read_bytes() for path in (catalog_path, fixture_path)]
+
+    result = _run_maintenance(
+        pack,
+        "merge_runner.sh",
+        INPUT_CATALOG_REFRESH="true",
+        **{name: value},
+    )
+
+    assert result.returncode != 0
+    assert "Catalog refresh cannot use" in result.stderr
+    assert name in result.stderr
+    assert [path.read_bytes() for path in (catalog_path, fixture_path)] == before
+    assert not (tmp_path / "docker-called").exists()
+
+
 def test_probe_result_is_folded_onto_dependency_names(tmp_path):
     """A raw probe result is recorded under dependency names, not distributions."""
     pack = _workspace(tmp_path, [])
     # ``mooncake-transfer-engine-rocm`` outranks the generic build of the same
     # name, which is the whole point of a multi-distribution entry.
-    # ``unlisted-package`` is not whitelisted at all and is dropped.
     dependencies_dir = _probe(
         tmp_path,
         BUILD_JOB["platform_tag"],
@@ -124,7 +394,6 @@ def test_probe_result_is_folded_onto_dependency_names(tmp_path):
             "mooncake-transfer-engine": "0.3.13",
             "mooncake-transfer-engine-rocm": "0.3.13.post1",
             "torch": "2.9.0",
-            "unlisted-package": "1.0.0",
         },
     )
 
@@ -151,21 +420,22 @@ def test_probed_nothing_installed_stays_an_empty_map(tmp_path):
     assert merged[0]["dependencies"] == {}
 
 
-def test_unprobed_rebuild_carries_over_existing_dependencies(tmp_path):
-    """Rebuilding without a probe must not erase what an earlier build recorded.
-
-    An absent ``dependencies`` means "never probed", so dropping it would be a
-    lie that only another rebuild could undo.
-    """
+def test_unprobed_rebuild_fails_without_changing_catalog(tmp_path):
     existing = dict(ENTRY, dependencies={"lmcache": "0.5.4"})
     pack = _workspace(tmp_path, [existing])
+    before = (pack.parent / "gpustack_runner" / "runner.py.json").read_bytes()
+    result = _run(pack, [BUILD_JOB])
+    assert result.returncode != 0
+    assert (pack.parent / "gpustack_runner" / "runner.py.json").read_bytes() == before
 
-    result = _run(pack, [BUILD_JOB], dependencies_dir=None)
+
+@pytest.mark.parametrize("operation", ["", "repair"])
+def test_disabled_collection_removes_old_dependencies(tmp_path, operation):
+    pack = _workspace(tmp_path, [dict(ENTRY, dependencies={"lmcache": "0.5.4"})])
+    artifacts = _publication(tmp_path, [BUILD_JOB], unknown=True)
+    result = _run(pack, [BUILD_JOB], artifacts, operation, allow_unknown=True)
     assert result.returncode == 0, result.stderr
-
-    merged = _merged(pack)
-    assert len(merged) == 1
-    assert merged[0]["dependencies"] == {"lmcache": "0.5.4"}
+    assert _merged(pack) == [ENTRY]
 
 
 def test_post_operation_updates_in_place_without_adding(tmp_path):
@@ -212,3 +482,407 @@ def test_post_operation_fails_on_a_tag_that_addresses_no_entry(tmp_path):
         "expected a post operation addressing no existing entry to fail"
     )
     assert "do not address exactly one existing entry" in result.stderr, result.stderr
+
+
+@pytest.mark.parametrize("count", [0, 2])
+def test_post_operation_requires_exactly_one_existing_row(tmp_path, count):
+    pack = _workspace(tmp_path, [ENTRY] * count)
+    artifacts = _probe(tmp_path, BUILD_JOB["platform_tag"], {"torch": "2.9.0"})
+    before = (pack.parent / "gpustack_runner" / "runner.py.json").read_bytes()
+    result = _run(pack, [BUILD_JOB], artifacts, "repair")
+    assert result.returncode != 0
+    assert "exactly one existing entry" in result.stderr
+    assert (pack.parent / "gpustack_runner" / "runner.py.json").read_bytes() == before
+
+
+def test_each_platform_has_its_own_dependencies_and_untouched_rows_survive(tmp_path):
+    other = dict(ENTRY, docker_image="gpustack/runner:older", custom="preserved")
+    pack = _workspace(tmp_path, [dict(ENTRY, dependencies={"torch": "old"}), other])
+    arm = dict(
+        BUILD_JOB,
+        platform="linux/arm64",
+        platform_tag=BUILD_JOB["platform_tag"].replace("amd64", "arm64"),
+    )
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB, arm],
+        {
+            BUILD_JOB["platform_tag"]: {"torch": "2.9.0+amd64"},
+            arm["platform_tag"]: {"torch": "2.9.0rc1+arm64", "lmcache": "0.5.4"},
+        },
+    )
+    result = _run(pack, [BUILD_JOB, arm], artifacts)
+    assert result.returncode == 0, result.stderr
+    merged = _merged(pack)
+    assert other in merged
+    changed = {
+        row["platform"]: row["dependencies"]
+        for row in merged
+        if row["docker_image"] == ENTRY["docker_image"]
+    }
+    assert changed == {
+        "linux/amd64": {"torch": "2.9.0+amd64"},
+        "linux/arm64": {"torch": "2.9.0rc1+arm64", "lmcache": "0.5.4"},
+    }
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "missing",
+        "failed",
+        "digest",
+        "source",
+        "mapping",
+        "platform",
+        "malformed",
+        "extra",
+        "manifest",
+        "tag",
+        "fixture",
+    ],
+)
+def test_invalid_publication_leaves_catalog_and_fixtures_unchanged(tmp_path, failure):
+    pack = _workspace(tmp_path, [dict(ENTRY, dependencies={"torch": "old"})])
+    artifacts = _probe(tmp_path, BUILD_JOB["platform_tag"], {"torch": "2.9.0"})
+    receipt_path = next(artifacts.glob("dependencies-*/receipt.json"))
+    receipt = json.loads(receipt_path.read_text())
+    if failure == "missing":
+        receipt_path.unlink()
+    elif failure == "malformed":
+        receipt_path.write_text("{invalid")
+    elif failure == "extra":
+        shutil.copytree(receipt_path.parent, artifacts / "dependencies-unexpected")
+    elif failure == "fixture":
+        (pack / "matrix.yaml").write_text("rules: [broken")
+    elif failure in {"manifest", "tag"}:
+        path = tmp_path / "registry.json"
+        registry = json.loads(path.read_text())
+        manifest = registry[ENTRY["docker_image"]]
+        if failure == "manifest":
+            manifest["manifests"][0]["digest"] = "sha256:" + "f" * 64
+        else:
+            manifest["annotations"] = {"changed": "external-writer"}
+        path.write_text(json.dumps(registry))
+    else:
+        if failure == "failed":
+            receipt["status"] = "failed"
+        elif failure == "digest":
+            receipt["build"]["image_digest"] = "sha256:" + "f" * 64
+        elif failure == "platform":
+            receipt["build"]["platform"] = "linux/arm64"
+        elif failure == "source":
+            receipt["invocation"]["source_revision"] = "c" * 40
+        else:
+            receipt["invocation"]["mapping_digest"] = "sha256:" + "c" * 64
+        receipt_path.write_text(json.dumps(receipt))
+    catalog_path = tmp_path / "gpustack_runner" / "runner.py.json"
+    fixture_path = (
+        tmp_path
+        / "tests"
+        / "gpustack_runner"
+        / "fixtures"
+        / "test_list_runners_by_backend.json"
+    )
+    fixture_path.write_text('["original fixture"]\n')
+    before = [path.read_bytes() for path in (catalog_path, fixture_path)]
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode != 0, result.stdout
+    assert [path.read_bytes() for path in (catalog_path, fixture_path)] == before
+
+
+@pytest.mark.parametrize("service,engine", [("vllm", "0.29.0"), ("sglang", "0.5.18")])
+def test_support_promotion_requires_measured_engine_on_all_platforms(
+    tmp_path,
+    service,
+    engine,
+):
+    pack = _workspace(tmp_path, [])
+    jobs = [
+        dict(
+            BUILD_JOB,
+            service=service,
+            service_version=engine,
+            platform=platform,
+            tag=f"cuda13.0-{service}{engine}",
+            platform_tag=f"cuda-{service}-{arch}",
+        )
+        for platform, arch in [("linux/amd64", "amd64"), ("linux/arm64", "arm64")]
+    ]
+    path = _support(
+        pack,
+        f"| cuda | 13.0 | {service} | - | {engine} | - | linux/amd64, linux/arm64 | prepared |\n"
+        f"| rocm | 7.2 | {service} | - | {engine} | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        jobs,
+        {j["platform_tag"]: {service: engine} for j in jobs},
+    )
+    result = _run(pack, jobs, artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == before.replace("prepared", "published", 1)
+    assert all(row["dependencies"][service] == engine for row in _merged(pack))
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "missing_engine",
+        "wrong_engine",
+        "partial_platforms",
+        "unknown_collection",
+        "dev_tag",
+        "wrong_runtime",
+        "wrong_variant",
+        "wrong_plugin",
+    ],
+)
+def test_unproven_support_stays_prepared(tmp_path, case):
+    pack = _workspace(tmp_path, [])
+    jobs = [
+        dict(
+            BUILD_JOB,
+            backend="cann",
+            backend_version="9.1",
+            backend_variant="950",
+            service_version="0.23.0",
+            platform=platform,
+            tag="cann9.1-950-vllm0.23.0",
+            platform_tag=f"cann-950-{arch}",
+        )
+        for platform, arch in [("linux/amd64", "amd64"), ("linux/arm64", "arm64")]
+    ]
+    packages = {"vllm": "0.23.0", "vllm-ascend": "0.23.0rc1"}
+    if case == "missing_engine":
+        packages.pop("vllm")
+    elif case == "wrong_engine":
+        packages["vllm"] = "0.22.0"
+    elif case == "partial_platforms":
+        jobs.pop()
+    elif case == "dev_tag":
+        for job in jobs:
+            job["tag"] += "-dev"
+    elif case == "wrong_runtime":
+        for job in jobs:
+            job["backend_version"] = "9.0"
+    elif case == "wrong_variant":
+        for job in jobs:
+            job["backend_variant"] = "a3"
+    elif case == "wrong_plugin":
+        packages["vllm-ascend"] = "0.23.0rc2"
+    path = _support(
+        pack,
+        "| cann | 9.1 | vllm | A5 | 0.23.0 | 0.23.0rc1 | linux/amd64, linux/arm64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    artifacts = _publication(
+        tmp_path,
+        jobs,
+        {j["platform_tag"]: packages for j in jobs},
+        unknown=case == "unknown_collection",
+    )
+    result = _run(pack, jobs, artifacts, allow_unknown=case == "unknown_collection")
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+
+
+def test_ascend_support_promotes_exact_measured_pair_and_alias(tmp_path):
+    pack = _workspace(tmp_path, [])
+    jobs = [
+        dict(
+            BUILD_JOB,
+            backend="cann",
+            backend_version="9.1",
+            backend_variant="950",
+            service_version="0.23.0",
+            platform=platform,
+            tag="cann9.1-950-vllm0.23.0",
+            platform_tag=f"cann-950-{arch}",
+        )
+        for platform, arch in [("linux/amd64", "amd64"), ("linux/arm64", "arm64")]
+    ]
+    path = _support(
+        pack,
+        "| cann | 9.1 | vllm | A5 | 0.23.0 | 0.23.0rc1 | linux/amd64, linux/arm64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        jobs,
+        {
+            j["platform_tag"]: {"vllm": "0.23.0", "vllm-ascend": "0.23.0rc1"}
+            for j in jobs
+        },
+    )
+    result = _run(pack, jobs, artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == before.replace("prepared", "published")
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["missing_receipt", "malformed_support", "missing_support"],
+)
+def test_invalid_publication_leaves_support_catalog_and_fixture_unchanged(
+    tmp_path,
+    invalid,
+):
+    pack = _workspace(tmp_path, [ENTRY])
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n",
+    )
+    fixture = (
+        tmp_path / "tests/gpustack_runner/fixtures/test_list_runners_by_backend.json"
+    )
+    fixture.write_text('["original fixture"]\n')
+    catalog = tmp_path / "gpustack_runner/runner.py.json"
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB],
+        {BUILD_JOB["platform_tag"]: {"vllm": "0.29.0"}},
+    )
+    if invalid == "missing_receipt":
+        next(artifacts.glob("dependencies-*/receipt.json")).unlink()
+    elif invalid == "malformed_support":
+        path.write_text(path.read_text().replace("prepared", "maybe"))
+    else:
+        path.unlink()
+    files = [catalog, fixture] + ([path] if path.exists() else [])
+    before = [p.read_bytes() for p in files]
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode != 0
+    assert [p.read_bytes() for p in files] == before
+
+
+@pytest.mark.parametrize("operation", ["prune", "discard"])
+def test_catalog_refresh_preserves_support_state_without_receipts(tmp_path, operation):
+    pack, _ = _maintenance_workspace(tmp_path, [ENTRY])
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    result = _run_maintenance(
+        pack,
+        operation + "_runner.sh",
+        INPUT_BACKEND="cuda",
+        INPUT_SERVICE="vllm",
+        INPUT_SERVICE_VERSION="0.29.0",
+    )
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+    assert not (tmp_path / "docker-called").exists()
+
+
+@pytest.mark.parametrize(
+    "installed",
+    ["0.29.0rc1", "0.29.0.post1", "0.29.0.dev1", "0.29.0+vendor"],
+)
+def test_measured_engine_suffix_cannot_be_relabelled_as_stable(tmp_path, installed):
+    pack = _workspace(tmp_path, [])
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB],
+        {BUILD_JOB["platform_tag"]: {"vllm": installed}},
+    )
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+    assert _merged(pack)[0]["dependencies"]["vllm"] == installed
+
+
+@pytest.mark.parametrize(
+    "backend,runtime,service,engine,installed,published",
+    [
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0+cu129", True),
+        ("rocm", "7.2", "vllm", "0.29.0", "0.29.0+rocm723", True),
+        ("cuda", "12.9", "vllm", "0.29.0.post1", "0.29.0.post1+cu129", True),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0rc1+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0.post1+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0.dev1+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0+rocm723", False),
+        ("rocm", "7.2", "vllm", "0.29.0", "0.29.0+cu129", False),
+        ("cuda", "12.9", "vllm", "0.29.0", "0.29.0+cu129.vendor", False),
+        ("cuda", "12.9", "sglang", "0.5.18", "0.5.18+cu129", False),
+    ],
+)
+def test_vllm_accelerator_build_suffix_preserves_release_identity(
+    tmp_path,
+    backend,
+    runtime,
+    service,
+    engine,
+    installed,
+    published,
+):
+    pack = _workspace(tmp_path, [])
+    job = dict(
+        BUILD_JOB,
+        backend=backend,
+        backend_version=runtime,
+        original_backend_version=runtime,
+        service=service,
+        service_version=engine,
+        tag=f"{backend}{runtime}-{service}{engine}",
+        platform_tag=f"{backend}-{service}-amd64",
+    )
+    path = _support(
+        pack,
+        f"| {backend} | {runtime} | {service} | - | {engine} | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        [job],
+        {job["platform_tag"]: {service: installed}},
+    )
+    result = _run(pack, [job], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == (
+        before.replace("prepared", "published") if published else before
+    )
+    assert _merged(pack)[0]["dependencies"][service] == installed
+
+
+def test_one_unmeasured_platform_cannot_borrow_engine_from_other_platform(tmp_path):
+    pack = _workspace(tmp_path, [])
+    second = dict(BUILD_JOB, platform="linux/arm64", platform_tag="cuda-vllm-arm64")
+    path = _support(
+        pack,
+        "| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64, linux/arm64 | prepared |\n",
+    )
+    before = path.read_bytes()
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB, second],
+        {BUILD_JOB["platform_tag"]: {"vllm": "0.29.0"}},
+    )
+    result = _run(pack, [BUILD_JOB, second], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_bytes() == before
+
+
+def test_indented_support_rows_cannot_shift_promotion_to_another_identity(tmp_path):
+    pack = _workspace(tmp_path, [])
+    path = _support(
+        pack,
+        "  | cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n"
+        "| cuda | 13.0 | vllm | - | 0.28.0 | - | linux/amd64 | prepared |\n",
+    )
+    before = path.read_text()
+    artifacts = _publication(
+        tmp_path,
+        [BUILD_JOB],
+        {BUILD_JOB["platform_tag"]: {"vllm": "0.29.0"}},
+    )
+    result = _run(pack, [BUILD_JOB], artifacts)
+    assert result.returncode == 0, result.stderr
+    assert path.read_text() == before.replace("prepared", "published", 1)

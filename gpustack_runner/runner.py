@@ -366,7 +366,7 @@ def list_runners(**kwargs) -> Runners | list[dict]:
     Returns runner list that match the specified criteria.
 
     Args:
-        kwargs:
+        kwargs (dict[str, Any]):
             The criteria to filter runners, possible keys are:
 
             - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
@@ -376,8 +376,8 @@ def list_runners(**kwargs) -> Runners | list[dict]:
               e.g. `(("lmcache", ">=0.4.6"),)`, ANDed. Must be a tuple, not a list: it is
               hashed by `@lru_cache`. Names are the keys of a runner's `dependencies` map;
               an unknown one matches nothing rather than raising. An empty specifier asks
-              only whether the package is installed. See the Dependency Versions section
-              of README.md. Default is None.
+              only whether the package is installed. See the Dependency metadata guide,
+              `docs/dependency-metadata.md`. Default is None.
             - `with_unknown_dependencies`: Whether to keep runners that were never
               dependency-probed, default is True. A no-op without `dependencies`.
             - `backend`: The backend name, default is None.
@@ -801,7 +801,7 @@ def list_backend_runners(**kwargs) -> BackendRunners | list[dict]:
     Returns backend runner list that match the specified criteria.
 
     Args:
-        kwargs:
+        kwargs (dict[str, Any]):
             The criteria to filter backend runners, possible keys are:
 
             - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
@@ -811,8 +811,8 @@ def list_backend_runners(**kwargs) -> BackendRunners | list[dict]:
               e.g. `(("lmcache", ">=0.4.6"),)`, ANDed. Must be a tuple, not a list: it is
               hashed by `@lru_cache`. Names are the keys of a runner's `dependencies` map;
               an unknown one matches nothing rather than raising. An empty specifier asks
-              only whether the package is installed. See the Dependency Versions section
-              of README.md. Default is None.
+              only whether the package is installed. See the Dependency metadata guide,
+              `docs/dependency-metadata.md`. Default is None.
             - `with_unknown_dependencies`: Whether to keep runners that were never
               dependency-probed, default is True. A no-op without `dependencies`.
             - `backend`: The backend name, default is None.
@@ -979,7 +979,7 @@ def list_service_runners(**kwargs) -> ServiceRunners | list[dict]:
     Returns service runner list that match the specified criteria.
 
     Args:
-        kwargs:
+        kwargs (dict[str, Any]):
             The criteria to filter service runners, possible keys are:
 
             - `data_path`: The path to the JSON data file. If not provided, uses the default data file.
@@ -989,8 +989,8 @@ def list_service_runners(**kwargs) -> ServiceRunners | list[dict]:
               e.g. `(("lmcache", ">=0.4.6"),)`, ANDed. Must be a tuple, not a list: it is
               hashed by `@lru_cache`. Names are the keys of a runner's `dependencies` map;
               an unknown one matches nothing rather than raising. An empty specifier asks
-              only whether the package is installed. See the Dependency Versions section
-              of README.md. Default is None.
+              only whether the package is installed. See the Dependency metadata guide,
+              `docs/dependency-metadata.md`. Default is None.
             - `with_unknown_dependencies`: Whether to keep runners that were never
               dependency-probed, default is True. A no-op without `dependencies`.
             - `backend`: The backend name, default is None.

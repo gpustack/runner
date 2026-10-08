@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "repository": "gpustack/runner",
+    "default_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "discover",
+    "pr_number": null,
+    "command_id": null,
+    "command_digest": null
+  },
+  "candidates": [
+    {
+      "subscription": "cuda/vllm",
+      "status": "ready",
+      "groups": [
+        "cuda-vllm"
+      ],
+      "reason": "Upgrade the selected engine."
+    },
+    {
+      "subscription": "cuda/sglang",
+      "status": "unchanged",
+      "groups": [],
+      "reason": "Already represented."
+    },
+    {
+      "subscription": "rocm/vllm",
+      "status": "unchanged",
+      "groups": [],
+      "reason": "Already represented."
+    },
+    {
+      "subscription": "rocm/sglang",
+      "status": "unchanged",
+      "groups": [],
+      "reason": "Already represented."
+    },
+    {
+      "subscription": "cann/vllm",
+      "status": "blocked",
+      "groups": [],
+      "reason": "The latest plugin pairing needs upstream evidence."
+    },
+    {
+      "subscription": "cann/sglang",
+      "status": "failed",
+      "groups": [],
+      "reason": "The upstream query failed."
+    }
+  ],
+  "groups": [
+    {
+      "id": "cuda-vllm",
+      "status": "ready",
+      "reason": "Static proposal for review.",
+      "depends_on": [],
+      "report": "Prepare CUDA/vLLM 0.30.0 from 0.29.0. Build linux/amd64 after merge. Registry evidence and upstream compatibility are separate. Image execution and GPU checks remain unverified.",
+      "patch": "diff --git a/pack/cuda/Dockerfile.vllm b/pack/cuda/Dockerfile.vllm\n--- a/pack/cuda/Dockerfile.vllm\n+++ b/pack/cuda/Dockerfile.vllm\n@@ -1,2 +1,2 @@\n-ARG VLLM_VERSION=0.29.0\n+ARG VLLM_VERSION=0.30.0\n ARG CUDA_VERSION=13.0.1\ndiff --git a/pack/matrix.yaml b/pack/matrix.yaml\n--- a/pack/matrix.yaml\n+++ b/pack/matrix.yaml\n@@ -2,4 +2,4 @@\n   - backend: cuda\n     services: [vllm]\n     platforms: [linux/amd64]\n-    args: [VLLM_VERSION=0.29.0]\n+    args: [VLLM_VERSION=0.30.0]\ndiff --git a/docs/supported-runners.md b/docs/supported-runners.md\n--- a/docs/supported-runners.md\n+++ b/docs/supported-runners.md\n@@ -2,4 +2,5 @@\n | Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |\n | --- | --- | --- | --- | --- | --- | --- | --- |\n | cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n+| cuda | 13.0 | vllm | - | 0.30.0 | - | linux/amd64 | prepared |\n <!-- runner-support-records:end -->\n",
+      "rows": [
+        {
+          "backend": "cuda",
+          "service": "vllm",
+          "variant": "",
+          "runtime": "13.0.1",
+          "old_engine_version": "0.29.0",
+          "engine_version": "0.30.0",
+          "plugin_version": null,
+          "platform": "linux/amd64",
+          "base_image": "vllm/vllm-openai:v0.30.0",
+          "manifest": {
+            "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "platform_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "platform": "linux/amd64",
+            "config_platform": "linux/amd64",
+            "sources": [
+              "https://github.com/vllm-project/vllm/releases/tag/v0.30.0"
+            ]
+          },
+          "python": "3.12",
+          "torch": null,
+          "packages": [
+            {
+              "name": "lmcache",
+              "version": "0.5.4",
+              "decision": "retain",
+              "reason": "Keep the shared protocol pin.",
+              "sources": [
+                "https://github.com/LMCache/LMCache/blob/main/docs/source/getting_started/compatibility.rst"
+              ]
+            }
+          ],
+          "patches": [],
+          "conclusion": "inference",
+          "sources": [
+            "https://github.com/vllm-project/vllm/releases/tag/v0.30.0"
+          ],
+          "checks": [
+            "Validate the source diff without executing it."
+          ],
+          "deferred": [
+            "Pack image builds",
+            "GPU inference"
+          ]
+        }
+      ]
+    }
+  ]
+}

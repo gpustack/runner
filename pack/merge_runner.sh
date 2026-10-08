@@ -4,12 +4,28 @@ set -eo pipefail
 
 INPUT_NAMESPACE="${INPUT_NAMESPACE:-"gpustack"}"
 INPUT_REPOSITORY="${INPUT_REPOSITORY:-"runner"}"
-INPUT_BUILD_JOBS="${INPUT_BUILD_JOBS:-"[]"}"
 INPUT_WORKSPACE="${INPUT_WORKSPACE:-"$(dirname "${BASH_SOURCE[0]}")"}"
 INPUT_TEMPDIR="${INPUT_TEMPDIR:-"/tmp"}"
 INPUT_DEPENDENCIES_DIR="${INPUT_DEPENDENCIES_DIR:-""}"
-INPUT_DEPENDENCIES_FILE="${INPUT_DEPENDENCIES_FILE:-"$(dirname "${BASH_SOURCE[0]}")/dependencies.json"}"
 INPUT_POST_OPERATION="${INPUT_POST_OPERATION:-""}"
+INPUT_CATALOG_REFRESH="${INPUT_CATALOG_REFRESH:-"false"}"
+
+if [[ "${INPUT_CATALOG_REFRESH}" == "true" ]]; then
+    # Prune and discard only refresh existing rows. Reject build inputs so this
+    # mode cannot bypass validation of changed images.
+    for INPUT_NAME in INPUT_CONTEXT INPUT_BUILD_JOBS INPUT_DEPENDENCIES_DIR \
+        INPUT_DEPENDENCIES_FILE INPUT_MANIFESTS_FILE INPUT_POST_OPERATION INPUT_ALLOW_UNKNOWN; do
+        if [[ -n "${!INPUT_NAME}" ]]; then
+            echo "[ERROR] Catalog refresh cannot use ${INPUT_NAME}." >&2
+            exit 1
+        fi
+    done
+else
+    : "${INPUT_CONTEXT:?Frozen Pack context is required}"
+    : "${INPUT_DEPENDENCIES_DIR:?Package outputs and receipts are required}"
+    : "${INPUT_MANIFESTS_FILE:?Published manifest identities are required}"
+    INPUT_DEPENDENCIES_FILE="${INPUT_DEPENDENCIES_FILE:-"$(dirname "${BASH_SOURCE[0]}")/dependencies.json"}"
+fi
 
 #
 # Merge new runners with existing runners.
@@ -20,44 +36,38 @@ mkdir -p "${OUTPUT_DIR}"
 
 OUTPUT_FILE="${OUTPUT_DIR}/runner.py.json"
 
-# Index the probe results, keyed by platform tag: each build job uploads its
-# versions as an artifact named "dependencies-<platform_tag>", and a platform tag
-# is unique per (platform, tag) within a run, so it addresses exactly one record.
-PROBED_DEPENDENCIES="{}"
-if [[ -n "${INPUT_DEPENDENCIES_DIR}" ]]; then
-    for DEPENDENCIES_FILE in "${INPUT_DEPENDENCIES_DIR}"/dependencies-*/dependencies.json; do
-        [[ -f "${DEPENDENCIES_FILE}" ]] || continue
-        PLATFORM_TAG="$(basename "$(dirname "${DEPENDENCIES_FILE}")")"
-        PROBED_DEPENDENCIES="$(echo "${PROBED_DEPENDENCIES}" | jq -cr \
-            --arg platform_tag "${PLATFORM_TAG#dependencies-}" \
-            --slurpfile probed "${DEPENDENCIES_FILE}" \
-            '.[$platform_tag] = $probed[0]')"
-    done
+WORK_DIR="$(mktemp -d "${INPUT_TEMPDIR}/runner-merge.XXXXXX")"
+CATALOG_CANDIDATE=""
+FIXTURES_CANDIDATE=""
+SUPPORT_CANDIDATE=""
+trap 'rm -rf "${WORK_DIR}"; rm -f "${CATALOG_CANDIDATE}" "${FIXTURES_CANDIDATE}" "${SUPPORT_CANDIDATE}"' EXIT
+if [[ "${INPUT_CATALOG_REFRESH}" != "true" ]]; then
+    # Validate the full frozen matrix, Package outputs, receipts and current registry
+    # descriptors before rendering either output. Missing data never means reuse.
+    printf '%s\n' "${INPUT_CONTEXT}" >"${WORK_DIR}/context.json"
+    INPUT_BUILD_JOBS="$(jq -ce '.matrix.build_jobs' "${WORK_DIR}/context.json")"
+    EXPECTED_REPOSITORY="$(jq -er '.matrix.repository' "${WORK_DIR}/context.json")"
+    if [[ "${EXPECTED_REPOSITORY}" != "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}" ]]; then
+        echo "[ERROR] Catalog repository differs from the frozen Pack context." >&2
+        exit 1
+    fi
+    COLLECTION_OPTIONS=()
+    if [[ "${INPUT_ALLOW_UNKNOWN:-false}" == "true" ]]; then
+        COLLECTION_OPTIONS+=(--allow-unknown)
+    fi
+    python3 "$(dirname "${BASH_SOURCE[0]}")/collect_dependencies.py" catalog \
+        --context "${WORK_DIR}/context.json" \
+        --mapping "${INPUT_DEPENDENCIES_FILE}" \
+        --artifacts "${INPUT_DEPENDENCIES_DIR}" \
+        --manifests "${INPUT_MANIFESTS_FILE}" \
+        "${COLLECTION_OPTIONS[@]}" \
+        --output "${WORK_DIR}/dependencies.json"
+    PROBED_DEPENDENCIES="$(cat "${WORK_DIR}/dependencies.json")"
+
+    # Review the probed dependencies.
+    echo "[INFO] Probed Dependencies:"
+    jq -r '.' <<<"${PROBED_DEPENDENCIES}"
 fi
-
-# Fold the probe results onto the dependency names of `pack/dependencies.json`.
-#
-# A probe reports raw distribution names, and one dependency may ship under
-# several of them (``lmcache-ascend`` on CANN, ``lmcache`` elsewhere). The first
-# name of the list that is installed wins, so `runner.py.json` records one
-# version per dependency and the query side needs no second lookup. A dependency
-# no image installed is simply absent, like any other uninstalled package.
-# `-S` keeps the folded map sorted whatever order the names file is in, so the
-# `runner.py.json` diff stays readable.
-PROBED_DEPENDENCIES="$(echo "${PROBED_DEPENDENCIES}" | jq -cSr \
-    --slurpfile dependencies "${INPUT_DEPENDENCIES_FILE}" \
-    '$dependencies[0] as $names
-     | map_values(
-         . as $probed
-         | reduce ($names | to_entries[]) as $entry ({};
-             ($entry.value | map(select($probed[.] != null)) | first) as $hit
-             | if $hit == null then . else . + {($entry.key): $probed[$hit]} end
-           )
-       )')"
-
-# Review the probed dependencies.
-echo "[INFO] Probed Dependencies:"
-jq -r '.' <<<"${PROBED_DEPENDENCIES}"
 
 # Load existing runners if exists.
 ORIGINAL_RUNNERS="[]"
@@ -65,7 +75,9 @@ if [[ -f "${OUTPUT_FILE}" ]]; then
     ORIGINAL_RUNNERS="$(jq -cr '.' "${OUTPUT_FILE}")"
 fi
 
-if [[ -n "${INPUT_POST_OPERATION}" ]]; then
+if [[ "${INPUT_CATALOG_REFRESH}" == "true" ]]; then
+    MERGED_RUNNERS="${ORIGINAL_RUNNERS}"
+elif [[ -n "${INPUT_POST_OPERATION}" ]]; then
     # Post operation mode: update in place, never add.
     #
     # An operation mutates an already released tag, so the only field it may
@@ -73,8 +85,7 @@ if [[ -n "${INPUT_POST_OPERATION}" ]]; then
     # Its matrix is pruned to just those tags -- building entries from it, the way
     # the normal path does, would invent entries for tags that were never released
     # and rewrite the other fields from a non-authoritative source. Nothing is
-    # reconstructed here, so nothing can be lost, and the normal path's carry-over
-    # step needs no counterpart.
+    # reconstructed here, so unrelated row fields stay unchanged.
 
     # Relate each probe result back to the entry it belongs to.
     PROBED_ENTRIES="$(echo "${INPUT_BUILD_JOBS}" | jq -cr \
@@ -82,7 +93,6 @@ if [[ -n "${INPUT_POST_OPERATION}" ]]; then
         --arg repository "${INPUT_REPOSITORY}" \
         --argjson dependencies "${PROBED_DEPENDENCIES}" \
         '[.[]
-          | select($dependencies[.platform_tag] != null)
           | {
               platform_tag: .platform_tag,
               platform: .platform,
@@ -90,9 +100,8 @@ if [[ -n "${INPUT_POST_OPERATION}" ]]; then
               dependencies: $dependencies[.platform_tag],
             }]')"
 
-    # Fail on anything that does not address exactly one existing entry. Only the
-    # jobs that actually probed are checked: one without a probe result has no
-    # data to write, so it can neither create an entry nor corrupt one.
+    # Every changed image must address exactly one existing entry, including
+    # explicit unknown results. Unknown removes stale metadata for that image.
     UNLOCATABLE="$(jq -cn \
         --argjson probed "${PROBED_ENTRIES}" \
         --argjson original "${ORIGINAL_RUNNERS}" \
@@ -114,8 +123,10 @@ if [[ -n "${INPUT_POST_OPERATION}" ]]; then
         --argjson original "${ORIGINAL_RUNNERS}" \
         '($probed | INDEX([.platform, .docker_image] | tostring)) as $index
          | $original
-         | map(($index[[.platform, .docker_image] | tostring] | .dependencies) as $d
-               | if $d then . + {dependencies: $d} else . end)')"
+         | map(($index[[.platform, .docker_image] | tostring]) as $p
+               | if $p == null then .
+                 elif $p.dependencies == null then del(.dependencies)
+                 else . + {dependencies: $p.dependencies} end)')"
 
     echo "[INFO] Updated Runners: $(echo "${PROBED_ENTRIES}" | jq -r 'length') of $(echo "${ORIGINAL_RUNNERS}" | jq -r 'length')"
 else
@@ -136,28 +147,22 @@ else
             deprecated: (.deprecated // false),
         } + (if $dependencies[.platform_tag] then {dependencies: $dependencies[.platform_tag]} else {} end)' | jq -cs .)"
 
-    # Carry over the dependencies of the entries this build did not probe.
-    # Otherwise rebuilding an unprobed image would replace an entry that carries
-    # dependencies with one that does not, and an absent `dependencies` means
-    # "never probed" -- erasing it is a lie only a rebuild can undo.
-    NEW_RUNNERS="$(echo "${NEW_RUNNERS}" | jq -cr \
+    # Replace selected identities; preserve every untouched historical row.
+    MERGED_RUNNERS="$(jq -cn \
+        --argjson new "${NEW_RUNNERS}" \
         --argjson original "${ORIGINAL_RUNNERS}" \
-        '($original | INDEX([.platform, .docker_image] | tostring)) as $index
-         | map(if has("dependencies") then .
-               else . + (($index[[.platform, .docker_image] | tostring] | .dependencies) as $d
-                         | if $d then {dependencies: $d} else {} end)
-               end)')"
+        '($new | INDEX([.platform, .docker_image] | tostring)) as $index
+         | $new + [$original[] | select($index[[.platform, .docker_image] | tostring] == null)]')"
+fi
 
-    # Merge new runners with original runners, and distinct by docker_image.
-    MERGED_RUNNERS="$(echo "${NEW_RUNNERS}" "${ORIGINAL_RUNNERS}" | jq -cs 'add | unique_by([.platform, .docker_image])')"
-
+if [[ -z "${INPUT_POST_OPERATION}" ]]; then
     # Normalize the merged runners by sorting them.
     MERGED_RUNNERS="$(echo "${MERGED_RUNNERS}" | jq -cr 'sort_by([.backend, (.backend_variant | explode | map(-.)), (.backend_version | explode | map(-.)), .service, (.service_version | split(".") | map(tonumber?) | map(-.))])')"
 fi
 
 # Review the merged runners.
 echo "[INFO] Merged Runners:"
-jq -r '.' <<<"${MERGED_RUNNERS}" | tee "${OUTPUT_FILE}" || true
+jq -r '.' <<<"${MERGED_RUNNERS}"
 
 #
 # Create fixtures for the merged runners.
@@ -185,4 +190,29 @@ done
 
 # Review the fixtures.
 echo "[INFO] Merged Fixtures:"
-jq -r '.' <<<"${OUTPUT_FIXTURES}" | tee "${OUTPUT_FIXTURES_FILE}" || true
+jq -r '.' <<<"${OUTPUT_FIXTURES}"
+
+# Render all complete files before any replacement. Each rename is atomic
+# because its candidate lives in the destination directory.
+if [[ "${INPUT_CATALOG_REFRESH}" != "true" ]]; then
+    # Only this invocation's validated measurements can confirm prepared support.
+    # Prune/discard have no collection evidence and must preserve support state.
+    SUPPORT_FILE="${INPUT_WORKSPACE}/../docs/supported-runners.md"
+    SUPPORT_CANDIDATE="$(mktemp "$(dirname "${SUPPORT_FILE}")/.support.XXXXXX")"
+    python3 "$(dirname "${BASH_SOURCE[0]}")/../tools/auto_sync/discovery.py" promote \
+        --support "${SUPPORT_FILE}" \
+        --context "${WORK_DIR}/context.json" \
+        --dependencies "${WORK_DIR}/dependencies.json" \
+        --output "${SUPPORT_CANDIDATE}"
+    chmod 644 "${SUPPORT_CANDIDATE}"
+fi
+CATALOG_CANDIDATE="$(mktemp "${OUTPUT_DIR}/.runner.XXXXXX")"
+FIXTURES_CANDIDATE="$(mktemp "${OUTPUT_FIXTURES_DIR}/.runners.XXXXXX")"
+jq '.' <<<"${MERGED_RUNNERS}" >"${CATALOG_CANDIDATE}"
+jq '.' <<<"${OUTPUT_FIXTURES}" >"${FIXTURES_CANDIDATE}"
+chmod 644 "${CATALOG_CANDIDATE}" "${FIXTURES_CANDIDATE}"
+mv -f "${FIXTURES_CANDIDATE}" "${OUTPUT_FIXTURES_FILE}"
+mv -f "${CATALOG_CANDIDATE}" "${OUTPUT_FILE}"
+if [[ -n "${SUPPORT_CANDIDATE}" ]]; then
+    mv -f "${SUPPORT_CANDIDATE}" "${SUPPORT_FILE}"
+fi

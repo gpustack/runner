@@ -5,7 +5,7 @@ _BLANK_TAG = "latest"
 
 def split_image(image: str, fill_blank_tag: bool = False) -> tuple:
     """
-    Split the Docker completed image string into its image_name([registry/][namespace/]repository) and image_tag.
+    Split the Docker completed image string into its image_name (`[registry/][namespace/]repository`) and image_tag.
 
     Args:
         image:
@@ -34,7 +34,7 @@ def merge_image(image_name: str, image_tag: str | None = None) -> str:
 
     Args:
         image_name:
-            The Docker image name, in form of [registry/][namespace/]repository.
+            The Docker image name, in form of `[registry/][namespace/]repository`.
         image_tag:
             The Docker image tag.
 
@@ -113,7 +113,7 @@ def replace_image_with(
     and the specified components are replaced with the provided values.
 
     The format of a Docker image string is:
-    [registry/][namespace/]repository[:tag|@digest]
+    `[registry/][namespace/]repository[:tag|@digest]`
 
     Args:
         image:

@@ -1,0 +1,364 @@
+name: Runner Auto Sync
+
+on:
+  schedule:
+    - cron: "23 1 * * 1"
+  workflow_dispatch:
+  issue_comment:
+    types: [created]
+  workflow_call:
+    inputs:
+      llm-url:
+        type: string
+        required: true
+      llm-model:
+        type: string
+        required: true
+      llm-protocol:
+        type: string
+        required: false
+      llm-use-anthropic:
+        type: string
+        required: false
+      llm-thinking:
+        type: string
+        required: false
+      llm-thinking-clear:
+        type: string
+        required: false
+      llm-temperature:
+        type: string
+        required: false
+      llm-top-p:
+        type: string
+        required: false
+      llm-reasoning-effort:
+        type: string
+        required: false
+      llm-timeout:
+        type: string
+        required: false
+      llm-context-window-size:
+        type: string
+        required: false
+      llm-modalities:
+        type: string
+        required: false
+      llm-auth-header:
+        type: string
+        required: false
+      llm-extra-body:
+        type: string
+        required: false
+    secrets:
+      llm-auth-token:
+        required: true
+      llm-extra-headers:
+        required: false
+      CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN:
+        required: false
+      CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS:
+        required: false
+      CI_PRT_GENERATOR_ID:
+        required: true
+      CI_PRT_GENERATOR_KEY:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.repository }}-auto-sync
+  queue: max
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  research:
+    if: >-
+      github.event_name != 'issue_comment' ||
+      (github.event.action == 'created' && github.event.issue.pull_request &&
+       github.event.comment.user.type != 'Bot' && startsWith(github.event.comment.body, '/auto-sync'))
+    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}
+    timeout-minutes: 60
+    outputs:
+      default-sha: ${{ steps.freeze.outputs.default-sha }}
+      ready: ${{ steps.prepare.outputs.ready }}
+      artifact-name: auto-sync-research-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout trusted default branch
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Freeze controller and policy revision
+        id: freeze
+        run: echo "default-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Setup UV
+        id: uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.24"
+          enable-cache: true
+          python-version: "3.10"
+      - name: Install locked Python dependencies
+        run: |
+          make prepare
+          uv sync --locked --all-packages
+      - name: Identify tool cache
+        id: tool-key
+        run: |
+          key=$(bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" --cache-key)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore tool installation
+        id: restore-tools
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: ${{ steps.tool-key.outputs.key }}
+      - name: Install or verify pinned tools
+        id: tools
+        run: |
+          bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
+          jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Save verified tools before research
+        id: save-tools
+        if: github.event_name != 'issue_comment' && steps.restore-tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: ${{ steps.tool-key.outputs.key }}
+      - name: Create repository read token
+        id: read-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_PRT_GENERATOR_ID }}
+          private-key: ${{ secrets.CI_PRT_GENERATOR_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+          permission-pull-requests: read
+      - name: Authorize and prepare frozen research context
+        id: prepare
+        env:
+          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+          AUTO_SYNC_GITHUB_TOKEN: ${{ steps.read-token.outputs.token }}
+          AUTO_SYNC_BOT_LOGIN: ${{ steps.read-token.outputs.app-slug }}[bot]
+          AUTO_SYNC_DEFAULT_SHA: ${{ steps.freeze.outputs.default-sha }}
+        run: |
+          args=()
+          if [[ "$GITHUB_EVENT_NAME" == issue_comment ]]; then
+            args+=(--event "$GITHUB_EVENT_PATH")
+          fi
+          uv run python -m tools.auto_sync.run prepare --repo "$GITHUB_WORKSPACE" \
+            --repository "$GITHUB_REPOSITORY" --default-sha "$AUTO_SYNC_DEFAULT_SHA" \
+            --output "$RUNNER_TEMP/auto-sync-prepared" "${args[@]}"
+          jq -er '.ready | if type == "boolean" then "ready=" + tostring else error("invalid ready flag") end' \
+            "$RUNNER_TEMP/auto-sync-prepared/result.json" >> "$GITHUB_OUTPUT"
+      - name: Research and propose
+        id: proposal
+        if: steps.prepare.outputs.ready == 'true'
+        env:
+          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+          AUTO_SYNC_GITHUB_TOKEN: ${{ steps.read-token.outputs.token }}
+          AUTO_SYNC_BOT_LOGIN: ${{ steps.read-token.outputs.app-slug }}[bot]
+          AUTO_SYNC_LLM_URL: ${{ inputs.llm-url || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL }}
+          AUTO_SYNC_LLM_MODEL: ${{ inputs.llm-model || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL }}
+          AUTO_SYNC_LLM_PROTOCOL: ${{ inputs.llm-protocol || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL }}
+          AUTO_SYNC_LLM_USE_ANTHROPIC: ${{ inputs.llm-use-anthropic || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC }}
+          AUTO_SYNC_LLM_THINKING: ${{ inputs.llm-thinking || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING }}
+          AUTO_SYNC_LLM_THINKING_CLEAR: ${{ inputs.llm-thinking-clear || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR }}
+          AUTO_SYNC_LLM_TEMPERATURE: ${{ inputs.llm-temperature || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE }}
+          AUTO_SYNC_LLM_TOP_P: ${{ inputs.llm-top-p || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P }}
+          AUTO_SYNC_LLM_REASONING_EFFORT: ${{ inputs.llm-reasoning-effort || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT }}
+          AUTO_SYNC_LLM_TIMEOUT: ${{ inputs.llm-timeout || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT }}
+          AUTO_SYNC_LLM_CONTEXT_WINDOW_SIZE: ${{ inputs.llm-context-window-size || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}
+          AUTO_SYNC_LLM_MODALITIES: ${{ inputs.llm-modalities || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODALITIES }}
+          AUTO_SYNC_LLM_AUTH_HEADER: ${{ inputs.llm-auth-header || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER }}
+          AUTO_SYNC_LLM_EXTRA_HEADERS: ${{ secrets.llm-extra-headers || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS }}
+          AUTO_SYNC_LLM_EXTRA_BODY: ${{ inputs.llm-extra-body || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY }}
+          AUTO_SYNC_LLM_AUTH_TOKEN: ${{ secrets.llm-auth-token || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
+        run: |
+          uv run python -m tools.auto_sync.run research --repo "$GITHUB_WORKSPACE" \
+            --bundle "$RUNNER_TEMP/auto-sync-prepared" --output "$RUNNER_TEMP/auto-sync-research"
+      - name: Select result bundle
+        id: result
+        if: always()
+        run: |
+          bundle="$RUNNER_TEMP/auto-sync-prepared"
+          if [[ -f "$RUNNER_TEMP/auto-sync-research/result.json" ]]; then
+            bundle="$RUNNER_TEMP/auto-sync-research"
+          fi
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+          if [[ -f "$bundle/result.json" ]]; then
+            cat "$bundle/result.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve research result
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-sync-research-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ steps.result.outputs.bundle }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  validation:
+    needs: research
+    if: needs.research.outputs.ready == 'true'
+    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}
+    timeout-minutes: 60
+    outputs:
+      publishable: ${{ steps.validate.outputs.publishable }}
+      artifact-name: auto-sync-validated-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout frozen controller
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.research.outputs.default-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup UV
+        id: uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.24"
+          enable-cache: true
+          python-version: "3.10"
+      - name: Install locked Python dependencies
+        run: |
+          make prepare
+          uv sync --locked --all-packages
+      - name: Identify tool cache
+        id: tool-key
+        run: |
+          key=$(bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" --cache-key)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore tool installation
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: ${{ steps.tool-key.outputs.key }}
+      - name: Install or verify pinned tools
+        id: tools
+        run: |
+          bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
+          jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Download candidate data
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.research.outputs.artifact-name }}
+          path: ${{ runner.temp }}/auto-sync-research
+      - name: Validate without credentials
+        id: validate
+        env:
+          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+        run: |
+          uv run python -m tools.auto_sync.run validate --repo "$GITHUB_WORKSPACE" \
+            --bundle "$RUNNER_TEMP/auto-sync-research" --output "$RUNNER_TEMP/auto-sync-validated"
+          jq -er '.publishable | if type == "boolean" then "publishable=" + tostring else error("invalid publishable flag") end' \
+            "$RUNNER_TEMP/auto-sync-validated/result.json" >> "$GITHUB_OUTPUT"
+      - name: Summarize validation
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/auto-sync-validated/result.json" ]]; then
+            cat "$RUNNER_TEMP/auto-sync-validated/result.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve original context and validated artifact
+        id: upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-sync-validated-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/auto-sync-validated
+          if-no-files-found: warn
+          retention-days: 30
+
+  publication:
+    needs: [research, validation]
+    if: needs.validation.outputs.publishable == 'true'
+    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout frozen controller
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.research.outputs.default-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup UV
+        id: uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.24"
+          enable-cache: true
+          python-version: "3.10"
+      - name: Install locked Python dependencies
+        run: |
+          make prepare
+          uv sync --locked --all-packages
+      - name: Identify tool cache
+        id: tool-key
+        run: |
+          key=$(bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" --cache-key)
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+      - name: Restore tool installation
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: ${{ steps.tool-key.outputs.key }}
+      - name: Install or verify pinned tools
+        id: tools
+        run: |
+          bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
+          jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/tools.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Restore original validated publication bundle
+        id: bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.validation.outputs.artifact-name }}
+          path: ${{ runner.temp }}/auto-sync-validated
+      - name: Create repository write token after validation
+        id: write-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_PRT_GENERATOR_ID }}
+          private-key: ${{ secrets.CI_PRT_GENERATOR_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Verify App identity and publish original validated data
+        id: publish
+        env:
+          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+          AUTO_SYNC_GITHUB_TOKEN: ${{ steps.write-token.outputs.token }}
+          AUTO_SYNC_BOT_LOGIN: ${{ steps.write-token.outputs.app-slug }}[bot]
+        run: |
+          uv run python -m tools.auto_sync.run publish --repo "$GITHUB_WORKSPACE" \
+            --bundle "$RUNNER_TEMP/auto-sync-validated" --output "$RUNNER_TEMP/auto-sync-publication.json"
+      - name: Summarize publication
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/auto-sync-publication.json" ]]; then
+            cat "$RUNNER_TEMP/auto-sync-publication.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Preserve publication result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-sync-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/auto-sync-publication.json
+          if-no-files-found: warn
+          retention-days: 30

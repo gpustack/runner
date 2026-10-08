@@ -6,6 +6,11 @@
 
 name: Pack
 
+# Hold one lock through image publication and catalog preparation.
+concurrency:
+  group: pack-publication-${{ github.repository }}
+  cancel-in-progress: false
+
 permissions:
   actions: write
   contents: write
@@ -114,6 +119,7 @@ jobs:
     outputs:
       build_jobs: ${{ steps.expand-matrix.outputs.build_jobs }}
       manifest_jobs: ${{ steps.expand-matrix.outputs.manifest_jobs }}
+      context: ${{ steps.freeze.outputs.context }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -134,6 +140,40 @@ jobs:
           INPUT_TEMPDIR: ${{ runner.temp }}
         run: ${{ github.workspace }}/pack/expand_matrix.sh
 
+      - name: Download Frozen Invocation
+        if: ${{ github.run_attempt > 1 }}
+        uses: actions/download-artifact@v4
+        with:
+          name: pack-context
+          path: ${{ runner.temp }}/invocation
+      - name: Freeze Invocation
+        id: freeze
+        env:
+          BUILD_JOBS: ${{ steps.expand-matrix.outputs.build_jobs }}
+          MANIFEST_JOBS: ${{ steps.expand-matrix.outputs.manifest_jobs }}
+        run: |
+          set -euo pipefail
+          jq -n --argjson builds "$BUILD_JOBS" --argjson manifests "$MANIFEST_JOBS" \
+            --arg repository "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}" \
+            '{repository: $repository, build_jobs: $builds, manifest_jobs: $manifests}' >"$RUNNER_TEMP/matrix.json"
+          freeze_options=(--matrix "$RUNNER_TEMP/matrix.json"
+            --workflow-run "$GITHUB_RUN_ID" --source-revision "$GITHUB_SHA")
+          if [[ "$GITHUB_RUN_ATTEMPT" != "1" ]]; then
+            freeze_options+=(--previous "$RUNNER_TEMP/invocation/context.json")
+          fi
+          python3 pack/collect_dependencies.py freeze "${freeze_options[@]}" \
+            --mapping pack/dependencies.json --output "$RUNNER_TEMP/context.json"
+          echo "context=$(jq -c . "$RUNNER_TEMP/context.json")" >>"$GITHUB_OUTPUT"
+      # The first attempt owns this immutable record. Missing rerun state fails closed.
+      - name: Upload Frozen Invocation
+        if: ${{ github.run_attempt == 1 }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pack-context
+          path: ${{ runner.temp }}/context.json
+          if-no-files-found: error
+          retention-days: 30
+
   # Build the Docker images per OS/ARCH.
   build:
     timeout-minutes: 360
@@ -149,6 +189,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           lfs: true
+          ref: ${{ github.sha }}
           fetch-depth: 1
           persist-credentials: false
       - name: Maximize Docker Build Space
@@ -160,6 +201,7 @@ jobs:
       - name: Setup BuildX
         uses: docker/setup-buildx-action@v3
         with:
+          version: v0.31.1
           driver-opts: |
             network=host
             env.BUILDKIT_STEP_LOG_MAX_SIZE=-1
@@ -188,74 +230,53 @@ jobs:
 
           set -eo pipefail
 
-          # Export tags to GH output.
-          echo "tags<<EOF" >> $GITHUB_OUTPUT
-          echo "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${INPUT_PLATFORM_TAG}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            # Export tags to GH output.
+            echo "tags<<EOF"
+            echo "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${INPUT_PLATFORM_TAG}"
+            echo "EOF"
 
-          # Export build_args to GH output.
-          echo "build_args<<EOF" >> $GITHUB_OUTPUT
-          for arg in ${INPUT_ARGS}; do
-            echo "${arg}" >> $GITHUB_OUTPUT
-          done
-          echo "EOF" >> $GITHUB_OUTPUT
-
-          # Export cache_from to GH output.
-          echo "cache_from<<EOF" >> $GITHUB_OUTPUT
-          if [[ "${INPUT_WITH_CACHE}" == "true" ]]; then
-            for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
-              echo "type=registry,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}" >> $GITHUB_OUTPUT
+            # Export build_args to GH output.
+            echo "build_args<<EOF"
+            for arg in ${INPUT_ARGS}; do
+              echo "${arg}"
             done
-          fi
-          echo "EOF" >> $GITHUB_OUTPUT
+            echo "EOF"
 
-          # Export cache_to to GH output.
-          echo "cache_to<<EOF" >> $GITHUB_OUTPUT
-          if [[ -z "${INPUT_POST_OPERATION}" ]]; then
-            for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
-              echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}" >> $GITHUB_OUTPUT
-            done
-          fi
-          echo "EOF" >> $GITHUB_OUTPUT
+            # Export cache_from to GH output.
+            echo "cache_from<<EOF"
+            if [[ "${INPUT_WITH_CACHE}" == "true" ]]; then
+              for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
+                echo "type=registry,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}"
+              done
+            fi
+            echo "EOF"
 
-          DOCKER_CONTEXT="${{ github.workspace }}/pack${{ github.event.inputs.post_operation && format('/.post_operation/{0}', github.event.inputs.post_operation) || '' }}/${{ matrix.backend }}"
-          echo "docker_context=${DOCKER_CONTEXT}" >> $GITHUB_OUTPUT
+            # Export cache_to to GH output.
+            echo "cache_to<<EOF"
+            if [[ -z "${INPUT_POST_OPERATION}" ]]; then
+              for tag_cache in ${INPUT_PLATFORM_TAG_CACHE}; do
+                echo "type=registry,ignore-error=true,mode=max,compression=gzip,ref=${INPUT_NAMESPACE}/${INPUT_CACHE_REPOSITORY}:${tag_cache}"
+              done
+            fi
+            echo "EOF"
 
-          DOCKER_FILE="${DOCKER_CONTEXT}/Dockerfile"
-          if [[ -f ${DOCKER_FILE}.${{ matrix.service }} ]]; then
-            DOCKER_FILE="${DOCKER_FILE}.${{ matrix.service }}"
-          fi
-          echo "docker_file=${DOCKER_FILE}" >> $GITHUB_OUTPUT
+            DOCKER_FILE="$("${{ github.workspace }}/pack/resolve_dockerfile.sh" \
+              "${{ github.workspace }}/pack" "${{ matrix.backend }}" "${{ matrix.service }}" "${INPUT_POST_OPERATION}")"
+            DOCKER_CONTEXT="$(dirname "${DOCKER_FILE}")"
+            echo "docker_context=${DOCKER_CONTEXT}"
+            echo "docker_file=${DOCKER_FILE}"
 
-          # Report whether this Dockerfile exposes the dependency export stage.
-          #
-          # Only post operations are gated on this. The ones predating dependency
-          # probing have no `<service>-deps` stage, and exporting it would fail the
-          # run -- after the image was already pushed. Skipping leaves the recorded
-          # dependencies stale but never wrong, since `pack/merge_runner.sh` only
-          # updates the entries it actually probed. The normal path is never gated,
-          # so a backend Dockerfile that drops the stage still fails loudly.
-          HAS_DEPENDENCIES_STAGE=false
-          if grep -qiE "^[[:space:]]*FROM[[:space:]]+.*[[:space:]]+AS[[:space:]]+${{ matrix.service }}-deps([[:space:]]|#|$)" "${DOCKER_FILE}"; then
-            HAS_DEPENDENCIES_STAGE=true
-          fi
-          echo "[INFO]: dependency export stage '${{ matrix.service }}-deps' present in ${DOCKER_FILE}: ${HAS_DEPENDENCIES_STAGE}"
-          echo "has_dependencies_stage=${HAS_DEPENDENCIES_STAGE}" >> $GITHUB_OUTPUT
+            # Historical recipes still mount the shared helper.
+            echo "build_contexts<<EOF"
+            if [[ -n "${INPUT_POST_OPERATION}" ]]; then
+              echo "shared=${{ github.workspace }}/pack/shared"
+            fi
+            echo "EOF"
 
-          # Flatten the whitelist into the build argument consumed by
-          # pack/shared/probe_dependencies.sh. An empty one must fail the job here:
-          # the script treats empty as "skip probing", the escape hatch for manual
-          # local builds, which in CI would silently ship an unprobed image.
-          DEPENDENCY_PACKAGES="$(jq -er '[.[][]] | join(" ")' "${{ github.workspace }}/pack/dependencies.json")"
-          # Match on "has a non-whitespace character" rather than stripping spaces:
-          # `${VAR// /}` strips spaces only, so a tab would pass as non-empty.
-          if [[ ! "${DEPENDENCY_PACKAGES}" =~ [^[:space:]] ]]; then
-            echo "[ERROR]: empty dependency whitelist from 'pack/dependencies.json'" >&2
-            exit 1
-          fi
-          echo "[INFO]: dependency packages ($(echo "${DEPENDENCY_PACKAGES}" | wc -w | tr -d ' ')): ${DEPENDENCY_PACKAGES}"
-          echo "dependency_packages=${DEPENDENCY_PACKAGES}" >> $GITHUB_OUTPUT
+          } >>"$GITHUB_OUTPUT"
       - name: Package
+        id: package
         timeout-minutes: 360
         uses: docker/build-push-action@v6
         with:
@@ -271,74 +292,58 @@ jobs:
           sbom: false
           context: ${{ steps.metadata.outputs.docker_context }}
           file: ${{ steps.metadata.outputs.docker_file }}
-          # Carries pack/shared/, which every backend Dockerfile mounts to reach
-          # the probe script. The build context itself stays pack/<backend>/.
-          build-contexts: |
-            shared=${{ github.workspace }}/pack/shared
+          build-contexts: ${{ steps.metadata.outputs.build_contexts }}
           platforms: ${{ matrix.platform }}
           target: ${{ matrix.service }}
           tags: |
             ${{ steps.metadata.outputs.tags }}
           build-args: |
             ${{ steps.metadata.outputs.build_args }}
-            DEPENDENCY_PACKAGES=${{ steps.metadata.outputs.dependency_packages }}
           cache-from: |
             ${{ steps.metadata.outputs.cache_from }}
           cache-to: |
             ${{ steps.metadata.outputs.cache_to }}
-      # Pull the probed versions out of the build that just ran: a second build of
-      # the same Dockerfile targeting the `FROM scratch` export stage, because a
-      # build can only have one target. It runs on the same builder, so it hits the
-      # Package step's cache instead of re-running the business layers, and needs no
-      # `docker pull`. It exports no cache -- Package already wrote it.
-      #
-      # A dry run runs it as a `check` call, which is the only thing that verifies
-      # the `<service>-deps` stage exists and is well formed. That produces no file
-      # and uploads nothing.
-      - name: Export Dependencies
-        if: ${{ github.event.inputs.post_operation == '' || steps.metadata.outputs.has_dependencies_stage == 'true' }}
-        uses: docker/build-push-action@v6
+      - name: Record Package Output
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        env:
+          INPUT_CONTEXT: ${{ needs.expand-matrix.outputs.context }}
+          PACKAGE_DIGEST: ${{ steps.package.outputs.digest }}
+          BUILD_JOB: ${{ matrix.platform_tag }}
+          BUILD_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$INPUT_CONTEXT" >"$RUNNER_TEMP/context.json"
+          python3 pack/collect_dependencies.py record-build --context "$RUNNER_TEMP/context.json" \
+            --mapping pack/dependencies.json --job "$BUILD_JOB" --attempt "$BUILD_ATTEMPT" \
+            --digest "$PACKAGE_DIGEST" --output "$RUNNER_TEMP/build.json"
+      # Replace only this job's independent Package output before collecting.
+      # An old receipt cannot validate against a replacement digest or attempt.
+      - name: Upload Package Output
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        uses: actions/upload-artifact@v4
         with:
-          allow: |
-            network.host
-            security.insecure
-          call: ${{ github.event.inputs.dry_run == 'true' && 'check' || 'build' }}
-          # Must stay byte-identical to the Package step: these land in the LLB
-          # definition, so a mismatch changes every following RUN's digest, misses
-          # the cache Package just populated, and exports a dependencies.json
-          # describing an image that was never pushed. Change one, change both.
-          ulimit: |
-            nofile=65536:65536
-          shm-size: '16G'
-          push: false
-          provenance: false
-          sbom: false
-          context: ${{ steps.metadata.outputs.docker_context }}
-          file: ${{ steps.metadata.outputs.docker_file }}
-          build-contexts: |
-            shared=${{ github.workspace }}/pack/shared
-          platforms: ${{ matrix.platform }}
-          target: ${{ matrix.service }}-deps
-          build-args: |
-            ${{ steps.metadata.outputs.build_args }}
-            DEPENDENCY_PACKAGES=${{ steps.metadata.outputs.dependency_packages }}
-          cache-from: |
-            ${{ steps.metadata.outputs.cache_from }}
-          outputs: ${{ github.event.inputs.dry_run == 'false' && format('type=local,dest={0}/dependencies', runner.temp) || '' }}
-      # The artifact name carries the platform tag, unique per (platform, tag)
-      # within a run: that is the key `merge_runner.sh` relates probes back with.
+          name: builds-${{ matrix.platform_tag }}
+          path: ${{ runner.temp }}/build.json
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 30
+      - name: Collect Dependencies
+        id: collect
+        if: ${{ github.event.inputs.dry_run == 'false' }}
+        run: |
+          python3 pack/collect_dependencies.py collect-record --context "$RUNNER_TEMP/context.json" \
+            --mapping pack/dependencies.json --build "$RUNNER_TEMP/build.json" \
+            --output "$RUNNER_TEMP/receipt.json"
+      # Preserve failures too. Partial reruns leave all other jobs' artifacts intact.
       - name: Upload Dependencies
-        if: ${{ github.event.inputs.dry_run == 'false' && (github.event.inputs.post_operation == '' || steps.metadata.outputs.has_dependencies_stage == 'true') }}
+        if: ${{ always() && github.event.inputs.dry_run == 'false' && steps.collect.outcome != 'skipped' }}
         uses: actions/upload-artifact@v4
         with:
           name: dependencies-${{ matrix.platform_tag }}
-          path: ${{ runner.temp }}/dependencies/dependencies.json
-          # `upload-artifact@v4` answers a duplicate name with a non-retryable 409.
-          # `build` carries `timeout-minutes: 360`, so "Re-run all jobs" is routine
-          # here, and without this every re-run leg would fail after pushing.
+          path: ${{ runner.temp }}/receipt.json
           overwrite: true
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 30
 
   # Merge all architecture images into manifest list.
   manifest:
@@ -348,31 +353,48 @@ jobs:
       - build
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Setup BuildX
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: v0.31.1
       - name: Login DockerHub
         uses: docker/login-action@v3
         with:
           username: ${{ env.INPUT_USERNAME }}
           password: ${{ env.INPUT_PASSWORD }}
+      - name: Download Package Outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: builds-*
+          path: ${{ runner.temp }}/artifacts
+      - name: Download Dependencies
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dependencies-*
+          path: ${{ runner.temp }}/artifacts
       - name: Manifest
         env:
-          INPUT_MANIFEST_JOBS: ${{ needs.expand-matrix.outputs.manifest_jobs }}
+          INPUT_CONTEXT: ${{ needs.expand-matrix.outputs.context }}
         run: |
-          #!/usr/bin/env bash
-
-          set -eo pipefail
-
-          # Iterate all items of manifest jobs.
-          for TAG in $(echo "${INPUT_MANIFEST_JOBS}" | jq -r 'keys[]'); do
-              PLATFORM_TAGS="$(echo "${INPUT_MANIFEST_JOBS}" | jq -r \
-                --arg tag "${TAG}" \
-                --arg repo "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}" \
-                '.[$tag] | map($repo + ":" + .) | join(" ")')"
-              echo "[INFO]: Creating manifest '${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}' with '${PLATFORM_TAGS}'"
-              docker manifest create --amend "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}" ${PLATFORM_TAGS}
-              docker manifest inspect "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}"
-              echo "[INFO]: Pushing manifest '${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}'"
-              docker manifest push --purge "${INPUT_NAMESPACE}/${INPUT_REPOSITORY}:${TAG}"
-          done
+          set -euo pipefail
+          printf '%s\n' "$INPUT_CONTEXT" >"$RUNNER_TEMP/context.json"
+          python3 pack/collect_dependencies.py publish --context "$RUNNER_TEMP/context.json" \
+            --mapping pack/dependencies.json --artifacts "$RUNNER_TEMP/artifacts" \
+            --output "$RUNNER_TEMP/manifests.json"
+      - name: Upload Manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifests
+          path: ${{ runner.temp }}/manifests.json
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 30
 
   # Submit a PR to merge the runner.
   #
@@ -393,17 +415,45 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.8.24"
+          enable-cache: true
+          python-version: "3.11"
+      - name: Install Runtime Dependencies
+        run: uv sync --locked --no-dev --no-install-project
+      - name: Setup BuildX
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: v0.31.1
+      - name: Login DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.INPUT_USERNAME }}
+          password: ${{ env.INPUT_PASSWORD }}
+      - name: Download Package Outputs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: builds-*
+          path: ${{ runner.temp }}/artifacts
       - name: Download Dependencies
         uses: actions/download-artifact@v4
         with:
           pattern: dependencies-*
-          path: ${{ runner.temp }}/dependencies
+          path: ${{ runner.temp }}/artifacts
+      - name: Download Manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: manifests
+          path: ${{ runner.temp }}/manifests
       - name: Merge Runner
         env:
-          INPUT_BUILD_JOBS: ${{ needs.expand-matrix.outputs.build_jobs }}
-          INPUT_DEPENDENCIES_DIR: ${{ runner.temp }}/dependencies
+          INPUT_CONTEXT: ${{ needs.expand-matrix.outputs.context }}
+          INPUT_DEPENDENCIES_DIR: ${{ runner.temp }}/artifacts
+          INPUT_MANIFESTS_FILE: ${{ runner.temp }}/manifests/manifests.json
           INPUT_POST_OPERATION: ${{ github.event.inputs.post_operation }}
-        run: ${{ github.workspace }}/pack/merge_runner.sh
+        run: uv run --no-sync bash "${{ github.workspace }}/pack/merge_runner.sh"
       - name: Generate Pull Request Token
         id: generate-prt
         uses: actions/create-github-app-token@v2

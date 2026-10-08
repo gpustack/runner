@@ -1,10 +1,9 @@
 """Self-consistency tests for pack/dependencies.json.
 
-The file maps a dependency name to the distribution names it may ship under,
-highest priority first. It is read twice, both on the build side: `pack.yml`
-flattens the values into the probe's build argument, and `pack/merge_runner.sh`
-folds a probe result back onto the names. Nothing reads it at query time --
-`runner.py.json` already carries the folded result.
+The file maps each dependency name to ordered distribution aliases, highest
+priority first. Central collection reads installed versions from each final
+platform image. Catalog preparation folds validated results onto these names.
+Query code reads the folded result from `runner.py.json`.
 """
 
 from __future__ import annotations

@@ -5,38 +5,35 @@
 #    - Install C buildkit.
 #    - Upgrade Python if needed.
 #    - Install Python buildkit.
-# 2. vllm target:
+# 2. sglang target:
 #    - Postprocess, review installation.
 
 # Argument usage:
 # - PYTHON_VERSION: Version of Python to use.
 # - CMAKE_MAX_JOBS: (PLACEHOLDER) Maximum number of jobs to use for CMake, default is empty,
 #   which means it will use the number of available CPU cores.
-# - MACA_VERSION: Version of MetaX MACA runtime environment to use.
-# - MACA_VERSION_EXTRA: Extra version string for MetaX MUSA runtime environment to use.
-# - MACA_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
-# - VLLM_BASE_IMAGE: Base image for vLLM.
-# - VLLM_VERSION: Version of vLLM to use.
-# - VLLM_TORCH_VERSION: (PLACEHOLDER) Version of Torch for vLLM to use.
+# - MUSA_VERSION: Version of MThreads MUSA runtime environment to use.
+# - MUSA_VERSION_EXTRA: Extra version string for MThreads MUSA runtime environment to use.
+# - MUSA_ARCHS: (PLACEHOLDER) Arch variant list supports for this runtime environment.
+# - SGLANG_BASE_IMAGE: Base image for SGLang.
+# - SGLANG_VERSION: Version of SGLang to use.
+# - SGLANG_TORCH_VERSION: (PLACEHOLDER) Version of Torch for SGLang to use.
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
-ARG MACA_VERSION=3.3.0
-ARG MACA_VERSION_EXTRA
-ARG MACA_ARCHS
-ARG VLLM_BASE_IMAGE=gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}
-ARG VLLM_VERSION=0.11.2
-ARG VLLM_TORCH_VERSION=2.8.0
-ARG SGLANG_BASE_IMAGE=gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}
-ARG SGLANG_VERSION=0.5.6
-ARG SGLANG_TORCH_VERSION=2.6.0
+ARG MUSA_VERSION=4.3.2
+ARG MUSA_VERSION_EXTRA
+ARG MUSA_ARCHS
+ARG SGLANG_BASE_IMAGE=gpustack/runner:musa${MUSA_VERSION}${MUSA_VERSION_EXTRA}-python${PYTHON_VERSION}
+ARG SGLANG_VERSION=0.5.7
+ARG SGLANG_TORCH_VERSION=2.5.0
 
 # Stage Bake Runtime
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${MACA_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/maca
+#   docker build --progress=plain --platform=linux/amd64 --file=pack/musa/Dockerfile.sglang --tag=gpustack/runner:musa${MUSA_VERSION%.*}-python${PYTHON_VERSION}-linux-amd64 --target=runtime pack/musa
 #
 
-FROM gpustack/runner:maca${MACA_VERSION}${MACA_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
+FROM gpustack/runner:musa${MUSA_VERSION}${MUSA_VERSION_EXTRA}-python${PYTHON_VERSION}-vanilla AS runtime
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
@@ -163,8 +160,7 @@ EOF
 
 ARG PYTHON_VERSION
 
-ENV PYTHON_VERSION=${PYTHON_VERSION} \
-    PATH="/opt/conda/bin:/opt/conda/condabin:${PATH}"
+ENV PYTHON_VERSION=${PYTHON_VERSION}
 
 RUN <<EOF
     # Python
@@ -251,83 +247,21 @@ EOF
 
 ## Declare Environment
 
-ARG MACA_VERSION
-ARG MACA_ARCHS
+ARG MUSA_VERSION
+ARG MUSA_ARCHS
 
-ENV MACA_HOME="/opt/maca" \
-    MACA_PATH="/opt/maca" \
-    MACA_VERSION=${MACA_VERSION} \
-    MACA_ARCHS=${MACA_ARCHS}
-
-# Stage vLLM
-#
-# Example build command:
-#   docker build --progress=plain --platform=linux/amd64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca${MACA_VERSION%.*}-vllm${VLLM_VERSION}-linux-amd64 --target=vllm pack/maca
-#
-
-FROM ${VLLM_BASE_IMAGE} AS vllm
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-
-ARG TARGETPLATFORM
-ARG TARGETOS
-ARG TARGETARCH
-
-ENV UV_SYSTEM_PYTHON=1 \
-    UV_PRERELEASE=allow \
-    UV_SKIP_WHEEL_FILENAME_CHECK=1
-
-## Install Torch
-
-ARG VLLM_TORCH_VERSION
-
-ENV VLLM_TORCH_VERSION=${VLLM_TORCH_VERSION}
-
-## Nothing to do, as the Torch has installed in global.
-
-## Install vLLM
-
-ARG VLLM_VERSION
-
-ENV VLLM_VERSION=${VLLM_VERSION}
-
-## Nothing to do, as the vLLM has installed in global.
-
-## Postprocess
-
-RUN <<EOF
-    # Postprocess
-
-    # Link if needed
-    if [[ ! -d ${MACA_HOME} ]] && [[ -d /opt/maca-${MACA_VERSION} ]]; then
-        ln -vsf /opt/maca-${MACA_VERSION} ${MACA_HOME}
-    fi
-
-    # Review
-    uv pip tree \
-        --package vllm \
-        --package vllm-metax \
-        --package flash-attn \
-        --package flashinfer \
-        --package triton \
-        --package deep_gemm \
-        --package torch
-EOF
-
-## Entrypoint
-
-ENV RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES=1 \
-    MACA_SMALL_PAGESIZE_ENABLE=1 \
-    VLLM_USE_V1=0
-
-WORKDIR /
-ENTRYPOINT [ "tini", "--" ]
+ENV MUSA_HOME="/usr/local/musa" \
+    MUSA_PATH="/usr/local/musa" \
+    MUSA_VERSION=${MUSA_VERSION} \
+    MUSA_ARCHS=${MUSA_ARCHS}
 
 # Stage SGLang
 #
 # Example build command:
-#   docker build --progress=plain --platform=linux/arm64 --file=pack/maca/Dockerfile --tag=gpustack/runner:maca{MACA_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/maca
+#   docker build --progress=plain --platform=linux/arm64 --file=pack/musa/Dockerfile.sglang --tag=gpustack/runner:musa{MUSA_VERSION%.*}-sglang${SGLANG_VERSION}-linux-arm64 --target=sglang pack/musa
 #
 
+# Keep the prepared base image; runtime is an independent build output.
 FROM ${SGLANG_BASE_IMAGE} AS sglang
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
@@ -360,14 +294,22 @@ ENV SGLANG_VERSION=${SGLANG_VERSION}
 RUN <<EOF
     # Postprocess
 
+    # Link if needed
+    if [[ ! -d ${MUSA_HOME} ]] && [[ -d /usr/local/musa-${MUSA_VERSION} ]]; then
+        ln -vsf /usr/local/musa-${MUSA_VERSION} ${MUSA_HOME}
+    fi
+
     # Review
     uv pip tree \
         --package sglang \
+        --package sglang-router \
         --package sgl-kernel \
         --package flash-attn \
-        --package flashinfer \
         --package triton \
+        --package vllm \
         --package torch \
+        --package torch-musa \
+        --package deep-ep \
         --package deep-gemm \
         --package ipython
 EOF
@@ -375,6 +317,7 @@ EOF
 ## Entrypoint
 
 ENV SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+    SGLANG_USE_MUSA_FUSED_KERNEL=1 \
     SGLANG_MOE_PADDING=1 \
     SGLANG_SET_CPU_AFFINITY=1
 

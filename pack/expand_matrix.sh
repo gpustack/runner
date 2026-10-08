@@ -15,10 +15,11 @@ if [[ -z "${INPUT_TARGET}" ]]; then
     exit 1
 fi
 
+MATRIX_WORKSPACE="${INPUT_WORKSPACE}"
 if [[ -n "${INPUT_POST_OPERATION}" ]]; then
-    INPUT_WORKSPACE="${INPUT_WORKSPACE}/.post_operation/${INPUT_POST_OPERATION}"
+    MATRIX_WORKSPACE="${MATRIX_WORKSPACE}/.post_operation/${INPUT_POST_OPERATION}"
 fi
-echo "[INFO] Using workspace: ${INPUT_WORKSPACE}"
+echo "[INFO] Using workspace: ${MATRIX_WORKSPACE}"
 echo "[INFO] Using tempdir: ${INPUT_TEMPDIR}"
 echo "[INFO] Expanding matrix for backend: ${INPUT_BACKEND}, target: ${INPUT_TARGET}, for_release: ${INPUT_FOR_RELEASE}, runner_profile: ${INPUT_RUNNER_PROFILE}"
 
@@ -26,25 +27,24 @@ echo "[INFO] Expanding matrix for backend: ${INPUT_BACKEND}, target: ${INPUT_TAR
 RULES="$(yq '.[]' \
     --output-format json \
     --indent 0 \
-    "${INPUT_WORKSPACE}/matrix.yaml")"
+    "${MATRIX_WORKSPACE}/matrix.yaml")"
 if [[ "${INPUT_BACKEND}" != "all" ]]; then
     RULES="$(echo "${RULES}" | jq -cr \
         --arg backend "${INPUT_BACKEND}" \
         '.[] | select(.backend == $backend)' | jq -cs .)"
 fi
 
+# Skip unsupported pairs before reading Dockerfile defaults.
+RULES="$(echo "${RULES}" | jq -cr \
+    --arg target "${INPUT_TARGET}" \
+    'map(select((.services // []) | index($target)))')"
+
 # Iterate all backends to gain the ARGs from the given Dockerfile.
 BACKENDS="$(echo "${RULES}" | jq -r '.[] | .backend' | sort -u | jq -R . | jq -cs .)"
 for BACKEND in $(echo "${BACKENDS}" | jq -cr '.[]'); do
     # Get the Dockerfile path for the backend.
-    DOCKERFILE="${INPUT_WORKSPACE}/${BACKEND}/Dockerfile"
-    if [[ -f "${DOCKERFILE}.${INPUT_TARGET}" ]]; then
-        DOCKERFILE="${DOCKERFILE}.${INPUT_TARGET}"
-    fi
-    if [[ ! -f "${DOCKERFILE}" ]]; then
-        echo "[ERROR]: Dockerfile not found: ${DOCKERFILE}"
-        exit 1
-    fi
+    DOCKERFILE="$("$(dirname "${BASH_SOURCE[0]}")/resolve_dockerfile.sh" \
+        "${INPUT_WORKSPACE}" "${BACKEND}" "${INPUT_TARGET}" "${INPUT_POST_OPERATION}")"
 
     # Merge the extension args into rules.
     if [[ -n "${INPUT_ARGS}" ]]; then
