@@ -228,6 +228,9 @@ For every candidate, the skill must:
 
 1. Compare upstream releases with current Dockerfile defaults, matrix overrides, and existing update pull requests.
 2. Read release notes, installation guidance, compatibility documentation, and relevant upstream fixes.
+   Inspect Dockerfiles at the selected release tag or resolved commit, including referenced requirements, installation scripts, and patches.
+   Trace stage ancestry, effective arguments, platform branches, source builds, and additional package versions.
+   Distinguish these source declarations from the artifacts actually published to the registry.
 3. Identify changes to CPU platforms, accelerator families, runtime versions, image variants, and package requirements.
 4. Inspect actual image manifests and configurations with crane or skopeo.
 5. Resolve available platform-specific digests and verify the requested artifacts exist.
@@ -332,6 +335,8 @@ The contract below is self-contained and does not depend on that integration's s
 | `llm-top-p` | Optional validated numeric value; compatible profile default `0.9` |
 | `llm-reasoning-effort` | Empty by default; otherwise `minimal`, `low`, `medium`, `high`, or `max` |
 | `llm-timeout` | Positive request timeout in seconds; default `3600`; separate from command and total-run deadlines |
+| `llm-context-window-size` | Optional positive integer for the selected Qwen provider context window |
+| `llm-modalities` | Optional JSON object of supported input modality boolean overrides |
 | `llm-auth-header` | Optional custom authentication header |
 | `llm-extra-headers` | Optional additional headers, following the documented `K=V,K=V` input convention |
 | `llm-extra-body` | Optional JSON object for provider-specific request fields |
@@ -357,6 +362,8 @@ The reusable workflow retains the `llm-*` interface and maps these values explic
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P` | Variable, optional | `llm-top-p` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT` | Variable, optional | `llm-reasoning-effort` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT` | Variable, optional | `llm-timeout` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE` | Variable, optional | `llm-context-window-size` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODALITIES` | Variable, optional | `llm-modalities` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER` | Variable, optional | `llm-auth-header`, the header name only |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS` | Secret, optional | `llm-extra-headers`, which can contain credentials |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` | Variable, optional | `llm-extra-body`, without credentials |
@@ -390,6 +397,12 @@ Configuration requirements:
 - Do not forward OpenAI-style reasoning effort or provider-specific thinking defaults blindly to Anthropic.
 - Reject explicitly unsupported combinations instead of silently dropping requested settings.
 - Convert timeout units correctly for the selected Qwen provider configuration.
+- Put context-window and modality overrides in the selected provider generationConfig, outside the HTTP extra body.
+- Leave omitted context-window and modality values to the pinned Qwen defaults.
+- Reject explicit MiniMax-M3 modality overrides because pinned Qwen replaces them with canonical capabilities.
+- Accept explicit OpenAI extra-body enable_thinking without also injecting a conflicting implicit thinking default.
+- Preserve explicit provider request fields and verify the emitted request.
+- Keep automatic memory and autoDream disabled for ephemeral runs; restore decisions from repository and PR history.
 - Confirm the actual emitted request contains the intended model settings.
 - Trim surrounding whitespace from comma-separated tokens and discard empty entries.
 - Reject embedded token whitespace and an empty usable-token list.
@@ -1062,6 +1075,16 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Verify: `uv run pytest tests/auto_sync/test_model.py tests/auto_sync/test_agent.py`
 
+- [x] **T1b · Support explicit Qwen provider capabilities**
+
+  Blocked by: T1
+
+  Owns: `tools/auto_sync/model.py`, `tests/auto_sync/test_model.py`, `tests/auto_sync/test_agent.py`, `tests/auto_sync/fixtures/model/**`
+
+  Acceptance: Map optional context window and modality settings into the selected provider generationConfig. Validate input types against the pinned Qwen contract. Preserve explicit extra-body thinking and sampling controls without conflicting implicit defaults. Prove request behavior with the actual pinned CLI and fake endpoints. Keep ephemeral memory policy unchanged.
+
+  Verify: `AUTO_SYNC_TOOL_BIN=/path/to/pinned/bin uv run pytest tests/auto_sync/test_model.py tests/auto_sync/test_agent.py`
+
 - [x] **T2 · Prove centralized dependency collection and receipt identity**
 
   Blocked by: None
@@ -1192,7 +1215,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
   Blocked by: T1, T8, T11, T12a
 
-  Owns: `AGENTS.md`, `.agents/skills/runner-release-sync/**`, `.claude/skills`, `.gitignore`, `README.md`, `mkdocs.yml`, `docs/release-automation.md`, `tests/auto_sync/test_project_instructions.py`
+  Owns: `AGENTS.md`, `.agents/skills/runner-release-sync/**`, `.claude/skills`, `.gitignore`, `README.md`, `mkdocs.yml`, `docs/release-automation.md`, `docs/packaging.md` (missing maintenance guidance only), `tests/auto_sync/test_project_instructions.py`
 
   Acceptance: Add the canonical skill and relative symlink without disturbing local Claude content. Document research, compatibility, patches, headless blocked/failed outcomes, configured model use, PR commands, cache behavior, and post-merge Pack. Keep README concise with Ascend rc policy and authoritative links. Include source navigation, evidence rules, coding and testing conventions, DCO sign-off, and the adopter registry. Integrate the T12a guides and preserve API navigation. Verify tracked-link behavior and instruction discovery.
 
@@ -1200,7 +1223,7 @@ Do not interpret their offline results as provider or image runtime acceptance.
 
 - [ ] **T13 · Wire weekly, manual, and comment workflows with offline end-to-end gates**
 
-  Blocked by: T12
+  Blocked by: T1b, T12
 
   Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tools/auto_sync/run.py`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_e2e.py`, `tests/auto_sync/fixtures/e2e/**`, `tests/auto_sync/test_bootstrap.py`, `tools/auto_sync/lint_workflows.py`, `tests/auto_sync/test_lint_workflows.py`
 
@@ -1224,7 +1247,7 @@ T13 uses three disjoint implementation tasks. Accept the integrated result only 
 
 - [ ] **T13b · Wire workflow triggers, credentials, cache, and Linux CI**
 
-  Blocked by: T12
+  Blocked by: T1b, T12
 
   Owns: `.github/workflows/auto-sync.yml`, `.github/workflows/ci.yml`, `.github/actionlint.yaml`, `tests/auto_sync/test_workflow.py`, `tests/auto_sync/test_bootstrap.py`
 

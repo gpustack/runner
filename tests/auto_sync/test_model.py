@@ -109,6 +109,135 @@ def test_chat_defaults_and_headers():
     assert config.headers["X-Value"] == "a=b"
 
 
+@pytest.mark.parametrize("protocol", ["openai", "openai-responses", "anthropic"])
+def test_provider_capabilities_are_optional_and_outside_http_body(protocol):
+    defaults = normalize_inputs(inputs(**{"llm-protocol": protocol}))
+    assert "contextWindowSize" not in defaults.generation_config("fake-first")
+    assert "modalities" not in defaults.generation_config("fake-first")
+    config = normalize_inputs(
+        inputs(
+            **{
+                "llm-protocol": protocol,
+                "llm-context-window-size": " 1000000 ",
+                "llm-modalities": '{"image":true,"pdf":false,"audio":true,"video":false}',
+            },
+        ),
+    )
+    mapped = config.generation_config("fake-first")
+    assert mapped["contextWindowSize"] == 1000000
+    assert mapped["modalities"] == {
+        "image": True,
+        "pdf": False,
+        "audio": True,
+        "video": False,
+    }
+    assert "contextWindowSize" not in config.body
+    assert "modalities" not in config.body
+
+
+@pytest.mark.parametrize(
+    "override,field",
+    [
+        *[
+            ({"llm-context-window-size": value}, "llm-context-window-size")
+            for value in ("0", "-1", "1.5", "1e6", "true", "NaN", "9007199254740992")
+        ],
+        *[
+            ({"llm-modalities": value}, "llm-modalities")
+            for value in (
+                "[]",
+                "null",
+                "true",
+                "{",
+                '{"text":true}',
+                '{"image":1}',
+                '{"image":"true"}',
+                '{"image":null}',
+            )
+        ],
+    ],
+)
+def test_invalid_provider_capabilities_fail_before_request(override, field):
+    with pytest.raises(ConfigurationError, match=field):
+        normalize_inputs(inputs(**override))
+
+
+@pytest.mark.parametrize("value", ["", " "])
+def test_empty_provider_capabilities_leave_qwen_defaults(value):
+    config = normalize_inputs(
+        inputs(**{"llm-context-window-size": value, "llm-modalities": value}),
+    )
+    mapped = config.generation_config("fake-first")
+    assert "contextWindowSize" not in mapped
+    assert "modalities" not in mapped
+
+
+@pytest.mark.parametrize("protocol", ["openai", "openai-responses", "anthropic"])
+@pytest.mark.parametrize("model", ["MiniMax-M3", "minimax-m3-highspeed"])
+@pytest.mark.parametrize("modalities", ['{"image":false,"video":false}', "{}"])
+def test_modalities_overridden_by_pinned_qwen_are_rejected(protocol, model, modalities):
+    with pytest.raises(ConfigurationError, match="llm-modalities"):
+        normalize_inputs(
+            inputs(
+                **{
+                    "llm-protocol": protocol,
+                    "llm-model": model,
+                    "llm-modalities": modalities,
+                },
+            ),
+        )
+
+
+def test_minimax_default_capabilities_and_older_models_remain_supported():
+    defaults = normalize_inputs(inputs(**{"llm-model": "MiniMax-M3"}))
+    assert "modalities" not in defaults.generation_config("fake-first")
+    older = normalize_inputs(
+        inputs(**{"llm-model": "MiniMax-M2.7", "llm-modalities": '{"image":false}'}),
+    )
+    assert older.generation_config("fake-first")["modalities"] == {"image": False}
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_explicit_enable_thinking_replaces_convenience_thinking(enabled):
+    config = normalize_inputs(
+        inputs(
+            **{
+                "llm-thinking": "disabled" if enabled else "enabled",
+                "llm-extra-body": json.dumps({"enable_thinking": enabled}),
+            },
+        ),
+    )
+    assert config.body["enable_thinking"] is enabled
+    assert "thinking" not in config.body
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_matching_explicit_thinking_controls_are_preserved(enabled):
+    extra = {
+        "enable_thinking": enabled,
+        "thinking": {"type": "enabled" if enabled else "disabled"},
+    }
+    config = normalize_inputs(inputs(**{"llm-extra-body": json.dumps(extra)}))
+    assert all(config.body[key] == value for key, value in extra.items())
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_conflicting_explicit_thinking_controls_fail(enabled):
+    extra = {
+        "enable_thinking": enabled,
+        "thinking": {"type": "disabled" if enabled else "enabled"},
+    }
+    with pytest.raises(ConfigurationError, match="Conflicting"):
+        normalize_inputs(inputs(**{"llm-extra-body": json.dumps(extra)}))
+
+
+def test_explicit_glm_thinking_keeps_existing_mapping():
+    config = normalize_inputs(
+        inputs(**{"llm-thinking": "enabled", "llm-thinking-clear": "true"}),
+    )
+    assert config.body["thinking"] == {"type": "enabled", "clear_thinking": True}
+
+
 @pytest.mark.parametrize(
     "override",
     [
@@ -222,6 +351,9 @@ def test_real_token_probe_uses_native_protocol(protocol, path, key, failure_stat
         '{"thinking":1}',
         '{"thinking":{"type":"maybe"}}',
         '{"thinking":{"type":"enabled","clear_thinking":"false"}}',
+        '{"enable_thinking":"true"}',
+        '{"enable_thinking":1}',
+        '{"enable_thinking":null}',
     ],
 )
 def test_known_extra_fields_require_correct_types(body):

@@ -82,6 +82,8 @@ class ModelConfig:
     body: dict
     headers: dict[str, str] = field(repr=False)
     auth_header: str
+    context_window_size: int | None = None
+    modalities: dict[str, bool] | None = None
 
     def request_headers(self, token: str) -> dict[str, str]:
         name = self.auth_header or (
@@ -106,6 +108,10 @@ class ModelConfig:
             "samplingParams": sampling,
             "customHeaders": self.request_headers(token),
         }
+        if self.context_window_size is not None:
+            result["contextWindowSize"] = self.context_window_size
+        if self.modalities is not None:
+            result["modalities"] = dict(self.modalities)
         if self.protocol == "openai-responses":
             effort = body.pop("reasoning_effort", None)
             reasoning = body.pop("reasoning", None)
@@ -142,6 +148,8 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
         "top-p",
         "reasoning-effort",
         "timeout",
+        "context-window-size",
+        "modalities",
         "auth-header",
         "extra-headers",
         "extra-body",
@@ -207,6 +215,33 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
         0.001,
         2147483,
     )
+    context_window_size = None
+    if value := values.get("llm-context-window-size"):
+        # Qwen stores this as a JavaScript number; require an exact integer.
+        if not re.fullmatch(r"[0-9]+", value) or not 0 < int(value) <= 2**53 - 1:
+            msg = "llm-context-window-size must be a positive safe integer"
+            raise ConfigurationError(msg)
+        context_window_size = int(value)
+    modalities = None
+    if value := values.get("llm-modalities"):
+        try:
+            modalities = json.loads(value)
+        except ValueError:
+            msg = "llm-modalities must be a JSON object"
+            raise ConfigurationError(msg) from None
+        if (
+            not isinstance(modalities, dict)
+            or set(modalities) - {"image", "pdf", "audio", "video"}
+            or any(type(enabled) is not bool for enabled in modalities.values())
+        ):
+            msg = "llm-modalities requires image, pdf, audio, or video boolean fields"
+            raise ConfigurationError(msg)
+        # Qwen 0.25.0 ModelRegistry replaces all MiniMax-M3 modality overrides.
+        if model.lower().startswith("minimax-m3"):
+            msg = (
+                "llm-modalities overrides are unsupported for MiniMax-M3 by pinned Qwen"
+            )
+            raise ConfigurationError(msg)
     try:
         extra = json.loads(
             values.get("llm-extra-body") or "{}",
@@ -235,6 +270,10 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
                 ),
             },
         }
+        # Explicit provider controls replace the corresponding convenience
+        # setting. Preserve thinking only when the extra body supplies it too.
+        if "enable_thinking" in extra:
+            body.pop("thinking")
     elif values.get("llm-thinking") or values.get("llm-thinking-clear"):
         msg = "llm-thinking and llm-thinking-clear require openai"
         raise ConfigurationError(msg)
@@ -286,6 +325,8 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
         body,
         headers,
         auth_header,
+        context_window_size,
+        modalities,
     )
 
 
@@ -314,6 +355,15 @@ def _validate_body(protocol: str, body: dict, model: str) -> None:
             )
         ):
             msg = "Invalid OpenAI thinking configuration"
+            raise ConfigurationError(msg)
+    if protocol == "openai" and "enable_thinking" in body:
+        if type(body["enable_thinking"]) is not bool:
+            msg = "enable_thinking must be a boolean"
+            raise ConfigurationError(msg)
+        if "thinking" in body and (
+            (body["thinking"]["type"] == "enabled") != body["enable_thinking"]
+        ):
+            msg = "Conflicting explicit thinking controls"
             raise ConfigurationError(msg)
     if protocol == "openai-responses":
         # Qwen 0.25.0 populates these before extra_body, which cannot replace them.

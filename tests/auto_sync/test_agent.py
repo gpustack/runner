@@ -2,9 +2,11 @@
 # Imports follow the repository root setup; numeric bounds are fixture expectations.
 """Exercise the pinned CLI against local protocols, never a paid endpoint."""
 
+import base64
 import contextlib
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -549,6 +551,140 @@ def test_real_cli_explicit_native_fields(
     assert count == 1
     for key, value in expected.items():
         assert requests[0]["body"][key] == value
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_real_cli_explicit_thinking_sampling_and_effort(
+    tool_bin,
+    workspace,
+    tmp_path,
+    enabled,
+):
+    extra = {
+        "enable_thinking": enabled,
+        "reasoning_effort": "max",
+        "temperature": 1,
+        "top_p": 0.9,
+    }
+    with endpoint("openai", tools=False) as (url, requests):
+        result = run_agent(
+            config(
+                url,
+                "openai",
+                **{
+                    "llm-temperature": "0.2",
+                    "llm-top-p": "0.1",
+                    "llm-reasoning-effort": "low",
+                    "llm-extra-body": json.dumps(extra),
+                },
+            ),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Check explicit provider controls.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr
+    assert len(requests) == 1
+    body = requests[0]["body"]
+    assert all(body[key] == value for key, value in extra.items())
+    assert "thinking" not in body
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_real_cli_image_capability_controls_request_content(
+    tool_bin,
+    workspace,
+    tmp_path,
+    enabled,
+):
+    image = workspace / "fixture.png"
+    image.write_bytes(
+        base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=",
+        ),
+    )
+    with endpoint("openai", calls=[("read_file", {"file_path": str(image)})]) as (
+        url,
+        requests,
+    ):
+        result = run_agent(
+            config(url, "openai", **{"llm-modalities": json.dumps({"image": enabled})}),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Read the fixture image.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr
+    assert len(requests) == 2
+    parts = [
+        part
+        for message in requests[1]["body"]["messages"]
+        if isinstance(message.get("content"), list)
+        for part in message["content"]
+    ]
+    images = [part for part in parts if part["type"] == "image_url"]
+    if enabled:
+        assert len(images) == 1
+        assert images[0]["image_url"]["url"].startswith("data:image/png;base64,")
+    else:
+        assert images == []
+        assert "does not support" in json.dumps(requests[1]["body"])
+    assert all("modalities" not in request["body"] for request in requests)
+
+
+@pytest.mark.parametrize("protocol", ["openai", "openai-responses", "anthropic"])
+def test_real_cli_stop_hook_reports_effective_context_window(
+    tool_bin,
+    workspace,
+    tmp_path,
+    monkeypatch,
+    protocol,
+):
+    observed = tmp_path / "context.json"
+    runner = agent._process_runner()  # noqa: SLF001 - controlled fixture boundary.
+
+    def capture_context(argv, *, cwd, env, deadline, stop_file):
+        settings_path = Path(env["QWEN_HOME"]) / "settings.json"
+        settings = json.loads(settings_path.read_text())
+        settings["hooks"]["Stop"] = [
+            {
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": shlex.join(
+                            [
+                                sys.executable,
+                                str(FIXTURES / "context_hook.py"),
+                                str(observed),
+                            ],
+                        ),
+                        "timeout": 5000,
+                    },
+                ],
+            },
+        ]
+        settings_path.write_text(json.dumps(settings))
+        return runner(argv, cwd=cwd, env=env, deadline=deadline, stop_file=stop_file)
+
+    monkeypatch.setattr(agent, "_process_runner", lambda: capture_context)
+    with endpoint(protocol, tools=False) as (url, requests):
+        result = run_agent(
+            config(url, protocol, **{"llm-context-window-size": "1000000"}),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Check effective context window.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr
+    event = json.loads(observed.read_text())
+    assert event["hook_event_name"] == "Stop"
+    assert event["context_limit"] == 1000000
+    assert event["input_tokens"] > 0
+    assert len(requests) == 1
+    assert "contextWindowSize" not in requests[0]["body"]
 
 
 @pytest.mark.parametrize(
