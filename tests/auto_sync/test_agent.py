@@ -205,7 +205,7 @@ def test_prompt_over_cli_stdin_limit_rejects_before_token_probe(
         pytest.raises(ConfigurationError, match="prompt exceeds"),
     ):
         run_agent(
-            config(url, "openai"),
+            config(url, "openai", **{"llm-auth-token": "fake-first,fake-second"}),
             workspace=workspace,
             tool_bin=tool_bin,
             prompt="界" * (3 * 1024 * 1024),
