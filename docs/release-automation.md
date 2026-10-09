@@ -112,6 +112,7 @@ Its subscription is one of `cuda/vllm`, `cuda/sglang`, `rocm/vllm`, `rocm/sglang
 `groups` contains related group IDs. Keep a concrete reason even when no group is needed.
 
 Each group has `id`, `status`, `reason`, `depends_on`, `report`, `patch`, and `rows`.
+Group IDs contain letters, digits, underscores, and hyphens, such as `cuda-vllm`.
 Use an empty dependency list when independent. A ready group requires a nonempty allowed-path patch and complete compatibility rows.
 An unchanged group carries no patch. Groups must not contain cyclic or unknown dependencies.
 
@@ -153,6 +154,13 @@ Preserve mixed outcomes and the limits of every group.
 The PR report includes old/new versions, release changes, platform evidence, package/patch decisions, checks, and post-merge build targets.
 Missing or malformed output remains failed even if the process exits zero.
 Only trusted validation can accept a ready group for publication.
+
+Use `tests/auto_sync/fixtures/proposals/ready.json` for the field shape. Its versions and evidence are fixture data.
+Use `uv run python -m tools.auto_sync.assemble --draft DRAFT --output OUTPUT` to serialize patch file contents.
+In the draft, replace each group's `patch` with `patch_file`. Relative paths resolve against the draft directory.
+Return the assembled JSON as the final Qwen result. The helper does not validate compatibility or generate Git diffs.
+Do not hand-escape diffs or create commits and rebases to split them.
+Check ordered component patches with `git apply --check` before editing recipes. A fuzzy check does not meet the validation gate.
 
 ## Model configuration
 
@@ -321,11 +329,12 @@ Candidate settings, environment files, and Git hooks cannot replace the frozen c
 | Unchanged tool failure | At most two retries |
 | External command | 300 seconds |
 | Qwen session | 180 turns and 180 tool calls |
-| Qwen wall time | 2400 seconds |
-| Outer deadline | 2700 seconds |
+| Qwen wall time | No separate limit |
+| Outer deadline | 55 minutes |
 | Actions job | 60 minutes |
 
 The outer deadline takes precedence over a longer model-request timeout.
+Qwen has no separate wall-clock budget. The outer deadline leaves time for cleanup and artifact upload before the job limit.
 The turn budget matches the tool budget so sequential tool calls can use the available allowance.
 Cleanup must adopt, terminate, and reap orphaned descendants. Unconfirmed cleanup remains failed.
 Missing configuration, exhausted credentials, upstream timeouts, and commands waiting for input must end within their bounds.

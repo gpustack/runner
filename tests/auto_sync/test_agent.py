@@ -71,6 +71,7 @@ def _local_cli_process(argv, *, cwd, env, deadline, stop_file, input_text):
         )
     expires = time.monotonic() + deadline
     timed_out = False
+    collected = False
     try:
         while True:
             remaining = expires - time.monotonic()
@@ -78,17 +79,44 @@ def _local_cli_process(argv, *, cwd, env, deadline, stop_file, input_text):
                 timed_out = remaining <= 0
                 os.killpg(process.pid, signal.SIGKILL)
                 stdout, stderr = process.communicate(timeout=2)
+                collected = True
                 break
             try:
                 stdout, stderr = process.communicate(timeout=min(0.1, remaining))
+                collected = True
                 break
             except subprocess.TimeoutExpired:
                 continue
     finally:
-        with contextlib.suppress(ProcessLookupError):
-            os.killpg(process.pid, signal.SIGKILL)
+        # A collected group may be recycled; signal only still-running processes.
+        if not collected:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
         process.wait(timeout=2)
     return ProcessResult(process.returncode, stdout, stderr, timed_out)
+
+
+def test_local_cli_process_does_not_signal_reaped_group(monkeypatch, tmp_path):
+    calls = []
+
+    def detect(pid, sig):
+        calls.append((pid, sig))
+        msg = "reaped process group must not be signalled"
+        raise PermissionError(msg)
+
+    monkeypatch.setattr(os, "killpg", detect)
+    result = _local_cli_process(
+        [sys.executable, "-c", "print('ok')"],
+        cwd=tmp_path,
+        env={},
+        deadline=10,
+        stop_file=None,
+        input_text="",
+    )
+    assert result.returncode == 0
+    assert not result.timed_out
+    assert result.stdout.strip() == "ok"
+    assert calls == []
 
 
 def test_unsupported_platform_rejects_before_launch_and_probe(
@@ -194,6 +222,97 @@ def test_real_cli_receives_large_prompt_without_argv_limit(
         for content in contents
     )
     assert prompt in text
+
+
+def test_real_cli_uses_outer_deadline_without_wall_time_budget(
+    tool_bin,
+    workspace,
+    tmp_path,
+    monkeypatch,
+):
+    runner = agent._process_runner()  # noqa: SLF001 - controlled fixture boundary.
+    observed = {}
+
+    def capture_budget(argv, *, cwd, env, deadline, stop_file, input_text):
+        observed["argv"] = argv
+        observed["deadline"] = deadline
+        observed["settings"] = json.loads(
+            (Path(env["QWEN_HOME"]) / "settings.json").read_text(),
+        )
+        return runner(
+            argv,
+            cwd=cwd,
+            env=env,
+            deadline=10,
+            stop_file=stop_file,
+            input_text=input_text,
+        )
+
+    monkeypatch.setattr(agent, "_process_runner", lambda: capture_budget)
+    with endpoint("openai", tools=False) as (url, requests):
+        result = run_agent(
+            config(url, "openai"),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Return the fixture result.",
+            runtime_dir=tmp_path / "runtime",
+        )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not result.timed_out
+    assert len(requests) == 1
+    assert "--max-wall-time" not in observed["argv"]
+    assert "maxWallTimeSeconds" not in observed["settings"]["model"]
+    assert observed["deadline"] == 3300
+
+
+@pytest.mark.parametrize("protocol", ["openai", "openai-responses", "anthropic"])
+def test_real_cli_assembles_proposal_files(
+    tool_bin,
+    workspace,
+    tmp_path,
+    protocol,
+):
+    original = json.loads(
+        (ROOT / "tests/auto_sync/fixtures/proposals/ready.json").read_text(),
+    )
+    draft = json.loads(json.dumps(original))
+    patch = tmp_path / "candidate.patch"
+    patch.write_bytes(draft["groups"][0].pop("patch").encode())
+    draft["groups"][0]["patch_file"] = patch.name
+    draft_path = tmp_path / "draft.json"
+    draft_path.write_text(json.dumps(draft))
+    output = tmp_path / "proposal.json"
+    command = {
+        "command": "cd "
+        + shlex.quote(str(ROOT))
+        + " && "
+        + shlex.join(
+            [
+                sys.executable,
+                "-m",
+                "tools.auto_sync.assemble",
+                "--draft",
+                str(draft_path),
+                "--output",
+                str(output),
+            ],
+        ),
+        "description": "Assemble the fixture proposal from patch files",
+        "timeout": 5000,
+    }
+    with endpoint(protocol, calls=[("run_shell_command", command)]) as (url, requests):
+        result = run_agent(
+            config(url, protocol),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Assemble the supplied proposal draft.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert not result.timed_out
+    assert len(requests) == 2
+    assert json.loads(output.read_text()) == original
 
 
 def test_prompt_over_cli_stdin_limit_rejects_before_token_probe(
