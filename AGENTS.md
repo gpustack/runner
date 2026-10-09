@@ -86,7 +86,7 @@ Run `make package` or Pack only when image production is explicitly authorized.
 
 Use [runner-release-sync](.agents/skills/runner-release-sync/SKILL.md) for upstream discovery or an authorized `/auto-sync` revision.
 The workflow selects and authenticates the model before Qwen starts. Use that configured model.
-NEVER launch another agent to switch providers; this workflow permits one bounded headless invocation.
+NEVER launch another agent to switch providers; the research stage permits exactly two bounded headless sessions: analysis, then proposal.
 Read-only GitHub MCP supports research. Trusted jobs validate and publish the proposal separately.
 The agent cannot merge, publish images, invoke Pack, or edit its controlling policy.
 If a decision is ambiguous or compatibility evidence is missing, return `blocked` and end the affected work.

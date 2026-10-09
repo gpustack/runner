@@ -161,6 +161,31 @@ def proposal(scenario, context):
     return raw
 
 
+def analysis(scenario, context):
+    raw = json.loads(
+        (Path(__file__).parent / "fixtures/proposals/analysis.json").read_text(),
+    )
+    raw["identity"] = context["identity"]
+    revision = git(scenario[4], "rev-parse", "HEAD")
+    for candidate in raw["candidates"]:
+        if candidate["status"] == "analyzed":
+            candidate["source_revision"] = revision
+    return raw
+
+
+def agent_stream(data, *extra_events):
+    events = [
+        *extra_events,
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "result": json.dumps(data),
+        },
+    ]
+    return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
 def research_bundle(scenario, tmp_path, prepared):
     # Output data is the controlled model boundary, not a mock of the controller.
     output = tmp_path / "research"
@@ -1231,7 +1256,14 @@ def test_real_controller_qwen_loads_canonical_policy_skill_and_native_mcp(
 ):
     prepared = prepare(scenario, tmp_path)
     context = json.loads((prepared / "context.json").read_text())
-    monkeypatch.setattr(server, "FINAL", json.dumps(proposal(scenario, context)))
+    monkeypatch.setattr(
+        server,
+        "FINALS",
+        [
+            json.dumps(analysis(scenario, context)),
+            json.dumps(proposal(scenario, context)),
+        ],
+    )
     with server.endpoint(
         protocol,
         calls=[("skill", {"skill": "runner-release-sync"})],
@@ -1254,7 +1286,8 @@ def test_real_controller_qwen_loads_canonical_policy_skill_and_native_mcp(
             )
             == 0
         )
-    assert len(requests) == 2
+    # Two bounded sessions: analysis, then a fresh proposal session.
+    assert len(requests) == 4
     assert "GPUStack Runner registers accelerated backends" in json.dumps(
         requests[0]["body"],
     )
@@ -1262,6 +1295,19 @@ def test_real_controller_qwen_loads_canonical_policy_skill_and_native_mcp(
     assert "get_file_contents" in json.dumps(requests[0]["body"]["tools"])
     assert "create_pull_request" not in json.dumps(requests[0]["body"]["tools"])
     assert "fork_repository" not in json.dumps(requests[0]["body"]["tools"])
+    handed_off = json.loads((output / "analysis.json").read_text())
+    assert handed_off["identity"] == context["identity"]
+    # The proposal session receives the validated analysis, never chat history.
+    opening = requests[2]["body"]
+    assert handed_off["candidates"][0]["findings"] in json.dumps(opening)
+    assert handed_off["candidates"][5]["unknowns"][0] in json.dumps(opening)
+    history = opening.get("messages") or opening.get("input") or []
+    assert all(
+        item.get("role") not in {"assistant", "tool"}
+        and item.get("type") != "function_call_output"
+        for item in history
+        if isinstance(item, dict)
+    )
     raw = json.loads((output / "proposal.json").read_text())
     assert raw["identity"] == context["identity"]
     assert raw["groups"][0]["status"] == "ready"
@@ -1641,10 +1687,14 @@ def test_model_cannot_forge_comment_or_original_context(
             f"os.symlink({str(foreign)!r}, {str(output)!r})"
         )
         command = shlex.join([sys.executable, "-c", script])
-    monkeypatch.setattr(server, "FINAL", json.dumps(raw))
+    monkeypatch.setattr(
+        server,
+        "FINALS",
+        [json.dumps(analysis(scenario, context)), json.dumps(raw)],
+    )
     with server.endpoint(
         "openai",
-        calls=[("run_shell_command", {"command": command})],
+        calls={0: [("run_shell_command", {"command": command})], 1: []},
     ) as (url, requests):
         monkeypatch.setenv("AUTO_SYNC_LLM_URL", url + "/v1")
         monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
@@ -1658,7 +1708,8 @@ def test_model_cannot_forge_comment_or_original_context(
             "--output",
             output,
         ) == int(forged_identity)
-    assert len(requests) == 2
+    # Analysis runs the mutation; the fresh proposal session never repeats it.
+    assert len(requests) == 3
     assert "MUTATION_EXECUTED" in json.dumps(requests[1]["body"])
     assert json.loads((prepared / "context.json").read_text()) == context
     assert json.loads((prepared / "discovery.json").read_text()) == context["discovery"]
@@ -1769,12 +1820,13 @@ def test_turn_exhaustion_retains_redacted_research_diagnostics(
         )
     assert len(requests) == 1
     diagnostic = json.loads((output / "diagnostics.json").read_text())
-    assert diagnostic["returncode"] == 53
-    assert not diagnostic["timed_out"]
-    events = diagnostic["events"]
+    assert [phase["name"] for phase in diagnostic["phases"]] == ["analysis"]
+    assert diagnostic["phases"][0]["returncode"] == 53
+    assert not diagnostic["phases"][0]["timed_out"]
+    events = diagnostic["phases"][0]["events"]
     assert any(event["type"] == "assistant" for event in events)
     assert "[REDACTED]" in json.dumps(events)
-    decoded = json.dumps(events, ensure_ascii=False) + diagnostic["stderr"]
+    decoded = json.dumps(events, ensure_ascii=False) + diagnostic["phases"][0]["stderr"]
     assert "fake-token" not in decoded
     assert "fake-header" not in decoded
     result = json.loads((output / "result.json").read_text())
@@ -1827,6 +1879,462 @@ def test_streamed_error_is_reported_without_stderr_warning(
     assert "Warning:" not in result["reason"]
 
 
+def test_research_reads_complete_release_records_on_demand(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    marker = "RELEASE_BODY_MUST_STAY_AVAILABLE_OUTSIDE_INITIAL_PROMPT"
+    selected = scenario[2].releases["vllm-project/vllm"][0]
+    selected["body"] = marker
+    selected["assets"] = [{"name": "wheel.whl", "url": "asset-metadata-marker"}]
+    prepared = prepare(scenario, tmp_path)
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+
+    def observe(_config, **kwargs):
+        prompt = kwargs["prompt"]
+        data = json.loads(prompt.split("\n", 1)[1])
+        record = data["upstream_sources"]["vllm-project/vllm@0.30.0"]
+        assert marker not in prompt
+        assert "asset-metadata-marker" not in prompt
+        assert Path(record["release_notes_path"]).read_text() == marker
+        saved = json.loads(Path(record["release_metadata_path"]).read_text())
+        assert saved == selected
+        assert record["release"]["tag_name"] == selected["tag_name"]
+        assert git(Path(record["path"]), "status", "--porcelain") == ""
+        return ProcessResult(1, "", "controlled diagnostic stop")
+
+    monkeypatch.setattr(run.agent, "run_agent", observe)
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            tmp_path / "research",
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize("limit", ["0", "-1", "2.5", "invalid"])
+def test_invalid_session_token_limit_fails_before_agent(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    limit,
+):
+    prepared = prepare(scenario, tmp_path)
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", limit)
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def observe(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(1, "", "controlled diagnostic stop")
+
+    monkeypatch.setattr(run.agent, "run_agent", observe)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    assert not calls
+    assert (
+        "positive integer" in json.loads((output / "result.json").read_text())["reason"]
+    )
+
+
+@pytest.mark.parametrize("limit,expected", [(None, 10_000_000), ("250000", 250_000)])
+def test_session_token_limit_reaches_agent(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    limit,
+    expected,
+):
+    prepared = prepare(scenario, tmp_path)
+    if limit is None:
+        monkeypatch.delenv("AUTO_SYNC_MAX_SESSION_TOKENS", raising=False)
+    else:
+        monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", limit)
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def observe(_config, **kwargs):
+        calls.append(kwargs["max_session_tokens"])
+        return ProcessResult(1, "", "controlled diagnostic stop")
+
+    monkeypatch.setattr(run.agent, "run_agent", observe)
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            tmp_path / "research",
+        )
+        == 1
+    )
+    assert calls == [expected]
+
+
+def test_token_stop_reason_survives_cli_interruption_error(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", "100")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    event = {"type": "result", "is_error": True, "error": {"message": "Interrupted"}}
+    monkeypatch.setattr(
+        run.agent,
+        "run_agent",
+        lambda *_a, **_k: ProcessResult(
+            1,
+            json.dumps(event),
+            "session token budget exceeded",
+            False,
+            120,
+        ),
+    )
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    reason = json.loads((output / "result.json").read_text())["reason"]
+    assert "session token budget exceeded" in reason
+    assert "120" in reason
+    assert "100" in reason
+    assert "Interrupted" not in reason
+
+
+def test_research_phases_share_budget_and_deadline_with_fresh_sessions(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", "1000")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    # The clock advances only inside the mocked sessions; every other consumer
+    # (API calls, clones, result assembly) observes a constant value.
+    now = [10000.0]
+    monkeypatch.setattr(run.time, "monotonic", lambda: now[0])
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            now[0] += 12
+            return ProcessResult(
+                0,
+                agent_stream(
+                    analysis(scenario, context),
+                    {
+                        "type": "assistant",
+                        "message": {"content": "ANALYSIS_TRANSCRIPT_NOISE"},
+                    },
+                ),
+                "",
+                False,
+                640,
+            )
+        now[0] += 8
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            300,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 2
+    analysis_call, proposal_call = calls
+    assert analysis_call["workspace"] != proposal_call["workspace"]
+    assert analysis_call["runtime_dir"] != proposal_call["runtime_dir"]
+    # The shared budget and deadline are consumed, never reset per phase.
+    assert analysis_call["max_session_tokens"] == 1000
+    assert proposal_call["max_session_tokens"] == 360
+    assert "deadline" not in analysis_call
+    assert proposal_call["deadline"] == run.agent.SESSION_DEADLINE - 12
+    # The proposal session receives the validated analysis, never the transcript.
+    assert "ANALYSIS_TRANSCRIPT_NOISE" not in proposal_call["prompt"]
+    analysis_payload = json.loads(analysis_call["prompt"].split("\n", 1)[1])
+    assert "analysis" not in analysis_payload
+    proposal_payload = json.loads(proposal_call["prompt"].split("\n", 1)[1])
+    saved = json.loads((output / "analysis.json").read_text())
+    assert proposal_payload["analysis"] == saved
+    assert saved["identity"] == context["identity"]
+    assert (output / "proposal.json").is_file()
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+    ]
+    assert diagnostic["reported_tokens"] == 940
+    result = json.loads((output / "result.json").read_text())
+    assert result["usage"] == {"analysis": 640, "proposal": 300, "reported": 940}
+    assert result["durations"]["analysis_seconds"] == 12
+    assert result["durations"]["proposal_seconds"] == 8
+
+
+def test_analysis_stage_prose_output_stops_before_proposal(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    fenced = (
+        "Here is the completed analysis.\n```json\n"
+        + json.dumps(analysis(scenario, context))
+        + "\n```"
+    )
+    event = {
+        "type": "result",
+        "subtype": "success",
+        "is_error": False,
+        "result": fenced,
+    }
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, json.dumps(event) + "\n", "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    assert len(calls) == 1
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "failed"
+    assert not (output / "proposal.json").exists()
+
+
+@pytest.mark.parametrize("corrupt", ["ready", "revision", "evidence"])
+def test_forged_analysis_never_reaches_proposal_stage(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    corrupt,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    forged = analysis(scenario, context)
+    target = next(c for c in forged["candidates"] if c["status"] == "analyzed")
+    if corrupt == "ready":
+        target["status"] = "ready"
+    elif corrupt == "revision":
+        target["source_revision"] = "e" * 40
+    else:
+        target["evidence"] = ["/etc/passwd"]
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, agent_stream(forged), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    assert len(calls) == 1
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "failed"
+    assert not (output / "proposal.json").exists()
+
+
+def test_proposal_stage_failure_keeps_analysis_artifact(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(1, "", "proposal session exploded", False, 20)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    assert len(calls) == 2
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+    ]
+    assert diagnostic["phases"][1]["returncode"] == 1
+    assert diagnostic["reported_tokens"] == 30
+    saved = json.loads((output / "analysis.json").read_text())
+    assert saved["identity"] == context["identity"]
+    assert not (output / "proposal.json").exists()
+
+
+@pytest.mark.parametrize(
+    "limit,analysis_tokens,proposal_tokens,proposal_fails,expected",
+    [
+        # Analysis alone exhausts the shared budget before the proposal starts.
+        ("100", 100, None, False, "100 reported tokens reached the 100 limit"),
+        # Cumulative usage across both phases is what trips the budget.
+        ("100", 60, 50, True, "110 reported tokens reached the 100 limit"),
+    ],
+)
+def test_shared_session_token_budget_spans_both_phases(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    limit,
+    analysis_tokens,
+    proposal_tokens,
+    proposal_fails,
+    expected,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", limit)
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                analysis_tokens,
+            )
+        return ProcessResult(
+            1 if proposal_fails else 0,
+            "" if proposal_fails else agent_stream(proposal(scenario, context)),
+            "Interrupted",
+            False,
+            proposal_tokens,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    if proposal_tokens is None:
+        assert len(calls) == 1
+    reason = json.loads((output / "result.json").read_text())["reason"]
+    assert expected in reason
+
+
 def test_final_artifact_redaction_preserves_nested_proposal(
     scenario,
     tmp_path,
@@ -1858,7 +2366,7 @@ def test_final_artifact_redaction_preserves_nested_proposal(
         == 1
     )
     diagnostic = json.loads((output / "diagnostics.json").read_text())
-    assert json.loads(diagnostic["events"][0]["result"]) == {
+    assert json.loads(diagnostic["phases"][0]["events"][0]["result"]) == {
         "identity": {"pr_number": None},
         "echo": "[REDACTED]",
     }
@@ -1896,8 +2404,8 @@ def test_diagnostics_keep_one_event_per_protocol_frame(scenario, tmp_path, monke
         == 1
     )
     diagnostic = json.loads((output / "diagnostics.json").read_text())
-    assert diagnostic["returncode"] == 53
-    assert diagnostic["events"] == [
+    assert diagnostic["phases"][0]["returncode"] == 53
+    assert diagnostic["phases"][0]["events"] == [
         {"type": "assistant", "message": {"content": "a\u2028b\u2029c\u0085d"}},
         {"type": "unparsed", "text": "not json"},
     ]

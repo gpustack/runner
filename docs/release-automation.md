@@ -92,6 +92,16 @@ Keep proposed support rows `prepared`, with explicit engine, plugin, runtime, va
 Do not populate the generated catalog with guessed package versions.
 [Packaging](packaging.md) owns recipe selection; [Dependency metadata](dependency-metadata.md) owns measured dependency semantics.
 
+## Analysis handoff
+
+Research runs as two sequential independent headless sessions: analysis, then proposal.
+The analysis session confirms compatibility facts and returns analysis schema 1 JSON; it never edits files or proposes changes.
+The controller validates that JSON against the frozen identity, the discovered selection, and the acquired source revisions.
+Forged statuses, missing evidence, or out-of-scope evidence references end the run before the proposal session starts.
+The proposal session starts with a fresh conversation containing only the validated analysis, never the analysis transcript.
+Both sessions share the reported-token budget and the outer deadline; analysis consumption reduces what the proposal session may spend.
+The validated analysis persists as `analysis.json` beside `proposal.json` in the research artifact.
+
 ## Proposal output
 
 The controller supplies frozen identity and output locations. Return one JSON object as the final Qwen result.
@@ -180,7 +190,7 @@ Reusable invocation keeps the `llm-*` names.
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL` | Optional Variable | `llm-protocol`: `openai`, `openai-responses`, or `anthropic` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC` | Optional Variable | `llm-use-anthropic`: legacy selector |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING` | Optional Variable | `llm-thinking`: `enabled` or `disabled` |
-| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR` | Optional Variable | `llm-thinking-clear`: boolean string |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR` | Optional Variable | `llm-thinking-clear`: boolean string; default `true` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE` | Optional Variable | `llm-temperature`: numeric value |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P` | Optional Variable | `llm-top-p`: numeric value |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT` | Optional Variable | `llm-reasoning-effort`: `minimal`, `low`, `medium`, `high`, or `max` |
@@ -190,6 +200,7 @@ Reusable invocation keeps the `llm-*` names.
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER` | Optional Variable | `llm-auth-header`: custom authentication header name |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS` | Optional Secret | `llm-extra-headers`: `K=V,K=V`; values may contain credentials |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` | Optional Variable | `llm-extra-body`: JSON object without credentials |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS` | Optional Variable | `max-session-tokens`: positive cumulative reported-token budget; default `10000000` |
 | `CI_PRT_GENERATOR_ID` | Required Secret | Existing GitHub App ID |
 | `CI_PRT_GENERATOR_KEY` | Required Secret | Existing GitHub App private key |
 | `AUTOSYNC_RUNNER` | Optional Variable | Linux runner label; default `ubuntu-22.04-4x` |
@@ -199,7 +210,9 @@ An explicit protocol takes precedence over the legacy selector. Leave the protoc
 Legacy true values are `true`, `1`, and `yes`; false values are `false`, `0`, `no`, or an empty value.
 Protocol and selector values ignore case. Invalid selectors fail when no explicit protocol overrides them.
 
-OpenAI-compatible defaults are thinking `disabled`, thinking-clear `false`, temperature `0.4`, and top-p `0.9`.
+OpenAI-compatible defaults are thinking `disabled`, thinking-clear `true`, temperature `0.4`, and top-p `0.9`.
+GLM's `enable_thinking` also receives native `thinking.clear_thinking`. Explicit native clearing choices take precedence.
+This provider setting clears cross-turn history. It does not disable current reasoning or guarantee removal within a tool chain.
 Reasoning effort is empty by default. Request timeout defaults to `3600` seconds and is separate from command and session limits.
 Do not inject those thinking or sampling defaults into Responses or Anthropic requests.
 Validate settings before making provider requests; unsupported explicit combinations fail instead of being silently dropped.
@@ -231,7 +244,7 @@ llm-url: "<maintainer-supplied provider base URL>"
 llm-model: "<maintainer-supplied GLM-5.3 model identifier>"
 llm-protocol: openai
 llm-thinking: enabled
-llm-thinking-clear: "false"
+llm-thinking-clear: "true"
 llm-temperature: "1"
 llm-top-p: "0.9"
 llm-reasoning-effort: max
@@ -332,6 +345,7 @@ Candidate settings, environment files, and Git hooks cannot replace the frozen c
 | Unchanged tool failure | At most two retries |
 | External command | 300 seconds |
 | Qwen session | 180 turns and 180 tool calls |
+| Reported token usage | 10,000,000 cumulative input and output tokens |
 | Qwen wall time | No separate limit |
 | Outer deadline | 55 minutes |
 | Actions job | 60 minutes |
@@ -348,7 +362,15 @@ Batch independent reads and manifest queries. Complete independent groups before
 Record specific missing facts for blocked groups and retain completed groups. Trusted validation runs in its separate job.
 
 Research uses streaming JSON so completed tool events survive an error or exhausted budget.
-Its artifact contains `diagnostics.json` with the exit code, timeout flag, elapsed agent time, parsed events, and stderr.
+Live logs show tool activity, brief updates, elapsed time and reported token usage.
+Silent periods produce elapsed-time heartbeats. They do not prove model activity.
+Thinking, raw tool contents and proposal bodies stay out of live progress logs.
+Complete release records remain in acquired files. Research reads them on demand rather than carrying all notes in its initial prompt.
+Search the selected recipe, catalog identity and referenced patches. Avoid dumping unrelated records into the conversation.
+The token budget counts reported input and output, including cached input once.
+Usage arrives after requests, so an in-flight request can exceed the budget. Provider quotas are required for a strict billing limit.
+Cached tokens may have different prices; cumulative usage does not establish an invoice amount.
+Its artifact contains `diagnostics.json` with one entry per session phase: exit code, timeout flag, elapsed agent time, reported tokens, parsed events, and stderr, plus the total reported tokens.
 Model tokens, GitHub tokens, and configured secret header values are redacted before upload.
 Inspect this file to locate repeated requests and tool failures. A diagnostic event is not an accepted proposal.
 Research failure reasons use structured CLI errors when available. Stderr remains in the diagnostic artifact.

@@ -265,15 +265,23 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
             "thinking": {
                 "type": thinking,
                 "clear_thinking": _boolean(
-                    values.get("llm-thinking-clear", "false"),
+                    values.get("llm-thinking-clear") or "true",
                     "llm-thinking-clear",
                 ),
             },
         }
-        # Explicit provider controls replace the corresponding convenience
-        # setting. Preserve thinking only when the extra body supplies it too.
+        clear = body["thinking"]["clear_thinking"]
+        # GLM supports native history clearing alongside enable_thinking.
+        # Other providers retain their explicit enable_thinking mapping.
         if "enable_thinking" in extra:
-            body.pop("thinking")
+            if model.upper().startswith("GLM-"):
+                body["thinking"]["type"] = (
+                    "enabled" if extra["enable_thinking"] else "disabled"
+                )
+            else:
+                body.pop("thinking")
+        if isinstance(extra.get("thinking"), dict):
+            extra["thinking"] = {"clear_thinking": clear, **extra["thinking"]}
     elif values.get("llm-thinking") or values.get("llm-thinking-clear"):
         msg = "llm-thinking and llm-thinking-clear require openai"
         raise ConfigurationError(msg)

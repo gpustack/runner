@@ -4,6 +4,10 @@ Validate complete release assessments as data, never as executable instructions.
 Schema 1 is illustrated in tests/auto_sync/fixtures/proposals/ready.json. The
 controller freezes identity before research. Only the final successful Qwen
 result contains a proposal; process exit and intermediate messages are insufficient.
+
+The analysis stage returns a separate handoff. Research completion is not
+compatibility confirmation, so the handoff has no ready status; the trusted
+validation job alone accepts a publishable proposal.
 """
 
 from __future__ import annotations
@@ -11,11 +15,29 @@ from __future__ import annotations
 import copy
 import json
 import re
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
-from tools.auto_sync.discovery import SUBSCRIPTIONS, canonical_variant, version
+from tools.auto_sync.discovery import (
+    SUBSCRIPTIONS,
+    UPSTREAMS,
+    canonical_variant,
+    version,
+)
 
 STATUSES = {"ready", "unchanged", "blocked", "failed"}
+ANALYSIS_STATUSES = {"analyzed", "blocked", "unchanged"}
+ANALYSIS_FIELDS = {
+    "subscription",
+    "status",
+    "reason",
+    "engine_version",
+    "plugin_version",
+    "source_revision",
+    "evidence",
+    "findings",
+    "patches",
+    "unknowns",
+}
 IDENTITY_FIELDS = {
     "repository",
     "default_sha",
@@ -471,6 +493,163 @@ def _row(row, ready, engine_prereleases):
         len({p["path"] for p in row["patches"]}) == len(row["patches"]),
         "duplicate patch dispositions",
     )
+
+
+def _analysis_versions(candidate, selected):
+    """An analysis may echo the discovered selection, never replace it."""
+    for field in ("engine_version", "plugin_version"):
+        value = candidate[field]
+        claimed = selected.get(field)
+        if value is None:
+            require(
+                claimed is None or candidate["status"] != "analyzed",
+                f"analyzed candidate lacks {field}",
+            )
+            continue
+        require(
+            claimed is not None and version(value) == version(claimed),
+            f"analysis {field} differs from the discovered candidate",
+        )
+
+
+def _analysis_revision(candidate, evidence, found):
+    revision = candidate["source_revision"]
+    if candidate["status"] == "analyzed":
+        require(_matches(revision, SHA), "analyzed candidate lacks an exact revision")
+    if revision is None:
+        return
+    require(_matches(revision, SHA), "analysis revision must be an exact commit")
+    service = candidate["subscription"].split("/", 1)[1]
+    selected = found[candidate["subscription"]]
+    key = f"{UPSTREAMS[service]}@{selected['engine_version']}"
+    record = evidence.get(key)
+    require(
+        record is not None and record.get("revision") == revision,
+        "analysis revision differs from the acquired upstream source",
+    )
+
+
+def _analysis_evidence(candidate, evidence):
+    entries = candidate["evidence"]
+    require(isinstance(entries, list), "invalid analysis evidence")
+    if candidate["status"] == "analyzed":
+        require(bool(entries), "analyzed candidate lacks evidence")
+    supplied, roots = set(), []
+    for record in evidence.values():
+        for key in ("path", "release_notes_path", "release_metadata_path"):
+            value = record.get(key)
+            if isinstance(value, str):
+                supplied.add(value)
+        if isinstance(record.get("path"), str):
+            roots.append(Path(record["path"]))
+    for item in entries:
+        require(isinstance(item, str) and bool(item.strip()), "invalid evidence entry")
+        if item in evidence or item in supplied:
+            continue
+        if re.fullmatch(r"https://[^\s/]+/[^\s]*", item):
+            continue
+        if _matches(item, r"[A-Za-z0-9_./-]+") and not item.startswith("/"):
+            # A repository-relative reference the next session can resolve itself.
+            require(".." not in PurePosixPath(item).parts, "escaping evidence path")
+            continue
+        path = Path(item)
+        require(
+            path.is_absolute()
+            and ".." not in path.parts
+            and any(path.is_relative_to(root) for root in roots),
+            "analysis evidence outside the supplied sources",
+        )
+
+
+def validate_analysis(data, expected_identity, *, found, evidence):
+    """
+    Validate the analysis-stage handoff before a fresh proposal session starts.
+
+    The handoff carries facts and evidence references for the discovered
+    candidates. It cannot declare readiness, change the frozen identity or
+    selection, or cite sources the controller never supplied.
+    """
+    try:
+        require(
+            isinstance(data, dict)
+            and set(data) == {"schema_version", "identity", "candidates"},
+            "invalid analysis fields",
+        )
+        require(
+            type(data["schema_version"]) is int and data["schema_version"] == 1,
+            "unsupported analysis schema",
+        )
+        require(
+            data["identity"] == expected_identity,
+            "analysis identity differs from frozen identity",
+        )
+        validate_identity(expected_identity)
+        data = copy.deepcopy(data)
+        selected = {c["subscription"]: c for c in found}
+        seen = set()
+        for candidate in data["candidates"]:
+            require(
+                isinstance(candidate, dict) and set(candidate) == ANALYSIS_FIELDS,
+                "invalid analysis candidate fields",
+            )
+            name = candidate["subscription"]
+            require(
+                name in selected and name not in seen,
+                "unknown or duplicate analysis subscription",
+            )
+            seen.add(name)
+            status = candidate["status"]
+            require(status in ANALYSIS_STATUSES, "invalid analysis status")
+            _text(candidate["reason"], "analysis reason")
+            _analysis_versions(candidate, selected[name])
+            if selected[name]["status"] == "needs_update":
+                require(
+                    status != "unchanged",
+                    "analysis cannot mark a required candidate unchanged",
+                )
+            else:
+                require(
+                    status == "unchanged",
+                    "analysis cannot research an already settled candidate",
+                )
+                require(
+                    candidate["engine_version"] is None
+                    and candidate["plugin_version"] is None
+                    and candidate["source_revision"] is None
+                    and not candidate["evidence"]
+                    and not candidate["unknowns"],
+                    "unchanged analysis carries research claims",
+                )
+            if status == "blocked":
+                _strings(candidate["unknowns"], "analysis unknowns")
+            else:
+                require(
+                    isinstance(candidate["unknowns"], list)
+                    and all(isinstance(u, str) for u in candidate["unknowns"]),
+                    "invalid analysis unknowns",
+                )
+            if status == "analyzed":
+                _text(candidate["findings"], "analysis findings")
+                _text(candidate["patches"], "analysis patch review")
+            else:
+                require(
+                    isinstance(candidate["findings"], str)
+                    and isinstance(candidate["patches"], str),
+                    "invalid analysis text fields",
+                )
+            _analysis_revision(candidate, evidence, selected)
+            _analysis_evidence(candidate, evidence)
+        require(
+            seen == {f"{b}/{s}" for b, s, _ in SUBSCRIPTIONS},
+            "incomplete analysis candidates",
+        )
+    except (ValueError, TypeError, KeyError, AttributeError, RecursionError) as exc:
+        if isinstance(exc, ProposalError):
+            raise
+        msg = f"malformed analysis: {exc}"
+        raise ProposalError(msg) from exc
+    else:
+        return data
 
 
 def validate_proposal(

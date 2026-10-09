@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "repository": "gpustack/runner",
+    "default_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "mode": "discover",
+    "pr_number": null,
+    "command_id": null,
+    "command_digest": null
+  },
+  "candidates": [
+    {
+      "subscription": "cuda/vllm",
+      "status": "analyzed",
+      "reason": "vLLM 0.30.0 compatibility measured against the selected recipe.",
+      "engine_version": "0.30.0",
+      "plugin_version": null,
+      "source_revision": "FILLED_BY_TEST",
+      "evidence": [
+        "vllm-project/vllm@0.30.0",
+        "https://github.com/vllm-project/vllm/releases/tag/v0.30.0",
+        "pack/cuda/Dockerfile.vllm"
+      ],
+      "findings": "Release notes and upstream Dockerfile declare torch 2.9.0 on Python 3.12; the selected CUDA recipe tracks the same runtime.",
+      "patches": "No component patches apply to the exact selected revision.",
+      "unknowns": []
+    },
+    {
+      "subscription": "cuda/sglang",
+      "status": "analyzed",
+      "reason": "SGLang 0.5.0 compatibility measured against the selected recipe.",
+      "engine_version": "0.5.0",
+      "plugin_version": null,
+      "source_revision": "FILLED_BY_TEST",
+      "evidence": ["sgl-project/sglang@0.5.0"],
+      "findings": "Upstream requirements pin torch 2.9.0; the CUDA recipe already selects it.",
+      "patches": "No component patches apply to the exact selected revision.",
+      "unknowns": []
+    },
+    {
+      "subscription": "rocm/vllm",
+      "status": "analyzed",
+      "reason": "vLLM 0.30.0 ROCm compatibility measured against the selected recipe.",
+      "engine_version": "0.30.0",
+      "plugin_version": null,
+      "source_revision": "FILLED_BY_TEST",
+      "evidence": ["vllm-project/vllm@0.30.0"],
+      "findings": "The ROCm Dockerfile at the selected tag keeps the same engine dependency set.",
+      "patches": "No component patches apply to the exact selected revision.",
+      "unknowns": []
+    },
+    {
+      "subscription": "rocm/sglang",
+      "status": "analyzed",
+      "reason": "SGLang 0.5.0 ROCm compatibility measured against the selected recipe.",
+      "engine_version": "0.5.0",
+      "plugin_version": null,
+      "source_revision": "FILLED_BY_TEST",
+      "evidence": ["sgl-project/sglang@0.5.0"],
+      "findings": "The ROCm build keeps the upstream dependency declarations unchanged.",
+      "patches": "No component patches apply to the exact selected revision.",
+      "unknowns": []
+    },
+    {
+      "subscription": "cann/vllm",
+      "status": "analyzed",
+      "reason": "vLLM 0.30.0 pairs with the Ascend plugin 0.30.0rc1 per its release notes.",
+      "engine_version": "0.30.0",
+      "plugin_version": "0.30.0rc1",
+      "source_revision": "FILLED_BY_TEST",
+      "evidence": [
+        "vllm-project/vllm@0.30.0",
+        "vllm-project/vllm-ascend@0.30.0rc1"
+      ],
+      "findings": "The plugin release documents alignment with upstream vLLM 0.30.0.",
+      "patches": "Plugin patches remain applicable to the exact selected revision.",
+      "unknowns": []
+    },
+    {
+      "subscription": "cann/sglang",
+      "status": "blocked",
+      "reason": "The Ascend SGLang compatibility statement is absent from the acquired sources.",
+      "engine_version": null,
+      "plugin_version": null,
+      "source_revision": null,
+      "evidence": [],
+      "findings": "",
+      "patches": "",
+      "unknowns": [
+        "Whether SGLang 0.5.0 supports the selected CANN runtime is not stated in the acquired release notes."
+      ]
+    }
+  ]
+}

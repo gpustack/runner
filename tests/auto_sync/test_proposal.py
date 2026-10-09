@@ -12,6 +12,7 @@ from tools.auto_sync.agent import ProcessResult
 from tools.auto_sync.proposal import (
     ProposalError,
     parse_agent_output,
+    validate_analysis,
     validate_proposal,
 )
 
@@ -333,3 +334,218 @@ def test_forged_output_permission_and_cann_prerelease_are_rejected(proposal):
             raw["identity"],
             engine_prereleases={("cann", "vllm", "0.30.0rc1")},
         )
+
+
+ANALYSIS_FIXTURE = Path(__file__).parent / "fixtures/proposals/analysis.json"
+ANALYSIS_FOUND = [
+    {
+        "subscription": "cuda/vllm",
+        "status": "needs_update",
+        "engine_version": "0.30.0",
+        "plugin_version": None,
+    },
+    {
+        "subscription": "cuda/sglang",
+        "status": "needs_update",
+        "engine_version": "0.5.0",
+        "plugin_version": None,
+    },
+    {
+        "subscription": "rocm/vllm",
+        "status": "needs_update",
+        "engine_version": "0.30.0",
+        "plugin_version": None,
+    },
+    {
+        "subscription": "rocm/sglang",
+        "status": "needs_update",
+        "engine_version": "0.5.0",
+        "plugin_version": None,
+    },
+    {
+        "subscription": "cann/vllm",
+        "status": "needs_update",
+        "engine_version": "0.30.0",
+        "plugin_version": "0.30.0rc1",
+    },
+    {
+        "subscription": "cann/sglang",
+        "status": "needs_update",
+        "engine_version": "0.5.0",
+        "plugin_version": None,
+    },
+]
+ANALYSIS_EVIDENCE = {
+    "vllm-project/vllm@0.30.0": {
+        "repository": "vllm-project/vllm",
+        "revision": "b" * 40,
+        "path": "/acquired/vllm-project-vllm/" + "b" * 40,
+        "source": "https://github.com/vllm-project/vllm/tree/" + "b" * 40,
+        "release": {"tag_name": "v0.30.0"},
+        "release_notes_path": "/acquired/" + "b" * 40 + ".release.md",
+        "release_metadata_path": "/acquired/" + "b" * 40 + ".release.json",
+    },
+    "sgl-project/sglang@0.5.0": {
+        "repository": "sgl-project/sglang",
+        "revision": "c" * 40,
+        "path": "/acquired/sgl-project-sglang/" + "c" * 40,
+        "source": "https://github.com/sgl-project/sglang/tree/" + "c" * 40,
+        "release": {"tag_name": "v0.5.0"},
+        "release_notes_path": "/acquired/" + "c" * 40 + ".release.md",
+        "release_metadata_path": "/acquired/" + "c" * 40 + ".release.json",
+    },
+    "vllm-project/vllm-ascend@0.30.0rc1": {
+        "repository": "vllm-project/vllm-ascend",
+        "revision": "d" * 40,
+        "path": "/acquired/vllm-project-vllm-ascend/" + "d" * 40,
+        "source": "https://github.com/vllm-project/vllm-ascend/tree/" + "d" * 40,
+        "release": {"tag_name": "v0.30.0rc1"},
+        "release_notes_path": "/acquired/" + "d" * 40 + ".release.md",
+        "release_metadata_path": "/acquired/" + "d" * 40 + ".release.json",
+    },
+}
+
+
+@pytest.fixture
+def analysis():
+    raw = json.loads(ANALYSIS_FIXTURE.read_text())
+    for candidate in raw["candidates"]:
+        if candidate["status"] == "analyzed":
+            repo = ANALYSIS_EVIDENCE
+            service = candidate["subscription"].split("/", 1)[1]
+            name = {"vllm": "vllm-project/vllm", "sglang": "sgl-project/sglang"}[
+                service
+            ]
+            candidate["source_revision"] = repo[
+                f"{name}@{candidate['engine_version']}"
+            ]["revision"]
+    return raw
+
+
+def check_analysis(raw, **kwargs):
+    found = kwargs.pop("found", ANALYSIS_FOUND)
+    evidence = kwargs.pop("evidence", ANALYSIS_EVIDENCE)
+    identity = kwargs.pop("identity", None) or raw["identity"]
+    return validate_analysis(raw, identity, found=found, evidence=evidence)
+
+
+def test_valid_analysis_handoff_is_accepted(analysis):
+    result = check_analysis(analysis)
+    assert result == analysis
+    assert result is not analysis
+    statuses = {c["subscription"]: c["status"] for c in result["candidates"]}
+    assert statuses["cann/sglang"] == "blocked"
+    assert sum(s == "analyzed" for s in statuses.values()) == 5
+
+
+def test_analysis_accepts_paths_inside_supplied_source_trees(analysis):
+    cuda = analysis["candidates"][0]
+    tree = ANALYSIS_EVIDENCE["vllm-project/vllm@0.30.0"]
+    cuda["evidence"] = [
+        tree["path"] + "/docker/Dockerfile.gpu",
+        tree["release_notes_path"],
+        tree["release_metadata_path"],
+    ]
+    assert check_analysis(analysis) == analysis
+
+
+@pytest.mark.parametrize("status", ["ready", "failed", "publishable", "done"])
+def test_analysis_never_confirms_compatibility(analysis, status):
+    analysis["candidates"][0]["status"] = status
+    with pytest.raises(ProposalError, match="analysis status"):
+        check_analysis(analysis)
+
+
+def test_analysis_identity_change_is_rejected(analysis):
+    frozen = copy.deepcopy(analysis["identity"])
+    analysis["identity"] = {**analysis["identity"], "head_sha": "f" * 40}
+    with pytest.raises(ProposalError, match="frozen identity"):
+        check_analysis(analysis, identity=frozen)
+
+
+def test_analysis_forged_revision_is_rejected(analysis):
+    analysis["candidates"][0]["source_revision"] = "e" * 40
+    with pytest.raises(ProposalError, match="acquired upstream source"):
+        check_analysis(analysis)
+
+
+def test_analysis_without_acquired_source_cannot_be_analyzed(analysis):
+    evidence = {k: v for k, v in ANALYSIS_EVIDENCE.items() if "vllm@" not in k}
+    with pytest.raises(ProposalError, match="acquired upstream source"):
+        check_analysis(analysis, evidence=evidence)
+
+
+def test_analysis_selection_change_is_rejected(analysis):
+    analysis["candidates"][0]["engine_version"] = "0.31.0"
+    with pytest.raises(ProposalError, match="differs from the discovered candidate"):
+        check_analysis(analysis)
+
+
+def test_analysis_requires_evidence_for_analyzed_candidates(analysis):
+    analysis["candidates"][0]["evidence"] = []
+    with pytest.raises(ProposalError, match="lacks evidence"):
+        check_analysis(analysis)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "/etc/passwd",
+        "/var/empty/other-repository",
+        "pack/../../etc/passwd",
+        "../escape",
+    ],
+)
+def test_analysis_evidence_outside_supplied_sources_is_rejected(analysis, entry):
+    analysis["candidates"][0]["evidence"] = [entry]
+    with pytest.raises(ProposalError, match="evidence"):
+        check_analysis(analysis)
+
+
+def test_analysis_required_candidate_cannot_be_unchanged(analysis):
+    analysis["candidates"][0].update(
+        status="unchanged",
+        engine_version=None,
+        plugin_version=None,
+        source_revision=None,
+        evidence=[],
+        unknowns=[],
+    )
+    with pytest.raises(ProposalError, match="cannot mark a required candidate"):
+        check_analysis(analysis)
+
+
+def test_analysis_settled_candidate_cannot_be_researched(analysis):
+    found = [
+        {**c, "status": "unchanged"} if c["subscription"] == "cuda/vllm" else c
+        for c in ANALYSIS_FOUND
+    ]
+    with pytest.raises(ProposalError, match="already settled"):
+        check_analysis(analysis, found=found)
+
+
+def test_analysis_blocked_requires_specific_unknowns(analysis):
+    blocked = analysis["candidates"][5]
+    assert blocked["status"] == "blocked"
+    blocked["unknowns"] = []
+    with pytest.raises(ProposalError, match="unknowns"):
+        check_analysis(analysis)
+
+
+@pytest.mark.parametrize("missing", ["candidates", "identity", "schema_version"])
+def test_analysis_requires_complete_fields(analysis, missing):
+    frozen = copy.deepcopy(analysis["identity"])
+    del analysis[missing]
+    with pytest.raises(ProposalError, match="analysis fields"):
+        check_analysis(analysis, identity=frozen)
+
+
+def test_analysis_rejects_duplicate_and_missing_subscriptions(analysis):
+    raw = copy.deepcopy(analysis)
+    raw["candidates"][1]["subscription"] = "cuda/vllm"
+    with pytest.raises(ProposalError, match="duplicate"):
+        check_analysis(raw)
+    raw = copy.deepcopy(analysis)
+    raw["candidates"] = raw["candidates"][:5]
+    with pytest.raises(ProposalError, match="incomplete analysis candidates"):
+        check_analysis(raw)

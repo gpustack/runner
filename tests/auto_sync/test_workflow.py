@@ -163,7 +163,13 @@ def test_reusable_inputs_and_exact_configuration_mapping():
         "auth-header",
         "extra-body",
     ]
-    assert set(invocation["inputs"]) == {"llm-" + name for name in suffixes}
+    assert set(invocation["inputs"]) == {"llm-" + name for name in suffixes} | {
+        "max-session-tokens",
+    }
+    assert invocation["inputs"]["max-session-tokens"]["type"] == "string"
+    assert env["AUTO_SYNC_MAX_SESSION_TOKENS"] == (
+        "${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}"
+    )
     for name in suffixes:
         config = name.replace("-", "_").upper()
         assert env["AUTO_SYNC_LLM_" + config] == (
