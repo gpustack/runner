@@ -101,7 +101,7 @@ Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and co
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
-Use `uv run python -m tools.auto_sync.assemble --draft DRAFT --output OUTPUT` to inline each group's `patch_file`.
-Return the assembled JSON as the final result. Do not create commits or rebases to split group patches.
+Write each group's patch to a UTF-8 file inside the session workspace and set the group's `patch_file` to its workspace-relative path.
+Return the draft JSON as the final result; the controller inlines patch files before validation. Do not create commits or rebases to split group patches.
 Exit success alone does not establish a valid proposal. Missing or malformed output is a failure.
 Finish with the assessment; a later maintainer command starts a fresh run.

@@ -2,7 +2,7 @@
 Assemble a proposal from a JSON draft whose groups reference patch files.
 
 A group may use "patch_file" instead of "patch". Files are UTF-8 data.
-Relative paths resolve against the draft directory.
+Relative paths resolve against the given base directory.
 Resolved targets must stay inside it, including through symlinks.
 Semantic validation stays with the trusted controller.
 """
@@ -38,7 +38,7 @@ def assemble(draft, base: Path):
             raise ProposalError(msg) from exc
         require(
             target.is_relative_to(base_resolved),
-            f"patch_file {name} resolves outside the draft directory",
+            f"patch_file {name} resolves outside the base directory",
         )
         try:
             group["patch"] = target.read_bytes().decode("utf-8")

@@ -18,7 +18,7 @@ from urllib.parse import quote, urlsplit
 
 import requests
 
-from tools.auto_sync import agent, checks, discovery, model, proposal, publish
+from tools.auto_sync import agent, assemble, checks, discovery, model, proposal, publish
 from tools.auto_sync.agent import _print_progress
 from tools.auto_sync.checks import _clone, _git, _run
 from tools.auto_sync.discovery import _releases as release_versions
@@ -1196,8 +1196,14 @@ def _research(args, scratch):
         raise proposal.ProposalError(msg)
 
     def finalize_proposal(data):
+        # Inline referenced workspace patch files before semantic validation so
+        # the final reply stays small enough for the model's output limit.
         bound = _bind_discovery(
-            proposal.validate_proposal(data, identity, engine_prereleases=permissions),
+            proposal.validate_proposal(
+                assemble.assemble(data, proposal_workspace),
+                identity,
+                engine_prereleases=permissions,
+            ),
             context,
         )
         return _check_group_patches(args.repo, identity, bound, scratch, env)
@@ -1243,11 +1249,12 @@ def _research(args, scratch):
             "Read the exact upstream trees, Dockerfiles and referenced requirements/installers/patches. "
             "Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane. "
             "For unavailable source or conflicting/ambiguous feedback, preserve blocked/failed assessments and finish. "
-            "The patch is relative to the current workspace head; include it as group.patch in your final JSON. "
+            "The patch is relative to the current workspace head; write each group's patch to a UTF-8 file inside your "
+            "workspace and set group.patch_file to its path relative to your workspace root instead of an inline group.patch. "
+            "The controller inlines patch files before validation, so your final reply stays the small draft JSON. "
             "Use tests/auto_sync/fixtures/proposals/ready.json for field shape only; supply your own identity and evidence. "
             "Group IDs contain only letters, digits, underscores and hyphens. "
-            "Use uv run python -m tools.auto_sync.assemble --draft DRAFT --output OUTPUT to inline each group.patch_file. "
-            "Return the assembled JSON as your final result. Do not hand-escape diffs or create commits and rebases to split groups. "
+            "Do not hand-escape diffs or create commits and rebases to split groups. "
             "Check ordered component patches with git apply --check before editing recipes; fuzzy patch checks are insufficient. "
             "Assess all six subscriptions and retain independent outcomes. "
             f"Budget: {agent.MAX_SESSION_TURNS} session turns and {agent.MAX_TOOL_CALLS} tool calls. "
@@ -1263,9 +1270,15 @@ def _research(args, scratch):
             "Do not run candidate validation or repository-wide tests here.\n"
             + json.dumps({**shared, "analysis": analysis, "schema": schema})
         )
+        proposal_workspace = _agent_workspace(
+            args.repo,
+            identity,
+            scratch / "workspace",
+            env,
+        )
         raw, _ = research_phase(
             "proposal",
-            _agent_workspace(args.repo, identity, scratch / "workspace", env),
+            proposal_workspace,
             proposal_prompt,
             schema,
             finalize_proposal,
