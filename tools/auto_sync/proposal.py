@@ -613,9 +613,12 @@ def validate_analysis(data, expected_identity, *, found, evidence):
     selection, or cite sources the controller never supplied.
     """
     try:
+        require(isinstance(data, dict), "invalid analysis fields")
+        # The schema version is the constant 1; a reply that omits it is
+        # unambiguous, and repair sessions provably re-drop the field.
+        data = {"schema_version": 1, **data}
         require(
-            isinstance(data, dict)
-            and set(data) == {"schema_version", "identity", "candidates"},
+            set(data) == {"schema_version", "identity", "candidates"},
             "invalid analysis fields",
         )
         require(
@@ -703,9 +706,12 @@ def validate_proposal(
 ) -> dict:
     """Return a normalized copy or fail closed before any candidate file is read."""
     try:
+        require(isinstance(data, dict), "invalid proposal fields")
+        # The schema version is the constant 1; a reply that omits it is
+        # unambiguous, and repair sessions provably re-drop the field.
+        data = {"schema_version": 1, **data}
         require(
-            isinstance(data, dict)
-            and set(data) == {"schema_version", "identity", "candidates", "groups"},
+            set(data) == {"schema_version", "identity", "candidates", "groups"},
             "invalid proposal fields",
         )
         require(
