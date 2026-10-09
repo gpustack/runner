@@ -87,6 +87,11 @@ class ProgressObserver:
         text = value if isinstance(value, str) else ""
         for secret in self._secrets:
             text = text.replace(secret, "[REDACTED]")
+        # Clean a bounded window after redaction; the mapping and the whitespace
+        # collapse below never grow the text, and the proposal gate only reads
+        # the leading characters.
+        if len(text) > limit + 100:
+            text = text[: limit + 100]
         # Controls, ANSI escapes, CR, and Unicode separators must not form lines.
         text = "".join(c if c.isprintable() else " " for c in text)
         text = " ".join(text.split())
