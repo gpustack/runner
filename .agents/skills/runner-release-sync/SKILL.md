@@ -100,6 +100,7 @@ Return JSON with the supplied frozen identity and an assessment for every subscr
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
+Cite only bare https URLs in every `sources` list (row, manifest, package, and patch); never a local path or a repository-relative path.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
 Write each group's patch to a UTF-8 file inside a `patches/` directory at the session workspace root and set the group's `patch_file` to its workspace-relative path.

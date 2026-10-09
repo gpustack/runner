@@ -154,6 +154,7 @@ Keep unknown optional versions as `null`; do not invent them to satisfy a report
 For a ready row, `manifest` contains `digest`, `platform_digest`, `platform`, `config_platform`, and `sources`.
 Both platform fields must match the row. An unavailable manifest can be `null` only for a non-ready row.
 `sources`, `checks`, and `deferred` are lists. Keep deferred Pack and GPU checks explicit.
+Every `sources` entry (row, manifest, package, and patch) is one bare `https://` URL; local paths and repository-relative paths are rejected.
 The report records runtime and other compatibility reasons that have no dedicated schema field.
 
 Each package choice contains `name`, `version`, `decision`, `reason`, and `sources`.

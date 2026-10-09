@@ -2996,6 +2996,72 @@ def test_proposal_patch_file_in_stripped_directory_is_repaired(
     assert "patch_file" not in saved["groups"][0]
 
 
+def test_proposal_non_url_source_is_repaired_with_the_offending_entry(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    # The production failure: the model mirrors the analysis stage's local and
+    # repository-relative evidence paths into proposal sources lists.
+    corrupted = proposal(scenario, context)
+    corrupted["groups"][0]["rows"][0]["sources"].append("pack/cuda/Dockerfile.vllm")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(0, agent_stream(corrupted), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    assert (
+        "invalid evidence source URL: 'pack/cuda/Dockerfile.vllm'"
+        in repair_payload["validation_error"]
+    )
+    assert repair_payload["failed_reply"] == json.dumps(corrupted)
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    assert (output / "proposal.json").is_file()
+
+
 def broken_patch(scenario, context):
     raw = proposal(scenario, context)
     group = raw["groups"][0]

@@ -95,10 +95,11 @@ def _strings(value, label, *, empty=False):
 
 def _sources(value):
     _strings(value, "evidence sources")
-    require(
-        all(re.fullmatch(r"https://[^\s/]+/[^\s]*", url) for url in value),
-        "invalid evidence source URL",
-    )
+    for url in value:
+        require(
+            re.fullmatch(r"https://[^\s/]+/[^\s]*", url),
+            f"invalid evidence source URL: {url!r}",
+        )
 
 
 def _matches(value, pattern):

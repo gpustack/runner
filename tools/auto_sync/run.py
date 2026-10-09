@@ -1249,6 +1249,8 @@ def _research(args, scratch):
             "Name each additional package choice by its canonical key (lmcache, mooncake, lmcache-ascend, vllm-omni, "
             "diffusers) behind the recipe's <SERVICE>_<KEY> pin, never the installed distribution name such as "
             "mooncake-transfer-engine-rocm. "
+            "Cite only bare https URLs in every sources list (row, manifest, package and patch); never a local path "
+            "or a repository-relative path. "
             "Read the exact upstream trees, Dockerfiles and referenced requirements/installers/patches. "
             "Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane. "
             "For unavailable source or conflicting/ambiguous feedback, preserve blocked/failed assessments and finish. "
