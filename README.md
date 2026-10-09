@@ -57,6 +57,14 @@ CANN/vLLM images use stable vLLM releases. An `(rc)` label identifies a prerelea
 - [Release automation](docs/release-automation.md): weekly proposals, model configuration, PR commands, and post-merge Pack.
 - [Project instructions](AGENTS.md): source navigation, development checks, and contribution conventions.
 
+## Contributing
+
+Contributions are welcome. Commits must carry a `Signed-off-by` line certifying the
+[Developer Certificate of Origin](./DCO).
+
+Using GPUStack Runner in production? Add your company or project to [ADOPTERS.md](./ADOPTERS.md)
+via pull request.
+
 ## License
 
 Copyright (c) 2026 The GPUStack authors.
