@@ -103,6 +103,7 @@ The proposal session starts with a fresh conversation containing only the valida
 
 When a stage's final reply fails the existing parse or validation gates, the controller starts bounded fresh repair sessions instead of failing immediately.
 A repair session receives the rejected reply text, the exact parse or validation error, and the stage schema, and must return one corrected raw JSON object without researching, editing, or accessing the network again.
+An analysis-stage repair also receives the supplied evidence keys, so a rejected evidence reference can be mapped to the exact supplied key.
 Repair output passes through the same parse and validation pipeline; no gate is relaxed and process failures, timeouts, or missing final results are never repaired.
 `AUTO_SYNC_MAX_REPAIR_ROUNDS` bounds the repair sessions per stage; default `2`, and `0` disables repairs.
 When the rounds are exhausted the run fails with the last error, exactly as an unrepairable rejection does.
