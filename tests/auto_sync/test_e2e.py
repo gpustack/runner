@@ -2685,6 +2685,150 @@ def test_proposal_stage_prose_output_is_repaired_once(
     assert (output / "proposal.json").is_file()
 
 
+def broken_patch(scenario, context):
+    raw = proposal(scenario, context)
+    group = raw["groups"][0]
+    group["patch"] = group["patch"].replace("\n@@", "\n @@")
+    return raw
+
+
+def whitespace_patch(scenario, context):
+    # Trailing whitespace on an added line passes plain git apply but fails
+    # the --whitespace=error applications in validation and publication.
+    raw = proposal(scenario, context)
+    group = raw["groups"][0]
+    lines = group["patch"].splitlines(keepends=True)
+    added = next(
+        i
+        for i, line in enumerate(lines)
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    lines[added] = lines[added].rstrip("\n") + " \n"
+    group["patch"] = "".join(lines)
+    return raw
+
+
+def test_proposal_stage_inapplicable_patch_is_repaired_once(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(
+                0,
+                agent_stream(broken_patch(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    assert "cuda-vllm patch does not apply" in repair_payload["validation_error"]
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    assert (output / "proposal.json").is_file()
+
+
+@pytest.mark.parametrize("breaker", [broken_patch, whitespace_patch])
+def test_inapplicable_patch_fails_research_without_repair_rounds(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    breaker,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_REPAIR_ROUNDS", "0")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(breaker(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    result = json.loads((output / "result.json").read_text())
+    assert "cuda-vllm patch does not apply" in result["reason"]
+    assert [
+        phase["name"]
+        for phase in json.loads(
+            (output / "diagnostics.json").read_text(),
+        )["phases"]
+    ] == ["analysis", "proposal"]
+
+
 @pytest.mark.parametrize("corrupt", ["ready", "revision", "evidence"])
 def test_forged_analysis_never_reaches_proposal_stage(
     scenario,
