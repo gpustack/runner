@@ -13,9 +13,11 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -25,6 +27,7 @@ from tools.auto_sync.model import (
     ModelConfig,
     select_token,
 )
+from tools.auto_sync.progress import ProgressObserver
 from tools.auto_sync.proposal import (
     ProposalError,
     load_json,
@@ -32,6 +35,9 @@ from tools.auto_sync.proposal import (
     redact,
     stream_lines,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Remove every built-in route to questions, planning, agents, or persistent work.
 DISABLED_TOOLS = [
@@ -60,6 +66,13 @@ DISABLED_TOOLS = [
 ]
 MAX_SESSION_TURNS = 180
 MAX_TOOL_CALLS = 180
+MAX_SESSION_TOKENS = 10_000_000
+# Outer supervision limit shared by the analysis and proposal sessions.
+SESSION_DEADLINE = 3300
+
+
+def _print_progress(line: str) -> None:
+    print(line, file=sys.stderr, flush=True)
 
 
 @dataclass(frozen=True)
@@ -68,6 +81,8 @@ class ProcessResult:
     stdout: str
     stderr: str
     timed_out: bool = False
+    # Cumulative tokens the CLI reported after each request; 0 when unobserved.
+    reported_tokens: int = 0
 
 
 def _process_runner():
@@ -94,12 +109,12 @@ def _supervise(request: dict) -> dict:
             stdin=input_stream,
         )
     expires = time.monotonic() + request["deadline"]
-    stop_file = Path(request["stop_file"]) if request["stop_file"] else None
+    stop_files = [Path(value) for value in request["stop_files"]]
     timed_out = False
     try:
         while process.poll() is None:
             timed_out = time.monotonic() >= expires
-            if timed_out or (stop_file and stop_file.exists()):
+            if timed_out or any(stop.exists() for stop in stop_files):
                 break
             time.sleep(min(0.02, max(0, expires - time.monotonic())))
     finally:
@@ -127,13 +142,24 @@ def _supervise(request: dict) -> dict:
     }
 
 
-def _linux_process(argv, *, cwd, env, deadline, stop_file, input_text):
+def _linux_process(
+    argv,
+    *,
+    cwd,
+    env,
+    deadline,
+    stop_file,
+    input_text,
+    observer=None,
+):
     # Regular files cannot leave communicate() waiting on an orphan's pipe.
     with (
         tempfile.TemporaryFile() as stdout,
         tempfile.TemporaryFile() as stderr,
         tempfile.TemporaryFile() as status,
+        tempfile.TemporaryDirectory() as observer_dir,
     ):
+        observer_stop = Path(observer_dir) / "stop"
         process = subprocess.Popen(  # noqa: S603 - fixed supervisor and trusted argv.
             [
                 sys.executable,
@@ -153,29 +179,79 @@ def _linux_process(argv, *, cwd, env, deadline, stop_file, input_text):
             {
                 "argv": argv,
                 "deadline": deadline,
-                "stop_file": str(stop_file) if stop_file else None,
+                "stop_files": [
+                    str(path) for path in (stop_file, observer_stop) if path
+                ],
                 "input_text": input_text,
             },
         ).encode()
         result = {"returncode": 1, "timed_out": False, "cleaned": False}
+        notes = []
+        offset = 0
+
+        def pump() -> None:
+            # pread leaves the writer's shared file offset alone.
+            nonlocal observer, offset
+            if observer is None:
+                return
+            try:
+                while (size := os.fstat(stdout.fileno()).st_size) > offset:
+                    chunk = os.pread(
+                        stdout.fileno(),
+                        min(size - offset, 1 << 20),
+                        offset,
+                    )
+                    offset += len(chunk)
+                    observer.feed(chunk)
+                observer.tick()
+                if observer.stop_requested:
+                    observer_stop.touch()
+            except Exception as error:
+                # A dead observer cannot enforce its guard; stop through cleanup.
+                observer = None
+                observer_stop.touch()
+                notes.append(f"progress observer failed: {type(error).__name__}")
+
+        def feed_stdin() -> None:
+            # A prompt larger than the pipe buffer must not stall the deadline.
+            try:
+                process.stdin.write(request)
+            except OSError:  # A dead supervisor reports below.
+                pass
+            finally:
+                with contextlib.suppress(OSError, ValueError):
+                    process.stdin.close()
+
+        limit = time.monotonic() + deadline + 4
+        threading.Thread(target=feed_stdin, daemon=True).start()
         try:
-            process.communicate(request, timeout=deadline + 4)
-            status.seek(0)
-            if process.returncode == 0:
-                result = json.load(status)
-        except subprocess.TimeoutExpired:
-            result["timed_out"] = True
+            while True:
+                try:
+                    process.wait(timeout=0.05)
+                    break
+                except subprocess.TimeoutExpired:
+                    pump()
+                    if time.monotonic() >= limit:
+                        result["timed_out"] = True
+                        break
+            if not result["timed_out"]:
+                status.seek(0)
+                if process.returncode == 0:
+                    result = json.load(status)
         finally:
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)
             with contextlib.suppress(subprocess.TimeoutExpired):
                 process.wait(timeout=1)
+            pump()
         stdout.seek(0)
         stderr.seek(0)
         out = stdout.read(os.fstat(stdout.fileno()).st_size).decode(errors="replace")
         err = stderr.read(os.fstat(stderr.fileno()).st_size).decode(errors="replace")
         if not result["cleaned"]:
             err += "\nauto-sync: process cleanup could not be confirmed\n"
+        for note in notes:
+            err += f"\nauto-sync: {note}\n"
         return ProcessResult(result["returncode"], out, err, result["timed_out"])
 
 
@@ -188,11 +264,14 @@ def run_process(
     secrets: list[str] | tuple[str, ...] = (),
     stop_file: Path | None = None,
     input_text: str = "",
+    observer: ProgressObserver | None = None,
 ) -> ProcessResult:
     """Provide finite stdin with EOF and bound execution plus orphan cleanup."""
     if deadline <= 0:
         msg = "The process deadline must be positive"
         raise ConfigurationError(msg)
+    # Only an observed process needs the extra runner capability.
+    extra = {"observer": observer} if observer else {}
     result = _process_runner()(
         argv,
         cwd=cwd,
@@ -200,6 +279,7 @@ def run_process(
         deadline=deadline,
         stop_file=stop_file,
         input_text=input_text,
+        **extra,
     )
     ordered = ordered_secrets(secrets)
 
@@ -216,7 +296,13 @@ def run_process(
     stdout, stderr = "\n".join(lines), redact(result.stderr, ordered)
     if result.timed_out:
         stderr += "\nauto-sync: outer process deadline exceeded\n"
-    return ProcessResult(result.returncode, stdout, stderr, result.timed_out)
+    return ProcessResult(
+        result.returncode,
+        stdout,
+        stderr,
+        result.timed_out,
+        observer.tokens if observer is not None else 0,
+    )
 
 
 def tool_guard(event: dict, state: Path) -> dict:
@@ -293,15 +379,20 @@ def run_agent(
     prompt: str,
     runtime_dir: Path,
     mcp_servers: dict | None = None,
-    deadline: float = 3300,
+    deadline: float = SESSION_DEADLINE,
     max_turns: int = MAX_SESSION_TURNS,
     max_tool_calls: int = MAX_TOOL_CALLS,
+    max_session_tokens: int = MAX_SESSION_TOKENS,
+    progress: Callable[[str], None] | None = None,
 ) -> ProcessResult:
     """
     The caller supplies a frozen-policy workspace, never raw PR settings.
 
     Candidate validation and publication run separately without these credentials.
     The caller must validate the returned assessment; exit zero is not acceptance.
+
+    ``max_session_tokens`` guards cumulative usage the CLI reports after each
+    request; it cannot cap provider billing or requests already issued.
     """
     _process_runner()  # Reject unsupported hosts before token probes or settings.
     workspace, runtime_dir, tool_bin = (
@@ -334,6 +425,9 @@ def run_agent(
             raise ConfigurationError(msg)
     if max_turns <= 0 or max_tool_calls <= 0:
         msg = "Agent limits must be positive"
+        raise ConfigurationError(msg)
+    if type(max_session_tokens) is not int or max_session_tokens <= 0:
+        msg = "The session token limit must be a positive integer"
         raise ConfigurationError(msg)
     token = select_token(
         config,
@@ -451,6 +545,11 @@ def run_agent(
     secrets = [*config.tokens, *config.headers.values()]
     for server in (mcp_servers or {}).values():
         secrets.extend(server.get("env", {}).values())
+    observer = ProgressObserver(
+        emit=progress or _print_progress,
+        secrets=secrets,
+        max_tokens=max_session_tokens,
+    )
     try:
         result = run_process(
             argv,
@@ -460,13 +559,25 @@ def run_agent(
             secrets=secrets,
             stop_file=guard_state.with_suffix(".failed"),
             input_text=prompt,
+            observer=observer,
         )
+        if observer.exceeded:
+            return ProcessResult(
+                1,
+                result.stdout,
+                result.stderr
+                + f"\nauto-sync: session token budget exceeded: {observer.tokens}"
+                f" reported tokens reached the {max_session_tokens} limit\n",
+                result.timed_out,
+                observer.tokens,
+            )
         if guard_state.with_suffix(".failed").exists():
             return ProcessResult(
                 1,
                 result.stdout,
                 result.stderr + "\nauto-sync: unchanged tool retries exhausted\n",
                 result.timed_out,
+                result.reported_tokens,
             )
         return result
     finally:

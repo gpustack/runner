@@ -100,7 +100,7 @@ def test_chat_defaults_and_headers():
     assert config.body == {
         "temperature": 0.4,
         "top_p": 0.9,
-        "thinking": {"type": "disabled", "clear_thinking": False},
+        "thinking": {"type": "disabled", "clear_thinking": True},
     }
     assert (
         config.generation_config("fake-first")["customHeaders"]["X-Token"]
@@ -218,7 +218,8 @@ def test_matching_explicit_thinking_controls_are_preserved(enabled):
         "thinking": {"type": "enabled" if enabled else "disabled"},
     }
     config = normalize_inputs(inputs(**{"llm-extra-body": json.dumps(extra)}))
-    assert all(config.body[key] == value for key, value in extra.items())
+    assert config.body["enable_thinking"] is enabled
+    assert config.body["thinking"] == {**extra["thinking"], "clear_thinking": True}
 
 
 @pytest.mark.parametrize("enabled", [True, False])
@@ -236,6 +237,39 @@ def test_explicit_glm_thinking_keeps_existing_mapping():
         inputs(**{"llm-thinking": "enabled", "llm-thinking-clear": "true"}),
     )
     assert config.body["thinking"] == {"type": "enabled", "clear_thinking": True}
+
+
+@pytest.mark.parametrize(
+    "clear,expected",
+    [("", True), ("true", True), ("false", False)],
+)
+def test_glm_native_thinking_receives_history_clear_default(clear, expected):
+    config = normalize_inputs(
+        inputs(
+            **{
+                "llm-model": "GLM-5.3-Flash",
+                "llm-thinking-clear": clear,
+                "llm-extra-body": '{"enable_thinking":true,"reasoning_effort":"max"}',
+            },
+        ),
+    )
+    assert config.body["thinking"] == {"type": "enabled", "clear_thinking": expected}
+    assert config.body["enable_thinking"] is True
+
+
+def test_openai_history_clear_is_enabled_by_default():
+    assert normalize_inputs(inputs()).body["thinking"]["clear_thinking"] is True
+
+
+def test_explicit_native_clear_choice_is_preserved():
+    config = normalize_inputs(
+        inputs(
+            **{
+                "llm-extra-body": '{"thinking":{"type":"enabled","clear_thinking":false}}',
+            },
+        ),
+    )
+    assert config.body["thinking"]["clear_thinking"] is False
 
 
 @pytest.mark.parametrize(

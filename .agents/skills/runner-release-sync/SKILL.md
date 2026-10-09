@@ -6,7 +6,9 @@ description: Research upstream GPUStack Runner releases and prepare scoped packa
 # Runner release sync
 
 Use the model and read-only GitHub MCP already configured by the workflow.
-Run one headless session. Do not launch another agent, request interactive confirmation, or wait for review.
+The research stage runs two sequential headless sessions: analysis, then proposal.
+The proposal session receives only the validated analysis summary, never the analysis transcript.
+Do not launch another agent, request interactive confirmation, or wait for review.
 Return a complete assessment within the supplied limits.
 
 Read the repository's `AGENTS.md` and [release guide](../../../docs/release-automation.md).
@@ -76,9 +78,22 @@ Record lasting constraints beside their version declaration or in the release gu
 Keep proposal-only decisions in its report. Do not invent a pin grammar or convert a temporary choice into a permanent ban.
 Publication appends to the existing branch after checking its head; leave thread resolution to the reviewer.
 
-## Result
+## Analysis output
 
+The analysis session confirms compatibility facts and never edits files.
+Return analysis schema 1 JSON with the supplied frozen identity and one entry per subscription.
+Return raw JSON only, without Markdown or code fences.
+Use `analyzed`, `blocked`, or `unchanged`; never `ready` or `failed`.
+An `analyzed` entry records the discovered engine and plugin versions, the exact acquired source revision, evidence citations, measured findings, and the patch disposition review.
+A `blocked` entry names each specific missing fact in `unknowns`.
+Cite only supplied evidence keys, supplied paths, in-tree absolute paths, repository-relative paths, or https URLs.
+Research completion is not compatibility confirmation.
+
+## Proposal output
+
+The proposal session starts fresh from the validated analysis and prepares the version-bump edits.
 Follow the [proposal output contract](../../../docs/release-automation.md#proposal-output).
+Return raw JSON only, without Markdown or code fences.
 Return JSON with the supplied frozen identity and an assessment for every subscription.
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.

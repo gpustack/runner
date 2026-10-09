@@ -9,11 +9,15 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 FINAL = json.dumps({"status": "unchanged", "summary": "Fixture complete"})
+# Optional per-session final texts for multi-session controllers; the last
+# entry repeats for later sessions. None keeps FINAL for every session.
+FINALS = None
 
 
 @contextmanager
 def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
     requests = []
+    sessions = []
     expected_path = (
         path
         or {
@@ -57,7 +61,21 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
                 if readable and self.connection.recv(1, socket.MSG_PEEK) == b"":
                     requests[-1]["closed_after"] = time.monotonic() - started
                     return
-            turn = len(requests)
+            # A request without assistant or tool history starts a new session.
+            history = body.get("messages") or body.get("input") or []
+            continuing = any(
+                item.get("role") in {"assistant", "tool"}
+                or item.get("type") == "function_call_output"
+                for item in history
+                if isinstance(item, dict)
+            )
+            if not continuing or not sessions:
+                sessions.append([])
+            sessions[-1].append(body)
+            turn = len(sessions[-1])
+            session = len(sessions) - 1
+            finals = FINALS or [FINAL]
+            final_text = finals[min(session, len(finals) - 1)]
             names = [
                 tool.get("name", tool.get("function", {}).get("name"))
                 for tool in body.get("tools", [])
@@ -72,10 +90,11 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
             )
             args = {"skill": "fixture-release"} if turn == 1 else {}
             call = tools and turn < 3
-            if calls is not None:
-                call = turn <= len(calls)
+            session_calls = calls.get(session, []) if isinstance(calls, dict) else calls
+            if session_calls is not None:
+                call = turn <= len(session_calls)
                 if call:
-                    name, args = calls[turn - 1]
+                    name, args = session_calls[turn - 1]
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Connection", "close")
@@ -103,7 +122,7 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
                             },
                         ]
                     else:
-                        delta["content"] = FINAL
+                        delta["content"] = final_text
                     event(
                         {
                             "id": f"chat_{turn}",
@@ -169,7 +188,7 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
                     delta = (
                         {"type": "input_json_delta", "partial_json": json.dumps(args)}
                         if call
-                        else {"type": "text_delta", "text": FINAL}
+                        else {"type": "text_delta", "text": final_text}
                     )
                     event(
                         {"type": "content_block_delta", "index": 0, "delta": delta},
@@ -277,7 +296,7 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
                                 "item_id": item["id"],
                                 "output_index": 0,
                                 "content_index": 0,
-                                "delta": FINAL,
+                                "delta": final_text,
                             },
                             "response.output_text.delta",
                         )
@@ -287,7 +306,7 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
                                 "item_id": item["id"],
                                 "output_index": 0,
                                 "content_index": 0,
-                                "text": FINAL,
+                                "text": final_text,
                             },
                             "response.output_text.done",
                         )
@@ -297,7 +316,7 @@ def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
                             "content": [
                                 {
                                     "type": "output_text",
-                                    "text": FINAL,
+                                    "text": final_text,
                                     "annotations": [],
                                 },
                             ],

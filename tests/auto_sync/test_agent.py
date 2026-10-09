@@ -26,6 +26,7 @@ from server import endpoint
 from tools.auto_sync import agent, proposal
 from tools.auto_sync.agent import ProcessResult, run_agent, run_process, tool_guard
 from tools.auto_sync.model import ConfigurationError, normalize_inputs
+from tools.auto_sync.progress import ProgressObserver
 from tools.auto_sync.proposal import parse_agent_output, stream_lines
 
 
@@ -55,7 +56,16 @@ def tool_bin(tmp_path, monkeypatch):
     return path
 
 
-def _local_cli_process(argv, *, cwd, env, deadline, stop_file, input_text):
+def _local_cli_process(
+    argv,
+    *,
+    cwd,
+    env,
+    deadline,
+    stop_file,
+    input_text,
+    observer=None,  # noqa: ARG001 - the local fixture has no live tail.
+):
     with tempfile.TemporaryFile() as input_stream:
         input_stream.write(input_text.encode("utf-8"))
         input_stream.seek(0)
@@ -233,7 +243,7 @@ def test_real_cli_uses_outer_deadline_without_wall_time_budget(
     runner = agent._process_runner()  # noqa: SLF001 - controlled fixture boundary.
     observed = {}
 
-    def capture_budget(argv, *, cwd, env, deadline, stop_file, input_text):
+    def capture_budget(argv, *, cwd, env, deadline, stop_file, input_text, observer):
         observed["argv"] = argv
         observed["deadline"] = deadline
         observed["settings"] = json.loads(
@@ -246,6 +256,7 @@ def test_real_cli_uses_outer_deadline_without_wall_time_budget(
             deadline=10,
             stop_file=stop_file,
             input_text=input_text,
+            observer=observer,
         )
 
     monkeypatch.setattr(agent, "_process_runner", lambda: capture_budget)
@@ -423,7 +434,7 @@ def test_real_cli_protocol_turns_instructions_skill_mcp(
         )
         if protocol == "openai":
             assert body["reasoning_effort"] == "high"
-            assert body["thinking"] == {"type": "disabled", "clear_thinking": False}
+            assert body["thinking"] == {"type": "disabled", "clear_thinking": True}
         elif protocol == "openai-responses":
             assert body["reasoning"]["effort"] == "high"
             assert "thinking" not in body
@@ -848,6 +859,39 @@ def test_real_cli_explicit_native_fields(
         assert requests[0]["body"][key] == value
 
 
+@pytest.mark.parametrize("clear,expected", [("", True), ("false", False)])
+def test_real_cli_glm_history_clear_reaches_api(
+    tool_bin,
+    workspace,
+    tmp_path,
+    clear,
+    expected,
+):
+    with endpoint("openai", tools=False) as (url, requests):
+        result = run_agent(
+            config(
+                url,
+                "openai",
+                **{
+                    "llm-model": "GLM-5.3-Flash",
+                    "llm-thinking-clear": clear,
+                    "llm-extra-body": '{"enable_thinking":true,"reasoning_effort":"max"}',
+                },
+            ),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Check configured history clearing.",
+            runtime_dir=tmp_path / "runtime",
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr
+    assert len(requests) == 1
+    assert requests[0]["body"]["thinking"] == {
+        "type": "enabled",
+        "clear_thinking": expected,
+    }
+
+
 @pytest.mark.parametrize("enabled", [True, False])
 def test_real_cli_explicit_thinking_sampling_and_effort(
     tool_bin,
@@ -940,7 +984,7 @@ def test_real_cli_stop_hook_reports_effective_context_window(
     observed = tmp_path / "context.json"
     runner = agent._process_runner()  # noqa: SLF001 - controlled fixture boundary.
 
-    def capture_context(argv, *, cwd, env, deadline, stop_file, input_text):
+    def capture_context(argv, *, cwd, env, deadline, stop_file, input_text, observer):
         settings_path = Path(env["QWEN_HOME"]) / "settings.json"
         settings = json.loads(settings_path.read_text())
         settings["hooks"]["Stop"] = [
@@ -968,6 +1012,7 @@ def test_real_cli_stop_hook_reports_effective_context_window(
             deadline=deadline,
             stop_file=stop_file,
             input_text=input_text,
+            observer=observer,
         )
 
     monkeypatch.setattr(agent, "_process_runner", lambda: capture_context)
@@ -1056,3 +1101,333 @@ def test_real_cli_and_probe_share_non_root_endpoint(
         headers = {key.lower(): value for key, value in request["headers"].items()}
         assert headers["x-fixture-token"] == "fake-first"
         assert headers["x-fixture"] == "yes"
+
+
+LINUX_ONLY = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="Required Linux test: live tail and descendant cleanup use the supervisor",
+)
+BUDGET_EVENT = json.dumps(
+    {
+        "type": "assistant",
+        "message": {
+            "id": "m1",
+            "content": [{"type": "text", "text": "working"}],
+            "usage": {"input_tokens": 60, "output_tokens": 40},
+        },
+    },
+)
+# A detached descendant that would write after the supervisor returned.
+ESCAPING_CHILD = (
+    "import subprocess,sys;subprocess.Popen([sys.executable,'-c',"
+    "\"import time,pathlib;time.sleep(1);pathlib.Path('escaped').touch()\"],"
+    "start_new_session=True,stdin=subprocess.DEVNULL,"
+    "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)"
+)
+
+
+def _budget_child(*, linger=30):
+    return (
+        f"import sys,time;exec({ESCAPING_CHILD!r});"
+        f"print({BUDGET_EVENT!r},flush=True);time.sleep({linger})"
+    )
+
+
+@LINUX_ONLY
+def test_large_stdin_still_honors_the_deadline(tmp_path, monkeypatch):
+    # A supervisor that stalls before reading stdin must not outlive the deadline.
+    root = Path(agent.__file__).resolve().parents[2]
+    package = tmp_path / "tools" / "auto_sync"
+    package.mkdir(parents=True)
+    for module in (root / "tools" / "auto_sync").glob("*.py"):
+        (package / module.name).write_text(module.read_text())
+    supervisor = package / "agent.py"
+    supervisor.write_text(
+        supervisor.read_text().replace(
+            'if len(sys.argv) == 3 and sys.argv[1] == "--supervise":\n        _process_runner()\n',
+            'if len(sys.argv) == 3 and sys.argv[1] == "--supervise":\n'
+            "        _process_runner()\n"
+            "        time.sleep(60)\n",
+            1,
+        ),
+    )
+    monkeypatch.setattr(agent, "__file__", str(supervisor))
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+    started = time.monotonic()
+    result = run_process(
+        [sys.executable, "-c", "import sys;sys.stdin.read()"],
+        cwd=tmp_path,
+        env={"PYTHONPATH": str(tmp_path)},
+        deadline=3,
+        input_text="x" * (4 * 1024 * 1024),
+    )
+    assert time.monotonic() - started < 20
+    assert result.timed_out
+    assert result.returncode == 1
+
+
+@LINUX_ONLY
+def test_progress_is_observed_while_child_is_still_alive(tmp_path):
+    child = (
+        "import os,pathlib,sys,time\n"
+        "pathlib.Path('pid').write_text(str(os.getpid()))\n"
+        'print(\'{"type":"system","subtype":"init"}\',flush=True)\n'
+        "for _ in range(200):\n"
+        " if pathlib.Path('ack').exists(): raise SystemExit(0)\n"
+        " time.sleep(0.05)\n"
+        "raise SystemExit(3)\n"
+    )
+    alive = []
+
+    def emit(line):
+        pid = int((tmp_path / "pid").read_text())
+        os.kill(pid, 0)  # Raises if the child already exited.
+        alive.append(line)
+        (tmp_path / "ack").touch()
+
+    result = run_process(
+        [sys.executable, "-c", child],
+        cwd=tmp_path,
+        env={},
+        deadline=20,
+        observer=ProgressObserver(emit=emit),
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(alive) == 1
+    assert "session started" in alive[0]
+
+
+@LINUX_ONLY
+def test_secret_split_across_child_writes_never_appears_live(tmp_path):
+    secret = "fake-secret-split-value"  # noqa: S105 - fake redaction fixture.
+    parts = [secret[:7], secret[7:15], secret[15:]]
+    child = (
+        "import sys,time\n"
+        'line=\'{"type":"assistant","message":{"id":"a","content":'
+        f'[{{"type":"text","text":"x {secret} y"}}]}}}}\\n\'\n'
+        f"for start,end in {[(0, 40), (40, 46), (46, 57), (57, 400)]!r}:\n"
+        " sys.stdout.write(line[start:end]);sys.stdout.flush();time.sleep(0.1)\n"
+    )
+    lines = []
+    result = run_process(
+        [sys.executable, "-c", child],
+        cwd=tmp_path,
+        env={},
+        deadline=20,
+        secrets=[secret],
+        observer=ProgressObserver(emit=lines.append, secrets=[secret]),
+    )
+    assert result.returncode == 0, result.stderr
+    assert parts[0] not in "\n".join(lines) or "[REDACTED]" in "\n".join(lines)
+    assert secret not in "\n".join(lines)
+    assert "x [REDACTED] y" in "\n".join(lines)
+    assert secret not in result.stdout
+
+
+@LINUX_ONLY
+def test_observed_capture_keeps_complete_stdout(tmp_path):
+    child = (
+        "import sys,time\n"
+        "for index in range(300):\n"
+        ' print(\'{"type":"system","subtype":"other","n":%d}\' % index,flush=True)\n'
+        " if index % 50 == 0: time.sleep(0.12)\n"
+    )
+    result = run_process(
+        [sys.executable, "-c", child],
+        cwd=tmp_path,
+        env={},
+        deadline=20,
+        observer=ProgressObserver(emit=lambda _: None),
+    )
+    assert result.returncode == 0
+    events = [json.loads(line) for line in result.stdout.split("\n") if line]
+    assert [event["n"] for event in events] == list(range(300))
+
+
+@LINUX_ONLY
+def test_budget_stop_cleans_descendants_before_returning(tmp_path):
+    lines = []
+    observer = ProgressObserver(emit=lines.append, max_tokens=100)
+    started = time.monotonic()
+    result = run_process(
+        [sys.executable, "-c", _budget_child()],
+        cwd=tmp_path,
+        env={},
+        deadline=25,
+        observer=observer,
+    )
+    assert time.monotonic() - started < 10
+    assert observer.exceeded
+    assert result.returncode == -9
+    assert not result.timed_out
+    assert any("session token budget exceeded" in line for line in lines)
+    time.sleep(1.3)
+    assert not (tmp_path / "escaped").exists()
+
+
+@LINUX_ONLY
+def test_observer_failure_still_runs_descendant_cleanup(tmp_path):
+    class Broken(ProgressObserver):
+        def feed(self, data):  # noqa: ARG002 - failure before any parsing.
+            msg = "observer boom"
+            raise RuntimeError(msg)
+
+    result = run_process(
+        [sys.executable, "-c", _budget_child()],
+        cwd=tmp_path,
+        env={},
+        deadline=25,
+        observer=Broken(emit=lambda _: None),
+    )
+    assert result.returncode == -9
+    assert "progress observer failed: RuntimeError" in result.stderr
+    time.sleep(1.3)
+    assert not (tmp_path / "escaped").exists()
+
+
+def test_run_process_passes_observer_only_when_requested(monkeypatch, tmp_path):
+    calls = []
+
+    def strict(argv, *, cwd, env, deadline, stop_file, input_text, **extra):  # noqa: ARG001
+        calls.append(extra)
+        return ProcessResult(0, "", "")
+
+    monkeypatch.setattr(agent, "_process_runner", lambda: strict)
+    run_process(["x"], cwd=tmp_path, env={}, deadline=1)
+    observer = ProgressObserver(emit=lambda _: None)
+    run_process(["x"], cwd=tmp_path, env={}, deadline=1, observer=observer)
+    assert calls == [{}, {"observer": observer}]
+
+
+def _fake_runner(stream: bytes, calls: list, *, chunk=7):
+    def runner(argv, *, cwd, env, deadline, stop_file, input_text, observer):  # noqa: ARG001
+        calls.append(observer)
+        for start in range(0, len(stream), chunk):
+            observer.feed(stream[start : start + chunk])
+        return ProcessResult(-9 if observer.stop_requested else 0, stream.decode(), "")
+
+    return lambda: runner
+
+
+def test_run_agent_reports_budget_error_with_safe_progress(
+    monkeypatch,
+    workspace,
+    tmp_path,
+):
+    secret = "fake-contract-token"  # noqa: S105 - fake redaction fixture.
+    leaked = BUDGET_EVENT.replace("working", f"working {secret}")
+    stream = (leaked + "\n").encode()
+    calls = []
+    monkeypatch.setattr(agent, "_process_runner", _fake_runner(stream, calls))
+    lines = []
+    result = run_agent(
+        config("http://127.0.0.1:9", "openai"),
+        workspace=workspace,
+        tool_bin=tmp_path / "bin",
+        prompt="Fixture",
+        runtime_dir=tmp_path / "runtime",
+        max_session_tokens=100,
+        progress=lines.append,
+    )
+    assert result.returncode == 1
+    assert "session token budget exceeded" in result.stderr
+    assert "unchanged tool retries" not in result.stderr
+    assert not result.timed_out
+    assert calls[0].max_tokens == 100
+    assert secret not in "\n".join(lines)
+    assert any("session token budget exceeded" in line for line in lines)
+    # A later stage subtracts this count before it runs.
+    assert result.reported_tokens == 100
+
+
+def test_run_agent_default_limit_does_not_stop_below_threshold(
+    monkeypatch,
+    workspace,
+    tmp_path,
+):
+    calls = []
+    monkeypatch.setattr(
+        agent,
+        "_process_runner",
+        _fake_runner((BUDGET_EVENT + "\n").encode(), calls),
+    )
+    result = run_agent(
+        config("http://127.0.0.1:9", "openai"),
+        workspace=workspace,
+        tool_bin=tmp_path / "bin",
+        prompt="Fixture",
+        runtime_dir=tmp_path / "runtime",
+        progress=lambda _: None,
+    )
+    assert result.returncode == 0
+    assert "token budget" not in result.stderr
+    assert calls[0].max_tokens == 10_000_000
+    assert calls[0].tokens == 100
+    assert result.reported_tokens == 100
+
+
+def test_reported_tokens_default_to_zero_without_an_observer(tmp_path, monkeypatch):
+    # Positional construction must stay valid for callers without an observer.
+    assert ProcessResult(0, "", "").reported_tokens == 0
+    monkeypatch.setattr(agent, "_process_runner", lambda: _local_cli_process)
+    result = run_process(
+        [sys.executable, "-c", "print('done')"],
+        cwd=tmp_path,
+        env={},
+        deadline=20,
+    )
+    assert result.returncode == 0
+    assert result.reported_tokens == 0
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, False, "5", 1.5, None])
+def test_invalid_token_limits_reject_before_authentication(
+    monkeypatch,
+    workspace,
+    tmp_path,
+    limit,
+):
+    monkeypatch.setattr(agent, "_process_runner", lambda: None)
+    with (
+        endpoint("openai", tools=False) as (url, requests),
+        pytest.raises(ConfigurationError, match="token limit"),
+    ):
+        run_agent(
+            config(url, "openai", **{"llm-auth-token": "fake-first,fake-second"}),
+            workspace=workspace,
+            tool_bin=tmp_path / "bin",
+            prompt="Fixture",
+            runtime_dir=tmp_path / "runtime",
+            max_session_tokens=limit,
+        )
+    assert requests == []
+    assert not (tmp_path / "runtime").exists()
+
+
+@LINUX_ONLY
+def test_run_agent_budget_stops_owned_cli_without_orphans(workspace, tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "qwen"
+    fake.write_text(
+        f"#!{sys.executable}\n"
+        f"import os,sys,time\nos.chdir({str(tmp_path)!r})\n{_budget_child()}\n",
+    )
+    fake.chmod(0o755)
+    lines = []
+    result = run_agent(
+        config("http://127.0.0.1:9", "openai"),
+        workspace=workspace,
+        tool_bin=bin_dir,
+        prompt="Fixture",
+        runtime_dir=tmp_path / "runtime",
+        max_session_tokens=100,
+        deadline=25,
+        progress=lines.append,
+    )
+    assert result.returncode == 1
+    assert "session token budget exceeded" in result.stderr
+    assert not result.timed_out
+    assert any("working" in line for line in lines)
+    time.sleep(1.3)
+    assert not (tmp_path / "escaped").exists()
