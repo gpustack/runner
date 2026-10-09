@@ -106,7 +106,7 @@ The proposal session starts with a fresh conversation containing only the valida
 When a stage's final reply fails the existing parse or validation gates, the controller starts bounded fresh repair sessions instead of failing immediately.
 A repair session receives the rejected reply text, the exact parse or validation error, and the stage schema, and must return one corrected raw JSON object without researching, editing, or accessing the network again.
 An analysis-stage repair also receives the supplied evidence keys, so a rejected evidence reference can be mapped to the exact supplied key.
-A proposal-stage repair reuses the stage workspace, so patch files referenced by the rejected reply persist; the corrected reply keeps its `patch_file` references rather than inlining patches.
+A proposal-stage repair reuses the stage workspace after startup configuration paths (`.qwen`, `.env`, `.mcp.json`, `.claude/settings.json`) are stripped, so patch files must live outside them; the corrected reply keeps its `patch_file` references rather than inlining patches.
 Repair output passes through the same parse and validation pipeline; no gate is relaxed and process failures, timeouts, or missing final results are never repaired.
 `AUTO_SYNC_MAX_REPAIR_ROUNDS` bounds the repair sessions per stage; default `2`, and `0` disables repairs.
 When the rounds are exhausted the run fails with the last error, exactly as an unrepairable rejection does.
@@ -181,7 +181,8 @@ Missing or malformed output remains failed even if the process exits zero.
 Only trusted validation can accept a ready group for publication.
 
 Use `tests/auto_sync/fixtures/proposals/ready.json` for the field shape. Its versions and evidence are fixture data.
-Write each group's patch to a UTF-8 file inside the session workspace and set the group's `patch_file` to its workspace-relative path.
+Write each group's patch to a UTF-8 file inside a `patches/` directory at the session workspace root and set the group's `patch_file` to its workspace-relative path.
+Startup configuration paths (`.qwen`, `.env`, `.mcp.json`, `.claude/settings.json`) are stripped before every repair session; never store patch files in them.
 Return the draft JSON as the final Qwen result; the controller inlines each `patch_file` with `tools.auto_sync.assemble` before validation.
 The assembler rejects a `patch_file` that resolves, including through symlinks, outside the session workspace.
 The helper does not validate compatibility or generate Git diffs.

@@ -102,7 +102,8 @@ Include compatibility rows, sources, package and patch decisions, executed check
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
-Write each group's patch to a UTF-8 file inside the session workspace and set the group's `patch_file` to its workspace-relative path.
+Write each group's patch to a UTF-8 file inside a `patches/` directory at the session workspace root and set the group's `patch_file` to its workspace-relative path.
+Startup configuration paths (`.qwen`, `.env`, `.mcp.json`, `.claude/settings.json`) are stripped before every repair session; never store patch files in them.
 Return the draft JSON as the final result; the controller inlines patch files before validation. Do not create commits or rebases to split group patches.
 Exit success alone does not establish a valid proposal. Missing or malformed output is a failure.
 Finish with the assessment; a later maintainer command starts a fresh run.

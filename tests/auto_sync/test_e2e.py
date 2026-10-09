@@ -2920,6 +2920,82 @@ def test_proposal_patch_file_outside_workspace_is_repaired(
     assert (output / "proposal.json").is_file()
 
 
+def test_proposal_patch_file_in_stripped_directory_is_repaired(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    # The production failure: the patch lands in a startup configuration
+    # directory that a repair session strips before it runs.
+    stripped = proposal(scenario, context)
+    patch = stripped["groups"][0].pop("patch")
+    stripped["groups"][0]["patch_file"] = ".qwen/tmp/candidate.patch"
+    truncated = json.dumps(stripped)[:100]
+    relocated = proposal(scenario, context)
+    relocated["groups"][0].pop("patch")
+    relocated["groups"][0]["patch_file"] = "patches/candidate.patch"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        workspace = Path(kwargs["workspace"])
+        if len(calls) == 2:
+            target = workspace / stripped["groups"][0]["patch_file"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(patch)
+            return ProcessResult(0, final_text(truncated), "", False, 10)
+        if len(calls) == 3:
+            # The repair session starts after the strip removed the patch file.
+            assert not (workspace / ".qwen").exists()
+            return ProcessResult(0, agent_stream(stripped), "", False, 10)
+        target = workspace / relocated["groups"][0]["patch_file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(patch)
+        return ProcessResult(0, agent_stream(relocated), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 4
+    repair_payload = json.loads(calls[3]["prompt"].split("\n", 1)[1])
+    assert "cannot read patch_file" in repair_payload["validation_error"]
+    assert repair_payload["failed_reply"] == json.dumps(stripped)
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+        "proposal-repair-2",
+    ]
+    saved = json.loads((output / "proposal.json").read_text())
+    assert saved["groups"][0]["patch"] == patch
+    assert "patch_file" not in saved["groups"][0]
+
+
 def broken_patch(scenario, context):
     raw = proposal(scenario, context)
     group = raw["groups"][0]
