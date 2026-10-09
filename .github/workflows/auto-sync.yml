@@ -89,7 +89,7 @@ jobs:
       github.event_name != 'issue_comment' ||
       (github.event.action == 'created' && github.event.issue.pull_request &&
        github.event.comment.user.type != 'Bot' && startsWith(github.event.comment.body, '/auto-sync'))
-    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}
+    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     outputs:
       default-sha: ${{ steps.freeze.outputs.default-sha }}
@@ -222,7 +222,7 @@ jobs:
   validation:
     needs: research
     if: needs.research.outputs.ready == 'true'
-    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}
+    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     outputs:
       publishable: ${{ steps.validate.outputs.publishable }}
@@ -296,7 +296,7 @@ jobs:
   publication:
     needs: [research, validation]
     if: needs.validation.outputs.publishable == 'true'
-    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}
+    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
       - name: Checkout frozen controller

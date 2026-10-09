@@ -212,7 +212,7 @@ Reusable invocation keeps the `llm-*` names.
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS` | Optional Variable | `max-repair-rounds`: non-negative repair-session bound per research stage; default `2` |
 | `CI_PRT_GENERATOR_ID` | Required Secret | Existing GitHub App ID |
 | `CI_PRT_GENERATOR_KEY` | Required Secret | Existing GitHub App private key |
-| `AUTOSYNC_RUNNER` | Optional Variable | Linux runner label; default `ubuntu-22.04-4x` |
+| `AUTOSYNC_RUNNER` | Optional Variable | Linux runner label; default `ubuntu-24.04` |
 
 Protocol defaults effectively to `openai`.
 An explicit protocol takes precedence over the legacy selector. Leave the protocol unset when using that selector.
@@ -391,8 +391,8 @@ A session-wide failure is described once; candidate rows show its affected subsc
 
 ## Runner and caches
 
-`AUTOSYNC_RUNNER` defaults to `ubuntu-22.04-4x`.
-Maintainers can select `ubuntu-22.04` or `ubuntu-22.04-8x` when those labels are available to the repository.
+`AUTOSYNC_RUNNER` defaults to `ubuntu-24.04`, a standard GitHub-hosted runner.
+Maintainers can select another label, such as the larger `ubuntu-22.04-8x`, when it is available to the repository and a run needs more capacity.
 Labels alone do not establish hardware specifications. Auto-sync uses remote inference and needs no GPU.
 An amd64 research runner can inspect arm64 manifests; final-image execution belongs to native Pack runners.
 The separately configured verification CI uses Ubuntu 22.04.
