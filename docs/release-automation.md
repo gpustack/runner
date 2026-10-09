@@ -156,6 +156,8 @@ Both platform fields must match the row. An unavailable manifest can be `null` o
 The report records runtime and other compatibility reasons that have no dedicated schema field.
 
 Each package choice contains `name`, `version`, `decision`, `reason`, and `sources`.
+The `name` is the canonical choice key behind the recipe pin: `lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, or `diffusers`.
+Never use the installed distribution name (for example `mooncake-transfer-engine-rocm`) in place of the canonical key.
 Decisions are `retain`, `update`, `disable`, or `source`.
 Each patch choice contains `path`, `disposition`, `reason`, `versions`, `platforms`, `sources`, `source_repository`, and `source_revision`.
 Use an exact source commit or `null` when unavailable.

@@ -99,6 +99,7 @@ Return raw JSON only, without Markdown or code fences.
 Return JSON with the supplied frozen identity and an assessment for every subscription.
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
+Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
 Write each group's patch to a UTF-8 file inside the session workspace and set the group's `patch_file` to its workspace-relative path.
