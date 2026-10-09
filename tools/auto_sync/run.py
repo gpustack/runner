@@ -877,6 +877,30 @@ def _check_group_patches(
     return data
 
 
+def _strip_untrusted_config(workspace: Path) -> None:
+    """Remove agent startup configuration without following hostile symlinks."""
+    for config_path in agent.UNTRUSTED_STARTUP_CONFIG:
+        parent = workspace
+        hostile = False
+        for part in Path(config_path).parts[:-1]:
+            parent = parent / part
+            if parent.is_symlink():
+                # Unlink the hostile link itself; never traverse it.
+                parent.unlink()
+                hostile = True
+                break
+            if not parent.is_dir():
+                hostile = True
+                break
+        if hostile:
+            continue
+        selected = workspace / config_path
+        if selected.is_dir() and not selected.is_symlink():
+            shutil.rmtree(selected)
+        else:
+            selected.unlink(missing_ok=True)
+
+
 def _research(args, scratch):
     context = _context(args.bundle, args.repo)
     prepared = _read(args.bundle / "result.json")
@@ -1081,12 +1105,7 @@ def _research(args, scratch):
         # A repair session reuses the previous session's workspace; strip any
         # startup configuration the model created so it can neither steer nor
         # block the fresh session's preflight.
-        for config_path in agent.UNTRUSTED_STARTUP_CONFIG:
-            selected = workspace / config_path
-            if selected.is_dir() and not selected.is_symlink():
-                shutil.rmtree(selected)
-            else:
-                selected.unlink(missing_ok=True)
+        _strip_untrusted_config(workspace)
         started = time.monotonic()
         extra = {} if deadline is None else {"deadline": deadline}
         result = agent.run_agent(

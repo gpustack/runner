@@ -36,6 +36,7 @@ from tools.auto_sync.run import (
     _redact,
     _registry,
     _source,
+    _strip_untrusted_config,
 )
 
 BOT = "runner-sync[bot]"
@@ -2890,6 +2891,33 @@ def test_repair_session_strips_model_created_startup_config(
     )
     assert len(calls) == 3
     assert leftover == [False]
+
+
+def test_strip_untrusted_config_never_traverses_symlinks(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    real = workspace / ".claude"
+    real.mkdir()
+    (real / "settings.json").write_text("{}\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    protected = outside / "settings.json"
+    protected.write_text("{}\n")
+    _strip_untrusted_config(workspace)
+    assert not (real / "settings.json").exists()
+    assert real.is_dir()  # the trusted skills checkout shares the directory
+    real.rmdir()
+
+    # A hostile symlink must be unlinked itself, never traversed.
+    (workspace / ".claude").symlink_to(outside)
+    _strip_untrusted_config(workspace)
+    assert not (workspace / ".claude").exists()
+    assert protected.is_file()
+
+    # A plain file cannot contain settings and must not crash the strip.
+    (workspace / ".claude").write_text("junk\n")
+    _strip_untrusted_config(workspace)
+    assert (workspace / ".claude").is_file()
 
 
 @pytest.mark.parametrize("corrupt", ["ready", "revision", "evidence"])
