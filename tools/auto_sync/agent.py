@@ -71,6 +71,15 @@ MAX_SESSION_TOKENS = 20_000_000
 MAX_REPAIR_ROUNDS = 2
 # Outer supervision limit shared by the analysis and proposal sessions.
 SESSION_DEADLINE = 3300
+# Automatic startup configuration a workspace must not supply; repair sessions
+# strip these paths before reusing a workspace a model session ran in.
+UNTRUSTED_STARTUP_CONFIG = (
+    ".qwen",
+    ".env",
+    ".mcp.json",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+)
 
 
 def _print_progress(line: str) -> None:
@@ -422,13 +431,7 @@ def run_agent(
         msg = "Agent prompt exceeds the pinned CLI stdin limit"
         raise ConfigurationError(msg)
     # Reject automatic startup configuration instead of trusting its precedence.
-    for name in (
-        ".qwen",
-        ".env",
-        ".mcp.json",
-        ".claude/settings.json",
-        ".claude/settings.local.json",
-    ):
+    for name in UNTRUSTED_STARTUP_CONFIG:
         if (workspace / name).exists() or (workspace / name).is_symlink():
             msg = (
                 "Untrusted workspace configuration must be removed before agent startup"
