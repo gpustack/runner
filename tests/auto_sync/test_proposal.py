@@ -487,6 +487,34 @@ def test_analysis_requires_evidence_for_analyzed_candidates(analysis):
         check_analysis(analysis)
 
 
+def test_analysis_evidence_rejection_names_the_offending_entry(analysis):
+    # A repair session can only correct entries the error names; the observed
+    # failure mode is a registry URL with the measured tag and digest appended.
+    entry = (
+        "https://hub.docker.com/v2/repositories/vllm/vllm-openai/tags "
+        "v0.30.0 sha256:" + "a" * 64
+    )
+    analysis["candidates"][0]["evidence"] = [
+        "vllm-project/vllm@0.30.0",
+        entry,
+    ]
+    with pytest.raises(ProposalError) as captured:
+        check_analysis(analysis)
+    assert entry[:120] in str(captured.value)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "https://hub.docker.com/v2/repositories/vllm/vllm-openai/tags",
+        "https://quay.io/repository/ascend/sglang",
+    ],
+)
+def test_analysis_accepts_bare_registry_urls(analysis, entry):
+    analysis["candidates"][0]["evidence"] = [entry]
+    assert check_analysis(analysis) == analysis
+
+
 @pytest.mark.parametrize(
     "entry",
     [
