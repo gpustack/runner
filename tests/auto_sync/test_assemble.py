@@ -120,6 +120,79 @@ def test_invalid_utf8_patch_fails(tmp_path):
     _expect_failure(tmp_path, draft)
 
 
+def _contained(tmp_path):
+    """Return a draft directory, an outside secret file, and the fixture data."""
+    inner = tmp_path / "draft_dir"
+    inner.mkdir()
+    secret = tmp_path / "secret.patch"
+    secret.write_bytes(b"OUTSIDE-SECRET")
+    original = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    draft, data = _split(inner, original)
+    return inner, draft, data, secret
+
+
+def _reject(inner, draft, data, value, secret):
+    data["groups"][0]["patch_file"] = value
+    _write(draft, data)
+    out = inner / "out.json"
+    read_bytes = Path.read_bytes
+
+    def read_inside(path):
+        assert path.resolve() != secret.resolve(), "outside file was read"
+        return read_bytes(path)
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(Path, "read_bytes", read_inside)
+        with pytest.raises(ProposalError) as info:
+            assemble_file(draft, out)
+    assert not out.exists()
+    assert secret.read_bytes().decode() not in str(info.value)
+
+
+def test_parent_traversal_fails(tmp_path):
+    inner, draft, data, secret = _contained(tmp_path)
+    _reject(inner, draft, data, "../secret.patch", secret)
+
+
+def test_absolute_outside_path_fails(tmp_path):
+    inner, draft, data, secret = _contained(tmp_path)
+    _reject(inner, draft, data, str(secret), secret)
+
+
+def test_symlink_to_outside_file_fails(tmp_path):
+    inner, draft, data, secret = _contained(tmp_path)
+    (inner / "link.patch").symlink_to(secret)
+    _reject(inner, draft, data, "link.patch", secret)
+
+
+def test_absolute_inside_path_is_allowed(tmp_path):
+    original = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    draft, _ = _split(tmp_path, original, name="a.patch")
+    data = json.loads(draft.read_text(encoding="utf-8"))
+    data["groups"][0]["patch_file"] = str(tmp_path / "a.patch")
+    _write(draft, data)
+    assemble_file(draft, tmp_path / "out.json")
+    result = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert result == original
+
+
+def test_nested_and_inside_symlink_are_allowed(tmp_path):
+    original = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    (tmp_path / "nested").mkdir()
+    draft, _ = _split(tmp_path, original, name="nested/a.patch")
+    assemble_file(draft, tmp_path / "out.json")
+    result = json.loads((tmp_path / "out.json").read_text(encoding="utf-8"))
+    assert result == original
+
+    (tmp_path / "link.patch").symlink_to(tmp_path / "nested/a.patch")
+    data = json.loads(draft.read_text(encoding="utf-8"))
+    data["groups"][0]["patch_file"] = "link.patch"
+    _write(draft, data)
+    assemble_file(draft, tmp_path / "out2.json")
+    result = json.loads((tmp_path / "out2.json").read_text(encoding="utf-8"))
+    assert result == original
+
+
 def test_duplicate_json_key_fails(tmp_path):
     draft = tmp_path / "draft.json"
     draft.write_text('{"schema_version": 1, "schema_version": 1}', encoding="utf-8")

@@ -158,6 +158,7 @@ Only trusted validation can accept a ready group for publication.
 Use `tests/auto_sync/fixtures/proposals/ready.json` for the field shape. Its versions and evidence are fixture data.
 Use `uv run python -m tools.auto_sync.assemble --draft DRAFT --output OUTPUT` to serialize patch file contents.
 In the draft, replace each group's `patch` with `patch_file`. Relative paths resolve against the draft directory.
+The assembler rejects a `patch_file` that resolves, including through symlinks, outside the draft directory.
 Return the assembled JSON as the final Qwen result. The helper does not validate compatibility or generate Git diffs.
 Do not hand-escape diffs or create commits and rebases to split them.
 Check ordered component patches with `git apply --check` before editing recipes. A fuzzy check does not meet the validation gate.
@@ -259,6 +260,8 @@ The workflow separates three jobs:
 1. Research produces the candidate patch and report under frozen default-branch policy.
 2. Validation checks candidate data without model credentials or repository-write credentials.
 3. Publication uses a clean runner, rechecks the artifact, and mints its own App write token.
+
+Validation performs deterministic static checks. Repository CI runs the test suite after the proposal PR opens.
 
 Publication verifies that its App slug matches the identity frozen before research.
 It applies only the validated patch with hooks disabled; it does not execute an agent worktree or candidate settings.
