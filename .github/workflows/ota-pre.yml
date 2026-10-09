@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   announce:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     # A fork's main is nothing the OTA server publishes.
     if: github.repository == 'gpustack/runner'

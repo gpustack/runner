@@ -64,7 +64,10 @@ def test_triggers_queue_and_job_boundaries():
     }
     assert set(workflow["jobs"]) == {"research", "validation", "publication"}
     for job in workflow["jobs"].values():
-        assert job["runs-on"] == "${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}"
+        assert (
+            job["runs-on"]
+            == "${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}"
+        )
         assert 0 < job["timeout-minutes"] <= 60
 
 
@@ -143,39 +146,51 @@ def test_model_boundary_rejects_known_bad_workflows(mutation):
         model_boundary(workflow)
 
 
-def test_reusable_inputs_and_exact_configuration_mapping():
+def test_dispatch_inputs_and_exact_configuration_mapping():
     workflow = load(WORKFLOW)
-    invocation = workflow["on"]["workflow_call"]
-    env = step(workflow["jobs"]["research"], "proposal")["env"]
-    suffixes = [
-        "url",
-        "model",
-        "protocol",
-        "use-anthropic",
-        "thinking",
-        "thinking-clear",
-        "temperature",
-        "top-p",
-        "reasoning-effort",
-        "timeout",
-        "context-window-size",
-        "modalities",
-        "auth-header",
-        "extra-body",
-    ]
-    assert set(invocation["inputs"]) == {"llm-" + name for name in suffixes} | {
+    assert "workflow_call" not in workflow["on"]
+    invocation = workflow["on"]["workflow_dispatch"]
+    dispatch = {
+        "runner_profile",
         "max-session-tokens",
         "max-repair-rounds",
+        "llm-thinking",
+        "llm-thinking-clear",
+        "llm-temperature",
+        "llm-top-p",
+        "llm-reasoning-effort",
     }
-    assert invocation["inputs"]["max-session-tokens"]["type"] == "string"
-    assert invocation["inputs"]["max-repair-rounds"]["type"] == "string"
+    assert set(invocation["inputs"]) == dispatch
+    for name in dispatch - {
+        "runner_profile",
+        "llm-thinking",
+        "llm-thinking-clear",
+        "llm-reasoning-effort",
+    }:
+        assert invocation["inputs"][name]["type"] == "string"
+    for name in [
+        "runner_profile",
+        "llm-thinking",
+        "llm-thinking-clear",
+        "llm-reasoning-effort",
+    ]:
+        assert invocation["inputs"][name]["type"] == "choice"
+    assert invocation["inputs"]["runner_profile"]["options"] == ["normal", "4x", "8x"]
+    assert invocation["inputs"]["llm-reasoning-effort"]["default"] == "low"
+    env = step(workflow["jobs"]["research"], "proposal")["env"]
     assert env["AUTO_SYNC_MAX_SESSION_TOKENS"] == (
         "${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}"
     )
     assert env["AUTO_SYNC_MAX_REPAIR_ROUNDS"] == (
         "${{ inputs.max-repair-rounds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS || '2' }}"
     )
-    for name in suffixes:
+    for name in [
+        "thinking",
+        "thinking-clear",
+        "temperature",
+        "top-p",
+        "reasoning-effort",
+    ]:
         config = name.replace("-", "_").upper()
         assert env["AUTO_SYNC_LLM_" + config] == (
             "${{ inputs.llm-"
@@ -184,18 +199,26 @@ def test_reusable_inputs_and_exact_configuration_mapping():
             + config
             + " }}"
         )
-        assert invocation["inputs"]["llm-" + name]["type"] == "string"
-    assert invocation["inputs"]["llm-protocol"].get("default", "") == ""
+    for name in [
+        "url",
+        "model",
+        "protocol",
+        "use-anthropic",
+        "timeout",
+        "context-window-size",
+        "modalities",
+        "auth-header",
+        "extra-body",
+    ]:
+        config = name.replace("-", "_").upper()
+        assert env["AUTO_SYNC_LLM_" + config] == (
+            "${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_" + config + " }}"
+        )
     for name in ["auth-token", "extra-headers"]:
         config = name.replace("-", "_").upper()
         assert env["AUTO_SYNC_LLM_" + config] == (
-            "${{ secrets.llm-"
-            + name
-            + " || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_"
-            + config
-            + " }}"
+            "${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_" + config + " }}"
         )
-        assert "llm-" + name in invocation["secrets"]
     assert "BOT_LOGIN" not in WORKFLOW.read_text().replace("AUTO_SYNC_BOT_LOGIN", "")
 
 
@@ -292,7 +315,7 @@ def test_ci_requires_pinned_linux_contracts_and_covers_changed_paths():
         ]:
             assert path not in ignored
     job = workflow["jobs"]["auto-sync-contract"]
-    assert job["runs-on"] == "ubuntu-22.04"
+    assert job["runs-on"] == "ubuntu-24.04"
     assert "continue-on-error" not in job
     tests = step(job, "contracts")
     assert tests["env"]["AUTO_SYNC_TOOL_BIN"] == "${{ steps.tools.outputs.bin }}"

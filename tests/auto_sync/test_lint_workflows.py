@@ -41,7 +41,7 @@ def lint(tmp_path, monkeypatch):
     return run
 
 
-def workflow(concurrency="", *, job=False, step="run: echo ok", runner="ubuntu-22.04"):
+def workflow(concurrency="", *, job=False, step="run: echo ok", runner="ubuntu-24.04"):
     scope = "" if job else concurrency
     nested = (
         ""
@@ -116,8 +116,8 @@ def test_max_requires_absent_or_literal_false_cancellation(lint, cancel):
         workflow("concurrency: {group: fixture, queue: max, queue: single}\n"),
         workflow("concurrency:\n  group: fixture\n  queue: max\n  'queue': single\n"),
         workflow().replace(
-            "runs-on: ubuntu-22.04",
-            "runs-on: ubuntu-22.04\n    runs-on: ubuntu-latest",
+            "runs-on: ubuntu-24.04",
+            "runs-on: ubuntu-24.04\n    runs-on: ubuntu-latest",
         ),
         workflow().replace("name: Fixture", "name: Fixture\nname: Other"),
     ],
@@ -164,15 +164,15 @@ def test_custom_runner_labels_use_project_config(lint, tmp_path):
     directory = tmp_path / ".github"
     directory.mkdir()
     (directory / "actionlint.yaml").write_text(
-        "self-hosted-runner:\n  labels: [ubuntu-22.04-4x, ubuntu-22.04-8x]\n",
+        "self-hosted-runner:\n  labels: [ubuntu-24.04-4x, ubuntu-24.04-8x]\n",
     )
     valid = workflow(
         "concurrency: {group: fixture, queue: max}\n",
-        runner="ubuntu-22.04-4x",
+        runner="ubuntu-24.04-4x",
     )
     result = lint(valid)
     assert result.returncode == 0, result.stdout + result.stderr
-    result = lint(valid.replace("ubuntu-22.04-4x", "unknown-runner"))
+    result = lint(valid.replace("ubuntu-24.04-4x", "unknown-runner"))
     assert result.returncode != 0
     assert "unknown-runner" in result.stdout + result.stderr
 

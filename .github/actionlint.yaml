@@ -1,4 +1,4 @@
 self-hosted-runner:
   labels:
-    - ubuntu-22.04-4x
-    - ubuntu-22.04-8x
+    - ubuntu-24.04-4x
+    - ubuntu-24.04-8x

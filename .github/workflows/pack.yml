@@ -115,7 +115,7 @@ env:
 jobs:
   # Expand the matrix based on the input parameters.
   expand-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       build_jobs: ${{ steps.expand-matrix.outputs.build_jobs }}
       manifest_jobs: ${{ steps.expand-matrix.outputs.manifest_jobs }}
@@ -351,7 +351,7 @@ jobs:
     needs:
       - expand-matrix
       - build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -408,7 +408,7 @@ jobs:
     needs:
       - expand-matrix
       - manifest
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -51,7 +51,7 @@ env:
 jobs:
   # Expand the matrix based on the input parameters.
   expand-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       squash_jobs: ${{ steps.expand-matrix.outputs.squash_jobs }}
       manifest_jobs: ${{ steps.expand-matrix.outputs.manifest_jobs }}
@@ -108,7 +108,7 @@ jobs:
     needs:
       - expand-matrix
       - squash
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Login DockerHub
         uses: docker/login-action@v3

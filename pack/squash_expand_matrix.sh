@@ -22,9 +22,9 @@ SQUASH_JOBS="[]"
 for ARCH in ${ARCHS}; do
     PLATFORM_IMAGE="${INPUT_IMAGE}-linux-${ARCH}"
     PLATFORM="linux/${ARCH}"
-    RUNNER="ubuntu-22.04"
+    RUNNER="ubuntu-24.04"
     if [[ "${PLATFORM}" == "linux/arm64" ]]; then
-        RUNNER="ubuntu-22.04-arm"
+        RUNNER="ubuntu-24.04-arm"
     fi
     if [[ "${INPUT_RUNNER_PROFILE}" != "normal" ]]; then
         RUNNER="${RUNNER}-${INPUT_RUNNER_PROFILE}"
@@ -59,13 +59,13 @@ echo "squash_jobs="
 #  {
 #     "src_image": "gpustack/runner:cuda12.8-vllm0.11.2",
 #     "platform": "linux/arm64",
-#     "runner": "ubuntu-22.04-arm",
+#     "runner": "ubuntu-24.04-arm",
 #     "dst_image": "gpustack/runner:cuda12.8-vllm0.11.2-linux-arm64"
 #   },
 #   {
 #     "src_image": "gpustack/runner:cuda12.8-vllm0.11.2",
 #     "platform": "linux/amd64",
-#     "runner": "ubuntu-22.04",
+#     "runner": "ubuntu-24.04",
 #     "dst_image": "gpustack/runner:cuda12.8-vllm0.11.2-linux-amd64"
 #   }
 # ]

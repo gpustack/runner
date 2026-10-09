@@ -188,9 +188,11 @@ Use the configured model; do not launch another agent to change providers.
 No local model installation or interactive login is needed.
 
 Scheduled and manual runs read these repository or organization settings.
-Reusable invocation keeps the `llm-*` names.
+A manual dispatch can additionally override the runner profile, the token budget, the repair-round bound,
+and the thinking, sampling, and reasoning-effort settings; each dispatch field pre-fills its documented default.
+The `llm-*` names below are the workflow's internal settings.
 
-| GitHub configuration | Kind | Input or purpose |
+| GitHub configuration | Kind | Setting or purpose |
 | --- | --- | --- |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL` | Required Variable | `llm-url`: provider base URL |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL` | Required Variable | `llm-model`: provider model identifier |
@@ -392,10 +394,11 @@ A session-wide failure is described once; candidate rows show its affected subsc
 ## Runner and caches
 
 `AUTOSYNC_RUNNER` defaults to `ubuntu-24.04`, a standard GitHub-hosted runner.
-Maintainers can select another label, such as the larger `ubuntu-22.04-8x`, when it is available to the repository and a run needs more capacity.
+Maintainers can select another label, such as the larger `ubuntu-24.04-8x`, when it is available to the repository and a run needs more capacity.
+A manual dispatch can select a larger runner profile for one run through its `runner_profile` input.
 Labels alone do not establish hardware specifications. Auto-sync uses remote inference and needs no GPU.
 An amd64 research runner can inspect arm64 manifests; final-image execution belongs to native Pack runners.
-The separately configured verification CI uses Ubuntu 22.04.
+The separately configured verification CI uses Ubuntu 24.04.
 
 `tools/auto_sync/tool-versions.json` owns exact versions and artifact checksums.
 The initial pins include Node `24.14.0`, Qwen `0.25.0`, GitHub MCP `2.0.1`, crane `0.21.9`, actionlint `1.7.12`, and uv `0.8.24`.

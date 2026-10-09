@@ -4,71 +4,68 @@ on:
   schedule:
     - cron: "23 1 * * 1"
   workflow_dispatch:
+    inputs:
+      # Choice large GitHub hosted runner.
+      runner_profile:
+        description: 'Runner profile, which profile to use for the runner.'
+        required: false
+        type: choice
+        default: normal
+        options:
+          - normal
+          - 4x
+          - 8x
+      # Budgets.
+      max-session-tokens:
+        description: 'Max session tokens, the cumulative reported-token budget across all sessions.'
+        required: false
+        type: string
+        default: "10000000"
+      max-repair-rounds:
+        description: 'Max repair rounds, the repair sessions allowed per research stage; 0 disables repairs.'
+        required: false
+        type: string
+        default: "2"
+      # Model behavior.
+      llm-thinking:
+        description: 'LLM thinking, the provider thinking switch.'
+        required: false
+        type: choice
+        default: disabled
+        options:
+          - disabled
+          - enabled
+      llm-thinking-clear:
+        description: 'LLM thinking clear, whether to clear cross-turn thinking history.'
+        required: false
+        type: choice
+        default: "true"
+        options:
+          - "true"
+          - "false"
+      llm-temperature:
+        description: 'LLM temperature, the sampling temperature.'
+        required: false
+        type: string
+        default: "0.4"
+      llm-top-p:
+        description: 'LLM top-p, the top-p sampling value.'
+        required: false
+        type: string
+        default: "0.9"
+      llm-reasoning-effort:
+        description: 'LLM reasoning effort, the reasoning effort level.'
+        required: false
+        type: choice
+        default: low
+        options:
+          - minimal
+          - low
+          - medium
+          - high
+          - max
   issue_comment:
     types: [created]
-  workflow_call:
-    inputs:
-      llm-url:
-        type: string
-        required: true
-      llm-model:
-        type: string
-        required: true
-      llm-protocol:
-        type: string
-        required: false
-      llm-use-anthropic:
-        type: string
-        required: false
-      llm-thinking:
-        type: string
-        required: false
-      llm-thinking-clear:
-        type: string
-        required: false
-      llm-temperature:
-        type: string
-        required: false
-      llm-top-p:
-        type: string
-        required: false
-      llm-reasoning-effort:
-        type: string
-        required: false
-      llm-timeout:
-        type: string
-        required: false
-      llm-context-window-size:
-        type: string
-        required: false
-      llm-modalities:
-        type: string
-        required: false
-      llm-auth-header:
-        type: string
-        required: false
-      llm-extra-body:
-        type: string
-        required: false
-      max-session-tokens:
-        type: string
-        required: false
-      max-repair-rounds:
-        type: string
-        required: false
-    secrets:
-      llm-auth-token:
-        required: true
-      llm-extra-headers:
-        required: false
-      CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN:
-        required: false
-      CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS:
-        required: false
-      CI_PRT_GENERATOR_ID:
-        required: true
-      CI_PRT_GENERATOR_KEY:
-        required: true
 
 permissions:
   contents: read
@@ -89,7 +86,7 @@ jobs:
       github.event_name != 'issue_comment' ||
       (github.event.action == 'created' && github.event.issue.pull_request &&
        github.event.comment.user.type != 'Bot' && startsWith(github.event.comment.body, '/auto-sync'))
-    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     outputs:
       default-sha: ${{ steps.freeze.outputs.default-sha }}
@@ -175,22 +172,22 @@ jobs:
           AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
           AUTO_SYNC_GITHUB_TOKEN: ${{ steps.read-token.outputs.token }}
           AUTO_SYNC_BOT_LOGIN: ${{ steps.read-token.outputs.app-slug }}[bot]
-          AUTO_SYNC_LLM_URL: ${{ inputs.llm-url || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL }}
-          AUTO_SYNC_LLM_MODEL: ${{ inputs.llm-model || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL }}
-          AUTO_SYNC_LLM_PROTOCOL: ${{ inputs.llm-protocol || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL }}
-          AUTO_SYNC_LLM_USE_ANTHROPIC: ${{ inputs.llm-use-anthropic || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC }}
+          AUTO_SYNC_LLM_URL: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL }}
+          AUTO_SYNC_LLM_MODEL: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL }}
+          AUTO_SYNC_LLM_PROTOCOL: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL }}
+          AUTO_SYNC_LLM_USE_ANTHROPIC: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC }}
           AUTO_SYNC_LLM_THINKING: ${{ inputs.llm-thinking || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING }}
           AUTO_SYNC_LLM_THINKING_CLEAR: ${{ inputs.llm-thinking-clear || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR }}
           AUTO_SYNC_LLM_TEMPERATURE: ${{ inputs.llm-temperature || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE }}
           AUTO_SYNC_LLM_TOP_P: ${{ inputs.llm-top-p || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P }}
           AUTO_SYNC_LLM_REASONING_EFFORT: ${{ inputs.llm-reasoning-effort || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT }}
-          AUTO_SYNC_LLM_TIMEOUT: ${{ inputs.llm-timeout || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT }}
-          AUTO_SYNC_LLM_CONTEXT_WINDOW_SIZE: ${{ inputs.llm-context-window-size || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}
-          AUTO_SYNC_LLM_MODALITIES: ${{ inputs.llm-modalities || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODALITIES }}
-          AUTO_SYNC_LLM_AUTH_HEADER: ${{ inputs.llm-auth-header || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER }}
-          AUTO_SYNC_LLM_EXTRA_HEADERS: ${{ secrets.llm-extra-headers || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS }}
-          AUTO_SYNC_LLM_EXTRA_BODY: ${{ inputs.llm-extra-body || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY }}
-          AUTO_SYNC_LLM_AUTH_TOKEN: ${{ secrets.llm-auth-token || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
+          AUTO_SYNC_LLM_TIMEOUT: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT }}
+          AUTO_SYNC_LLM_CONTEXT_WINDOW_SIZE: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}
+          AUTO_SYNC_LLM_MODALITIES: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODALITIES }}
+          AUTO_SYNC_LLM_AUTH_HEADER: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER }}
+          AUTO_SYNC_LLM_EXTRA_HEADERS: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS }}
+          AUTO_SYNC_LLM_EXTRA_BODY: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY }}
+          AUTO_SYNC_LLM_AUTH_TOKEN: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
           AUTO_SYNC_MAX_SESSION_TOKENS: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}
           AUTO_SYNC_MAX_REPAIR_ROUNDS: ${{ inputs.max-repair-rounds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS || '2' }}
         run: |
@@ -222,7 +219,7 @@ jobs:
   validation:
     needs: research
     if: needs.research.outputs.ready == 'true'
-    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     outputs:
       publishable: ${{ steps.validate.outputs.publishable }}
@@ -296,7 +293,7 @@ jobs:
   publication:
     needs: [research, validation]
     if: needs.validation.outputs.publishable == 'true'
-    runs-on: ${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
+    runs-on: ${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
       - name: Checkout frozen controller

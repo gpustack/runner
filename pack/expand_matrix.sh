@@ -160,9 +160,9 @@ EOT
             fi
             PLATFORM_TAG_X="${TAG_X}-${OS}-${ARCH}"
             PLATFORM_TAG_XY="${TAG_XY}-${OS}-${ARCH}"
-            RUNNER="ubuntu-22.04"
+            RUNNER="ubuntu-24.04"
             if [[ "${PLATFORM}" == "linux/arm64" ]]; then
-                RUNNER="ubuntu-22.04-arm"
+                RUNNER="ubuntu-24.04-arm"
             fi
             if [[ "${INPUT_RUNNER_PROFILE}" != "normal" ]]; then
                 RUNNER="${RUNNER}-${INPUT_RUNNER_PROFILE}"
@@ -226,7 +226,7 @@ echo "build_jobs="
 #    "args": [
 #      "CUDA_VERSION=12.6.3"
 #    ],
-#    "runner": "ubuntu-22.04-arm",
+#    "runner": "ubuntu-24.04-arm",
 #    "platform_tag_cache": [
 #      "cuda12.6-vllm0.9.2-linux-arm64",
 #      "cuda12.6-vllm0.9-linux-arm64",
@@ -247,7 +247,7 @@ echo "build_jobs="
 #    "args": [
 #      "CUDA_VERSION=12.6.3"
 #    ],
-#    "runner": "ubuntu-22.04",
+#    "runner": "ubuntu-24.04",
 #    "platform_tag_cache": [
 #      "cuda12.6-vllm0.9.2-linux-amd64",
 #      "cuda12.6-vllm0.9-linux-amd64",
