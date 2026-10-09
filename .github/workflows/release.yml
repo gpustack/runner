@@ -40,7 +40,7 @@ env:
 jobs:
   # Build wheel and source distributions, and upload them to PyPI and GitHub Releases.
   release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
