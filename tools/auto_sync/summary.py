@@ -31,6 +31,8 @@ def _elapsed(value):
 def _reason(value):
     if "Reached max session turns" in value:
         return "Qwen reached the session turn limit (exit 53)."
+    if "wall-clock budget" in value and "exit 55" in value:
+        return "Qwen exceeded its configured wall-clock budget (exit 55)."
     return _cell(value)
 
 

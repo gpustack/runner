@@ -63,6 +63,21 @@ def test_untrusted_candidate_reason_cannot_inject_markdown():
     assert "\\|" in markdown
 
 
+def test_wall_time_failure_is_visible_after_startup_warning():
+    reason = (
+        "agent process failed or timed out (exit 55): "
+        + "Warning: running headless. " * 20
+        + "Run aborted: wall-clock budget of 2400s exceeded (--max-wall-time)."
+    )
+    markdown = result_markdown(
+        {"stage": "research", "status": "failed", "reason": reason},
+        {},
+    )
+    assert "wall-clock budget" in markdown
+    assert "exit 55" in markdown
+    assert "Warning:" not in markdown
+
+
 def test_publication_links_to_actual_pull_request():
     markdown = result_markdown(
         {

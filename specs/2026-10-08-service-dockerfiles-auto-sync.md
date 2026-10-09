@@ -1050,8 +1050,8 @@ Use these initial limits:
 | Repeated unchanged tool failure | At most two retries |
 | External command | 300 seconds |
 | Qwen session | 180 turns and 180 tool calls |
-| Qwen wall time | 2400 seconds |
-| Outer process deadline | 2700 seconds |
+| Qwen wall time | No separate limit |
+| Outer process deadline | 55 minutes |
 | Actions job deadline | 60 minutes |
 
 Keep the model-request timeout separate from these limits.

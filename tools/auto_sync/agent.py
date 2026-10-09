@@ -293,10 +293,9 @@ def run_agent(
     prompt: str,
     runtime_dir: Path,
     mcp_servers: dict | None = None,
-    deadline: float = 2700,
+    deadline: float = 3300,
     max_turns: int = MAX_SESSION_TURNS,
     max_tool_calls: int = MAX_TOOL_CALLS,
-    wall_time: int = 2400,
 ) -> ProcessResult:
     """
     The caller supplies a frozen-policy workspace, never raw PR settings.
@@ -333,7 +332,7 @@ def run_agent(
                 "Untrusted workspace configuration must be removed before agent startup"
             )
             raise ConfigurationError(msg)
-    if max_turns <= 0 or max_tool_calls <= 0 or wall_time <= 0:
+    if max_turns <= 0 or max_tool_calls <= 0:
         msg = "Agent limits must be positive"
         raise ConfigurationError(msg)
     token = select_token(
@@ -357,7 +356,6 @@ def run_agent(
             "name": config.model,
             "maxSessionTurns": max_turns,
             "maxToolCalls": max_tool_calls,
-            "maxWallTimeSeconds": wall_time,
         },
         "modelProviders": {
             config.protocol: [
@@ -447,8 +445,6 @@ def run_agent(
         str(max_turns),
         "--max-tool-calls",
         str(max_tool_calls),
-        "--max-wall-time",
-        str(wall_time),
         "--prompt",
         "Follow the task supplied on stdin.",
     ]

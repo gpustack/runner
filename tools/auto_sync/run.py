@@ -840,6 +840,11 @@ def _research(args, scratch):
         "Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane. "
         "For unavailable source or conflicting/ambiguous feedback, preserve blocked/failed assessments and finish. "
         "The patch is relative to the current workspace head; include it as group.patch in your final JSON. "
+        "Use tests/auto_sync/fixtures/proposals/ready.json for field shape only; supply your own identity and evidence. "
+        "Group IDs contain only letters, digits, underscores and hyphens. "
+        "Use uv run python -m tools.auto_sync.assemble --draft DRAFT --output OUTPUT to inline each group.patch_file. "
+        "Return the assembled JSON as your final result. Do not hand-escape diffs or create commits and rebases to split groups. "
+        "Check ordered component patches with git apply --check before editing recipes; fuzzy patch checks are insufficient. "
         "Assess all six subscriptions and retain independent outcomes. "
         f"Budget: {agent.MAX_SESSION_TURNS} session turns and {agent.MAX_TOOL_CALLS} tool calls. "
         f"Reserve the last {agent.MAX_SESSION_TURNS // 4} turns for editing and final JSON. "
@@ -847,7 +852,7 @@ def _research(args, scratch):
         "Batch independent file reads and registry queries. Complete one independent compatibility group before "
         "expanding research to others. Record unresolved candidates as blocked with the specific missing fact. "
         "Return completed groups even when other candidates remain blocked. "
-        "The separate trusted validation job runs candidate checks; do not run the repository-wide test suite here.\n"
+        "The separate trusted validation job runs validate_candidate and the repository-wide tests; do not run those here.\n"
         + json.dumps(
             {
                 "context": context,

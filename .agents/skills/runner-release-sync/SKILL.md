@@ -34,7 +34,7 @@ Plan research against the supplied turn and tool budgets. Reserve the final quar
 Reuse the supplied release notes and local upstream trees before making remote requests.
 Batch independent file reads and registry queries. Complete an independent compatibility group before widening research.
 If another group lacks evidence, record its specific missing fact and retain completed independent groups.
-The separate trusted validation job runs candidate checks. Do not spend the research session running the repository-wide test suite.
+The separate trusted validation job runs `validate_candidate` and the repository-wide tests. Do not run those during research.
 
 Read release notes, installation guidance, compatibility matrices, and resolved upstream fixes.
 Read upstream Dockerfiles at the selected release tag or resolved commit, rather than the moving default branch.
@@ -55,6 +55,7 @@ Conflicting evidence blocks the affected group.
 Give every affected patch a disposition: retain, adapt, remove, or add.
 State its reason, applicable versions and platforms, and upstream issue or commit evidence.
 Check ordered patch application against the exact selected source revision.
+Use `git apply --check` before editing recipes. A fuzzy application check can miss failures that trusted validation rejects.
 If the source is unavailable, report the check as unverified. Application success is not runtime validation.
 
 Edit only selected service recipes, related patches, matrix entries, and allowed support prose.
@@ -81,5 +82,8 @@ Return JSON with the supplied frozen identity and an assessment for every subscr
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 For a ready group, include its allowed-path patch and complete report.
+Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
+Use `uv run python -m tools.auto_sync.assemble --draft DRAFT --output OUTPUT` to inline each group's `patch_file`.
+Return the assembled JSON as the final result. Do not create commits or rebases to split group patches.
 Exit success alone does not establish a valid proposal. Missing or malformed output is a failure.
 Finish with the assessment; a later maintainer command starts a fresh run.
