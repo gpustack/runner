@@ -897,7 +897,8 @@ def _research(args, scratch):
                     "vllm-ascend plugin commit in findings or evidence"
                 ),
                 "evidence": [
-                    "supplied evidence key, supplied path, repository-relative path or https URL",
+                    "supplied evidence key, supplied path, repository-relative path, "
+                    "or one bare https URL without appended annotations",
                 ],
                 "findings": "Measured compatibility facts with their evidence classification.",
                 "patches": "Patch disposition review summary with exact-revision check results.",
@@ -924,7 +925,8 @@ def _research(args, scratch):
         "expanding research to others. "
         "Research completion is not compatibility confirmation: report analyzed, blocked or unchanged only. "
         "Review every affected patch against the exact selected source revision and record the outcome in patches. "
-        "Cite only supplied evidence keys, supplied paths, repository-relative paths or https URLs in evidence. "
+        "Cite only supplied evidence keys, supplied paths, repository-relative paths or bare https URLs in evidence; "
+        "an entry is one exact reference, so record image tags and digests in findings, never appended to a URL. "
         "Record unresolved candidates as blocked with the specific missing fact in reason and unknowns. "
         "Return completed assessments even when other candidates remain blocked. "
         f"Budget: {agent.MAX_SESSION_TURNS} session turns and {agent.MAX_TOOL_CALLS} tool calls. "

@@ -560,6 +560,7 @@ def _analysis_evidence(candidate, evidence):
                 supplied.add(value)
         if isinstance(record.get("path"), str):
             roots.append(Path(record["path"]))
+    rejected = []
     for item in entries:
         require(isinstance(item, str) and bool(item.strip()), "invalid evidence entry")
         if item in evidence or item in supplied:
@@ -571,12 +572,20 @@ def _analysis_evidence(candidate, evidence):
             require(".." not in PurePosixPath(item).parts, "escaping evidence path")
             continue
         path = Path(item)
-        require(
+        if (
             path.is_absolute()
             and ".." not in path.parts
-            and any(path.is_relative_to(root) for root in roots),
-            "analysis evidence outside the supplied sources",
-        )
+            and any(path.is_relative_to(root) for root in roots)
+        ):
+            continue
+        rejected.append(item)
+    # A repair session can only correct entries the error names; bound the list.
+    require(
+        not rejected,
+        "analysis evidence outside the supplied sources: "
+        + ", ".join(repr(item[:120]) for item in rejected[:3])
+        + (f" (+{len(rejected) - 3} more)" if len(rejected) > 3 else ""),
+    )
 
 
 def validate_analysis(data, expected_identity, *, found, evidence):
