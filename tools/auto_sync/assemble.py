@@ -32,11 +32,12 @@ def assemble(draft, base: Path):
         require(isinstance(name, str) and name, "patch_file must be a string")
         try:
             target = (base / name).resolve()
+            base_resolved = base.resolve()
         except (OSError, RuntimeError) as exc:
             msg = f"cannot resolve patch_file {name}: {exc}"
             raise ProposalError(msg) from exc
         require(
-            target.is_relative_to(base.resolve()),
+            target.is_relative_to(base_resolved),
             f"patch_file {name} resolves outside the draft directory",
         )
         try:

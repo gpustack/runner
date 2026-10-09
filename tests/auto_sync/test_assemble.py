@@ -165,6 +165,23 @@ def test_symlink_to_outside_file_fails(tmp_path):
     _reject(inner, draft, data, "link.patch", secret)
 
 
+def test_base_resolution_failure_is_reported(tmp_path, monkeypatch):
+    original = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    draft, _ = _split(tmp_path, original)
+    resolve = Path.resolve
+
+    def fail_base(path, *args, **kwargs):
+        if path == tmp_path:
+            msg = "fixture directory resolution failed"
+            raise PermissionError(msg)
+        return resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", fail_base)
+    with pytest.raises(ProposalError, match="cannot resolve patch_file"):
+        assemble_file(draft, tmp_path / "out.json")
+    assert not (tmp_path / "out.json").exists()
+
+
 def test_absolute_inside_path_is_allowed(tmp_path):
     original = json.loads(FIXTURE.read_text(encoding="utf-8"))
     draft, _ = _split(tmp_path, original, name="a.patch")
