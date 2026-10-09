@@ -500,7 +500,9 @@ def test_analysis_evidence_rejection_names_the_offending_entry(analysis):
     ]
     with pytest.raises(ProposalError) as captured:
         check_analysis(analysis)
-    assert entry[:120] in str(captured.value)
+    # Truncated entries carry an ellipsis so they are not mistaken for the
+    # full reference; the entry above exceeds the 120-character bound.
+    assert entry[:120] + "..." in str(captured.value)
 
 
 @pytest.mark.parametrize(

@@ -580,10 +580,14 @@ def _analysis_evidence(candidate, evidence):
             continue
         rejected.append(item)
     # A repair session can only correct entries the error names; bound the list.
+    # Mark truncation so a clipped entry is not mistaken for the full reference.
     require(
         not rejected,
         "analysis evidence outside the supplied sources: "
-        + ", ".join(repr(item[:120]) for item in rejected[:3])
+        + ", ".join(
+            repr(item[:120] + ("..." if len(item) > 120 else ""))
+            for item in rejected[:3]
+        )
         + (f" (+{len(rejected) - 3} more)" if len(rejected) > 3 else ""),
     )
 
