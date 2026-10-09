@@ -1078,6 +1078,15 @@ def _research(args, scratch):
     ):
         """Run one bounded stage session and account it against the shared budget."""
         nonlocal reported_total
+        # A repair session reuses the previous session's workspace; strip any
+        # startup configuration the model created so it can neither steer nor
+        # block the fresh session's preflight.
+        for config_path in agent.UNTRUSTED_STARTUP_CONFIG:
+            selected = workspace / config_path
+            if selected.is_dir() and not selected.is_symlink():
+                shutil.rmtree(selected)
+            else:
+                selected.unlink(missing_ok=True)
         started = time.monotonic()
         extra = {} if deadline is None else {"deadline": deadline}
         result = agent.run_agent(

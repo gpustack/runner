@@ -2829,6 +2829,69 @@ def test_inapplicable_patch_fails_research_without_repair_rounds(
     ] == ["analysis", "proposal"]
 
 
+def test_repair_session_strips_model_created_startup_config(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+    leftover = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        workspace = Path(kwargs["workspace"])
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            # A model session can leave startup configuration behind; it must
+            # neither steer nor block the fresh repair session's preflight.
+            (workspace / ".qwen").mkdir()
+            (workspace / ".env").write_text("TOKEN=steal-me\n")
+            return ProcessResult(
+                0,
+                agent_stream(broken_patch(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        leftover.append((workspace / ".qwen").exists() or (workspace / ".env").exists())
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    assert leftover == [False]
+
+
 @pytest.mark.parametrize("corrupt", ["ready", "revision", "evidence"])
 def test_forged_analysis_never_reaches_proposal_stage(
     scenario,
