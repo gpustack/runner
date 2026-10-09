@@ -2515,7 +2515,79 @@ def test_repair_round_receives_validation_error_and_recovers(
     assert repair_payload["failed_reply"] == json.dumps(paired)
     assert "raw JSON object" in calls[1]["prompt"]
     assert "repair session of the analysis stage" in calls[1]["prompt"]
+    assert "vllm-project/vllm@0.30.0" in repair_payload["supplied_evidence_keys"]
     assert 0 < calls[1]["deadline"] < run.agent.SESSION_DEADLINE
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "analysis-repair-1",
+        "proposal",
+    ]
+    assert (output / "proposal.json").is_file()
+
+
+def test_analysis_evidence_key_mismatch_is_repaired_with_supplied_keys(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    spaced = analysis(scenario, context)
+    target = next(c for c in spaced["candidates"] if c["status"] == "analyzed")
+    # The production failure: a spaced key instead of the supplied exact key.
+    target["evidence"] = [
+        "vllm-project/vllm @0.30.0" if e == "vllm-project/vllm@0.30.0" else e
+        for e in target["evidence"]
+    ]
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(0, agent_stream(spaced), "", False, 10)
+        if len(calls) == 2:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    assert "outside the supplied sources" in repair_payload["validation_error"]
+    assert repair_payload["supplied_evidence_keys"] == [
+        "sgl-project/sglang@0.5.0",
+        "vllm-project/vllm-ascend@0.30.0rc1",
+        "vllm-project/vllm@0.30.0",
+    ]
+    assert "matching key from supplied_evidence_keys" in calls[1]["prompt"]
     diagnostic = json.loads((output / "diagnostics.json").read_text())
     assert [phase["name"] for phase in diagnostic["phases"]] == [
         "analysis",
@@ -2675,6 +2747,8 @@ def test_proposal_stage_prose_output_is_repaired_once(
     stage_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
     assert repair_payload["schema"] == stage_payload["schema"]
     assert "repair session of the proposal stage" in calls[2]["prompt"]
+    # Analysis evidence keys are meaningless for a proposal-stage repair.
+    assert "supplied_evidence_keys" not in repair_payload
     diagnostic = json.loads((output / "diagnostics.json").read_text())
     assert [phase["name"] for phase in diagnostic["phases"]] == [
         "analysis",

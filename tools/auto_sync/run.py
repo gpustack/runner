@@ -796,8 +796,27 @@ def _agent_workspace(repo, identity, target, env):
     return target
 
 
-def _repair_prompt(phase: str, schema: dict, failed_reply: str, error: str) -> str:
+def _repair_prompt(
+    phase: str,
+    schema: dict,
+    failed_reply: str,
+    error: str,
+    evidence_keys=(),
+) -> str:
     """Ask one fresh bounded session to correct a rejected final reply."""
+    payload = {
+        "schema": schema,
+        "validation_error": error,
+        "failed_reply": failed_reply,
+    }
+    guidance = ""
+    if evidence_keys:
+        # A fresh session cannot see the original prompt; name the valid keys.
+        payload["supplied_evidence_keys"] = sorted(evidence_keys)
+        guidance = (
+            " An evidence entry rejected by the error must be replaced with the"
+            " matching key from supplied_evidence_keys."
+        )
     return (
         "Use the canonical runner-release-sync skill and trusted AGENTS.md. "
         f"You are a repair session of the {phase} stage of one bounded research run. "
@@ -809,14 +828,10 @@ def _repair_prompt(phase: str, schema: dict, failed_reply: str, error: str) -> s
         "file, and do not access the network for new investigation. "
         "Preserve every fact, field and value that the validation error does not reject. "
         "The rejected final reply is supplied as failed_reply, the exact error as "
-        "validation_error, and the required schema as schema.\n"
-        + json.dumps(
-            {
-                "schema": schema,
-                "validation_error": error,
-                "failed_reply": failed_reply,
-            },
-        )
+        "validation_error, and the required schema as schema."
+        + guidance
+        + "\n"
+        + json.dumps(payload)
     )
 
 
@@ -1166,7 +1181,13 @@ def _research(args, scratch):
             result = session(
                 f"{phase}-repair-{rounds + 1}",
                 workspace,
-                _repair_prompt(phase, schema, reply, last),
+                _repair_prompt(
+                    phase,
+                    schema,
+                    reply,
+                    last,
+                    evidence_keys=list(evidence) if phase == "analysis" else (),
+                ),
                 budget=max_session_tokens - reported_total,
                 deadline=deadline,
             )
