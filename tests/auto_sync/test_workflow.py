@@ -62,7 +62,7 @@ def test_triggers_queue_and_job_boundaries():
         "queue": "max",
         "cancel-in-progress": False,
     }
-    assert set(workflow["jobs"]) == {"research", "validation", "publication", "retry"}
+    assert set(workflow["jobs"]) == {"research", "validation", "publication"}
     for job in workflow["jobs"].values():
         assert (
             job["runs-on"]
@@ -159,7 +159,6 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
         "llm-temperature",
         "llm-top-p",
         "llm-reasoning-effort",
-        "attempt",
     }
     assert set(invocation["inputs"]) == dispatch
     for name in dispatch - {
@@ -221,26 +220,6 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
             "${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_" + config + " }}"
         )
     assert "BOT_LOGIN" not in WORKFLOW.read_text().replace("AUTO_SYNC_BOT_LOGIN", "")
-
-
-def test_failed_run_redispatches_exactly_once():
-    workflow = load(WORKFLOW)
-    retry = workflow["jobs"]["retry"]
-    assert retry["needs"] == ["research", "validation", "publication"]
-    condition = retry["if"]
-    assert "failure()" in condition
-    assert "github.event_name == 'schedule'" in condition
-    assert "github.event_name == 'workflow_dispatch'" in condition
-    assert "inputs.attempt != '2'" in condition
-    assert retry["permissions"] == {"actions": "write"}
-    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
-    assert inputs["attempt"]["type"] == "string"
-    assert inputs["attempt"]["default"] == "1"
-    dispatch = retry["steps"][-1]
-    assert dispatch["env"]["GH_TOKEN"] == "${{ github.token }}"  # noqa: S105 - workflow expression fixture.
-    assert "gh workflow run auto-sync.yml" in dispatch["run"]
-    assert '--ref "${{ github.ref_name }}"' in dispatch["run"]
-    assert "-f attempt=2" in dispatch["run"]
 
 
 def test_app_scope_identity_and_clean_validation():

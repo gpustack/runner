@@ -14,7 +14,7 @@ No personal skills, cached sessions, or off-repository instruction files are req
 Weekly discovery runs on Sunday at 13:07 UTC, or 21:07 in Asia/Shanghai.
 Maintainers can also start discovery manually.
 Scheduled and manual discovery use one frozen default-branch revision for controller code, instructions, and validators.
-A failed scheduled or manual run re-dispatches itself once on the same ref with the standard configuration; the retried run never retries again.
+If a run fails on transient errors, re-run its failed jobs from the run page.
 
 There are six subscriptions:
 
@@ -191,7 +191,6 @@ No local model installation or interactive login is needed.
 Scheduled and manual runs read these repository or organization settings.
 A manual dispatch can additionally override the runner profile, the token budget, the repair-round bound,
 and the thinking, sampling, and reasoning-effort settings; each dispatch field pre-fills its documented default.
-The `attempt` field is an internal retry guard; leave it at `1`.
 The `llm-*` names below are the workflow's internal settings.
 
 | GitHub configuration | Kind | Setting or purpose |
