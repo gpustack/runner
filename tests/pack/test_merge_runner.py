@@ -63,7 +63,7 @@ ENTRY = {
     "deprecated": False,
 }
 
-SUPPORT_HEADER = """# Supported runners
+SUPPORT_HEADER = """# Support records
 
 <!-- runner-support-records:start -->
 | Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |
@@ -73,7 +73,7 @@ SUPPORT_END = "<!-- runner-support-records:end -->\n"
 
 
 def _support(pack, rows=""):
-    path = pack.parent / "docs" / "supported-runners.md"
+    path = pack.parent / "docs" / "support-records.md"
     path.parent.mkdir(exist_ok=True)
     path.write_text(SUPPORT_HEADER + rows + SUPPORT_END)
     return path

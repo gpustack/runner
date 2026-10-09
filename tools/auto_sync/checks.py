@@ -639,7 +639,7 @@ def _check_group(base, work, group, sources, scratch, env, protected, ascend_pai
         _safe_file(work, path)
     before_matrix = _matrix(work, env)
     before_configs = _configurations(work, before_matrix)
-    before_support = _safe_file(work, "docs/supported-runners.md").read_text()
+    before_support = _safe_file(work, "docs/support-records.md").read_text()
     before_lmcache = _lmcache_versions(work, before_matrix)
     _git(env, work, "apply", "--check", "--whitespace=error", "-", text=group["patch"])
     _git(env, work, "apply", "--whitespace=error", "-", text=group["patch"])
@@ -684,7 +684,7 @@ def _check_group(base, work, group, sources, scratch, env, protected, ascend_pai
     )
     _check_support(
         before_support,
-        _safe_file(work, "docs/supported-runners.md").read_text(),
+        _safe_file(work, "docs/support-records.md").read_text(),
         group["rows"],
         changed,
         protected,
@@ -870,7 +870,7 @@ def validate_candidate(
                 env,
                 repo,
                 "show",
-                expected_identity["default_sha"] + ":docs/supported-runners.md",
+                expected_identity["default_sha"] + ":docs/support-records.md",
             ),
             require_explicit=True,
         )

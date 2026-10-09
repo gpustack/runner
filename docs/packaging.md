@@ -138,7 +138,7 @@ catalog-refresh mode only prunes and discards existing rows and explicitly rejec
 inputs, so it cannot be used to bypass validation of changed images.
 
 Support status is documented separately, including what `prepared` and `published` mean. See
-[Supported runners](supported-runners.md).
+[Support records](support-records.md).
 
 Related: [Dependency metadata](dependency-metadata.md) covers how validated receipts become the
 `dependencies` map of a runner entry.
@@ -168,7 +168,7 @@ Do not extend a combined active Dockerfile.
 3. Update `_RE_DOCKER_IMAGE` in `gpustack_runner/runner.py` when the new backend or service needs parser support.
 4. Review `pack/dependencies.json` for packages that determine engine startup or compatibility.
    Keep separate keys for packages that coexist or use incomparable versions; see [Dependency metadata](dependency-metadata.md).
-5. Add explicit `prepared` support records with the intended platforms in [Supported runners](supported-runners.md).
+5. Add explicit `prepared` support records with the intended platforms in [Support records](support-records.md).
 6. Add behavior tests for image parsing, recipe selection, matrix expansion, and relevant dependency behavior.
    Run `uv run pytest tests/gpustack_runner tests/pack` and `uv run mkdocs build --strict`.
 

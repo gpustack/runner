@@ -16,12 +16,22 @@ from tools.auto_sync.discovery import (
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures" / "discovery"
-HEADER = """# Supported runners
+HEADER = """# Support records
 
 <!-- runner-support-records:start -->
 | Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 {rows}<!-- runner-support-records:end -->
+"""
+# Detection also parses historical tables from the supported-runners guide. This
+# stub never matches a subscribed combination, so fixture rows stay decisive.
+HISTORY = """# Supported runners
+
+### Iluvatar CoreX
+
+| CoreX Version <br/> (Variant) | vLLM    |
+|-------------------------------|---------|
+| 4.2                           | `0.8.3` |
 """
 
 
@@ -80,7 +90,8 @@ def repository(tmp_path, *, rows="", catalog=None):
     (tmp_path / "gpustack_runner").mkdir()
     (tmp_path / "gpustack_runner/runner.py.json").write_text(json.dumps(catalog or []))
     (tmp_path / "docs").mkdir()
-    (tmp_path / "docs/supported-runners.md").write_text(HEADER.format(rows=rows))
+    (tmp_path / "docs/support-records.md").write_text(HEADER.format(rows=rows))
+    (tmp_path / "docs/supported-runners.md").write_text(HISTORY)
     (tmp_path / "README.md").write_text(
         "[Supported runners](docs/supported-runners.md)\n",
     )
@@ -229,7 +240,9 @@ def test_legacy_rc_is_partial_identity_not_a_plugin_match(tmp_path, upstream, pa
     pairs["0.20.2rc1"] = {**pairs["0.27.1rc1"], "engine_version": "0.20.2"}
     repo = repository(tmp_path)
     path = repo / "docs/supported-runners.md"
-    path.write_text(path.read_text() + (FIXTURES / "legacy-support.md").read_text())
+    # Prepend: text outside a parsed section is ignored, exactly like the
+    # real guide's prose preamble ahead of its tables.
+    path.write_text((FIXTURES / "legacy-support.md").read_text() + path.read_text())
     result = selected(repo, upstream, pairs, "cann/vllm")
     assert result["status"] == "needs_update"
     assert result["variants"][1]["insufficient_identity"] == ["support"]
@@ -242,8 +255,11 @@ def test_raw_mentions_other_engine_backend_do_not_match(tmp_path, upstream, pair
         rows=support_row(backend="rocm"),
         catalog=[catalog_row(service="sglang")],
     )
-    with (repo / "docs/supported-runners.md").open("a") as file:
-        file.write("\nWe considered cuda vllm 0.29.0 in release notes.\n")
+    history = repo / "docs/supported-runners.md"
+    # Prepend: the note stays outside the stub's parsed CoreX section.
+    history.write_text(
+        "\nWe considered cuda vllm 0.29.0 in release notes.\n" + history.read_text(),
+    )
     assert selected(repo, upstream, pairs)["status"] == "needs_update"
 
 
@@ -253,31 +269,31 @@ def test_raw_mentions_other_engine_backend_do_not_match(tmp_path, upstream, pair
         "catalog_missing",
         "catalog_json",
         "catalog_shape",
-        "support_missing",
-        "support_table",
-        "readme_missing",
-        "readme_link",
+        "records_missing",
+        "records_table",
+        "history_missing",
+        "history_prose",
     ],
 )
 def test_failed_source_never_reports_unchanged(tmp_path, upstream, pairs, broken):
     repo = repository(tmp_path, rows=support_row(), catalog=[catalog_row()])
     catalog = repo / "gpustack_runner/runner.py.json"
-    support = repo / "docs/supported-runners.md"
-    readme = repo / "README.md"
+    records = repo / "docs/support-records.md"
+    history = repo / "docs/supported-runners.md"
     if broken == "catalog_missing":
         catalog.unlink()
     elif broken == "catalog_json":
         catalog.write_text("{")
     elif broken == "catalog_shape":
         catalog.write_text('[{"backend":"cuda"}]')
-    elif broken == "support_missing":
-        support.unlink()
-    elif broken == "support_table":
-        support.write_text(support.read_text().replace("prepared", "perhaps"))
-    elif broken == "readme_missing":
-        readme.unlink()
+    elif broken == "records_missing":
+        records.unlink()
+    elif broken == "records_table":
+        records.write_text(records.read_text().replace("prepared", "perhaps"))
+    elif broken == "history_missing":
+        history.unlink()
     else:
-        readme.write_text("# A prose mention of cuda vllm 0.29.0\n")
+        history.write_text("A prose mention of cuda vllm 0.29.0 without tables.\n")
     assert {r["status"] for r in discover(repo, upstream, pairs)} == {"failed"}
 
 
@@ -295,8 +311,15 @@ def test_upstream_failure_is_local_and_visible(tmp_path, upstream, pairs, broken
 def test_support_migration_preserves_every_original_cell():
     legacy = (FIXTURES / "legacy-support.md").read_text()
     support = (ROOT / "docs/supported-runners.md").read_text()
-    assert legacy in support
+
+    def tables(text):
+        # Bold annotations were dropped in the split and column padding was
+        # re-flowed; whitespace-insensitive containment still proves that no
+        # original table cell was lost.
+        return " ".join(text.split("### Ascend CANN", 1)[1].replace("**", "").split())
+
     assert "### Ascend CANN" not in (ROOT / "README.md").read_text()
+    assert tables(legacy) in tables(support)
     records = parse_support(support)
     assert [r for r in records if r["status"] == "historical"] == parse_support(legacy)
     assert {r["backend"] for r in records} == {
@@ -325,9 +348,9 @@ def test_linked_support_requires_markers_even_with_legacy_tables(
 ):
     repo = repository(tmp_path)
     upstream["vllm-project/vllm"].append(release("v0.30.0"))
-    path = repo / "docs/supported-runners.md"
+    path = repo / "docs/support-records.md"
     text = (
-        (ROOT / "docs/supported-runners.md")
+        (ROOT / "docs/support-records.md")
         .read_text()
         .replace(
             "<!-- runner-support-records:end -->",
@@ -392,16 +415,10 @@ def test_support_symlink_cannot_escape_frozen_checkout(tmp_path, upstream, pairs
     repository(repo, catalog=[catalog_row()])
     outside = tmp_path / "outside.md"
     outside.write_text(HEADER.format(rows=support_row()))
-    support = repo / "docs/supported-runners.md"
-    support.unlink()
-    support.symlink_to(outside)
+    records = repo / "docs/support-records.md"
+    records.unlink()
+    records.symlink_to(outside)
     assert {r["status"] for r in discover(repo, upstream, pairs)} == {"failed"}
-
-
-def test_pre_split_readme_tables_remain_a_detection_source(tmp_path, upstream, pairs):
-    repo = repository(tmp_path)
-    (repo / "README.md").write_text((FIXTURES / "legacy-support.md").read_text())
-    assert selected(repo, upstream, pairs)["status"] == "unchanged"
 
 
 def test_catalog_can_resolve_unknown_historical_plugin(tmp_path, upstream, pairs):

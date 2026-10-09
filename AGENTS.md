@@ -10,7 +10,7 @@ Start with the guide for the affected contract:
 | Task | Guide | Source entry points |
 | --- | --- | --- |
 | Runner selection and public API | [API reference](docs/modules/gpustack_runner.md) | `gpustack_runner/runner.py`, `__init__.py`, `__main__.py` |
-| Supported versions and platforms | [Supported runners](docs/supported-runners.md) | `gpustack_runner/runner.py.json`, `pack/matrix.yaml` |
+| Supported versions and platforms | [Supported runners](docs/supported-runners.md) | `gpustack_runner/runner.py.json`, `pack/matrix.yaml`, `docs/support-records.md` |
 | Recipes and image production | [Packaging](docs/packaging.md) | `pack/<backend>/Dockerfile.<service>`, `resolve_dockerfile.sh`, `expand_matrix.sh`, `.github/workflows/pack.yml` |
 | Installed dependencies | [Dependency metadata](docs/dependency-metadata.md) | `pack/dependencies.json`, `probe_dependencies.py`, `collect_dependencies.py`, `merge_runner.sh` |
 | Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `tools/auto_sync/`, `.agents/skills/runner-release-sync/SKILL.md` |
@@ -86,7 +86,7 @@ Run `make package` or Pack only when image production is explicitly authorized.
 
 Use [runner-release-sync](.agents/skills/runner-release-sync/SKILL.md) for upstream discovery or an authorized `/auto-sync` revision.
 The workflow selects and authenticates the model before Qwen starts. Use that configured model.
-NEVER launch another agent to switch providers; the research stage permits exactly two bounded headless sessions: analysis, then proposal.
+NEVER launch another agent to switch providers; the research stage permits exactly two bounded headless stage sessions — analysis, then proposal — plus bounded repair sessions that only correct rejected final output (`AUTO_SYNC_MAX_REPAIR_ROUNDS`, default 2).
 Read-only GitHub MCP supports research. Trusted jobs validate and publish the proposal separately.
 The agent cannot merge, publish images, invoke Pack, or edit its controlling policy.
 If a decision is ambiguous or compatibility evidence is missing, return `blocked` and end the affected work.

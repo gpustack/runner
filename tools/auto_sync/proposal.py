@@ -201,8 +201,13 @@ def _nested_json(value: str):
     return parsed if isinstance(parsed, (dict, list)) else None
 
 
-def parse_agent_output(result) -> dict:
-    """Extract schema data from T1's ProcessResult and the pinned Qwen event log."""
+def final_reply_text(result) -> str:
+    """
+    Extract the raw final reply text from the pinned Qwen event log.
+
+    A malformed event stream or failed process raises before any reply text
+    exists, so those failures cannot feed a repair session.
+    """
     require(
         result.returncode == 0 and not result.timed_out,
         "agent process failed or timed out",
@@ -231,9 +236,21 @@ def parse_agent_output(result) -> dict:
         final.get("subtype") == "success" and final.get("is_error") is False,
         "Qwen final result failed",
     )
-    data = load_json(final.get("result"))
+    text = final.get("result")
+    require(isinstance(text, str), "Qwen final reply is not text")
+    return text
+
+
+def parse_reply(text: str) -> dict:
+    """Load one final reply text as a JSON object."""
+    data = load_json(text)
     require(isinstance(data, dict), "proposal output must be an object")
     return data
+
+
+def parse_agent_output(result) -> dict:
+    """Extract schema data from T1's ProcessResult and the pinned Qwen event log."""
+    return parse_reply(final_reply_text(result))
 
 
 def allowed_path(path, rows):
@@ -251,6 +268,7 @@ def allowed_path(path, rows):
         "pack/matrix.yaml",
         "README.md",
         "docs/supported-runners.md",
+        "docs/support-records.md",
         "docs/release-automation.md",
     }:
         return

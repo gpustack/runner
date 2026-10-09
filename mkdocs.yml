@@ -46,6 +46,7 @@ copyright: Copyright &copy; 2025, GPUStack Contributors
 nav:
   - Overview: index.md
   - Supported runners: supported-runners.md
+  - Support records: support-records.md
   - Packaging: packaging.md
   - Dependency metadata: dependency-metadata.md
   - Release automation: release-automation.md

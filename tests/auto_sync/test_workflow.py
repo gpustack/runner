@@ -165,10 +165,15 @@ def test_reusable_inputs_and_exact_configuration_mapping():
     ]
     assert set(invocation["inputs"]) == {"llm-" + name for name in suffixes} | {
         "max-session-tokens",
+        "max-repair-rounds",
     }
     assert invocation["inputs"]["max-session-tokens"]["type"] == "string"
+    assert invocation["inputs"]["max-repair-rounds"]["type"] == "string"
     assert env["AUTO_SYNC_MAX_SESSION_TOKENS"] == (
         "${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}"
+    )
+    assert env["AUTO_SYNC_MAX_REPAIR_ROUNDS"] == (
+        "${{ inputs.max-repair-rounds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS || '2' }}"
     )
     for name in suffixes:
         config = name.replace("-", "_").upper()

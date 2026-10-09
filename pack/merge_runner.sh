@@ -197,7 +197,7 @@ jq -r '.' <<<"${OUTPUT_FIXTURES}"
 if [[ "${INPUT_CATALOG_REFRESH}" != "true" ]]; then
     # Only this invocation's validated measurements can confirm prepared support.
     # Prune/discard have no collection evidence and must preserve support state.
-    SUPPORT_FILE="${INPUT_WORKSPACE}/../docs/supported-runners.md"
+    SUPPORT_FILE="${INPUT_WORKSPACE}/../docs/support-records.md"
     SUPPORT_CANDIDATE="$(mktemp "$(dirname "${SUPPORT_FILE}")/.support.XXXXXX")"
     python3 "$(dirname "${BASH_SOURCE[0]}")/../tools/auto_sync/discovery.py" promote \
         --support "${SUPPORT_FILE}" \

@@ -445,6 +445,48 @@ def test_real_cli_protocol_turns_instructions_skill_mcp(
     assert "fake-contract-token" not in result.stdout + result.stderr
 
 
+def test_deepwiki_mcp_carries_no_collected_secret(
+    tool_bin,
+    workspace,
+    tmp_path,
+    monkeypatch,
+):
+    servers = {
+        **agent.github_mcp(tool_bin, "fake-github-token"),
+        **agent.deepwiki_mcp(),
+    }
+    # The documented hosted endpoint needs no authentication material.
+    assert servers["deepwiki"] == {"httpUrl": "https://mcp.deepwiki.com/mcp"}
+    assert servers["github"]["env"] == {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "fake-github-token",
+    }
+    captured = {}
+    real_observer = agent.ProgressObserver
+
+    def spy(**kwargs):
+        captured["secrets"] = list(kwargs["secrets"])
+        return real_observer(**kwargs)
+
+    monkeypatch.setattr(agent, "ProgressObserver", spy)
+    with endpoint("openai", tools=False) as (url, _requests):
+        result = run_agent(
+            config(url, "openai"),
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt="Fixture",
+            runtime_dir=tmp_path / "runtime",
+            mcp_servers=servers,
+            deadline=10,
+        )
+    assert result.returncode == 0, result.stderr + result.stdout
+    # Only model and GitHub MCP credentials are collected; DeepWiki adds none.
+    assert set(captured["secrets"]) == {
+        "fake-contract-token",
+        "yes",
+        "fake-github-token",
+    }
+
+
 def test_rejects_candidate_configuration_before_request(tool_bin, workspace, tmp_path):
     (workspace / ".env").write_text("OPENAI_API_KEY=untrusted\n")
     with endpoint("openai") as (url, requests):

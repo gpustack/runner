@@ -272,15 +272,20 @@ def _read_sources(repo):
     catalog = _catalog_records(
         json.loads((repo / "gpustack_runner/runner.py.json").read_text()),
     )
-    readme = (repo / "README.md").read_text()
-    if re.search(r"\]\((?:\./)?docs/supported-runners\.md(?:#[^)]*)?\)", readme):
-        path = repo / "docs/supported-runners.md"
+    records, history = (
+        repo / "docs/support-records.md",
+        repo / "docs/supported-runners.md",
+    )
+    for path in (records, history):
         if not path.resolve().is_relative_to(repo.resolve()):
             msg = "support document escapes the frozen checkout"
             raise DiscoveryError(msg)
-        support = parse_support(path.read_text(), require_explicit=True)
-    else:
-        support = parse_support(readme)
+    # Explicit status records and historical tables live in separate documents;
+    # merging keeps represented-version detection identical to the single-file era.
+    support = parse_support(
+        records.read_text(),
+        require_explicit=True,
+    ) + parse_support(history.read_text())
     return {"catalog": catalog, "support": support}
 
 

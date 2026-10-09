@@ -153,7 +153,7 @@ parts are equal. The comparison is limited to release identity:
 
 These records describe configuration and measured package coverage for the intended platforms.
 They do not verify runtime compatibility; GPU verification is a separate concern, and the row
-status alone never asserts it. See [Supported runners](supported-runners.md).
+status alone never asserts it. See [Support records](support-records.md).
 
 ## Extending the whitelist
 
@@ -163,4 +163,4 @@ short. Before grouping accelerator-specific variants under one name, confirm the
 exclusive as described above.
 
 Related: [Packaging](packaging.md) covers receipt collection and promotion;
-[Supported runners](supported-runners.md) covers support records and status semantics.
+[Support records](support-records.md) covers support records and status semantics.

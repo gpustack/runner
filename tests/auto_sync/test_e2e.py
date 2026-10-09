@@ -84,8 +84,14 @@ def scenario(tmp_path, monkeypatch):
     (repo / "README.md").write_text(
         "# Runner\n[Supported runners](docs/supported-runners.md)\n",
     )
-    (repo / "docs/supported-runners.md").write_text(
+    (repo / "docs/support-records.md").write_text(
         "<!-- runner-support-records:start -->\n| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| cuda | 13.0 | vllm | - | 0.29.0 | - | linux/amd64 | prepared |\n<!-- runner-support-records:end -->\n",
+    )
+    (repo / "docs/supported-runners.md").write_text(
+        "# Supported runners\n\n### Iluvatar CoreX\n\n"
+        "| CoreX Version <br/> (Variant) | vLLM    |\n"
+        "|-------------------------------|---------|\n"
+        "| 4.2                           | `0.8.3` |\n",
     )
     (repo / "pack/cuda").mkdir(parents=True)
     (repo / "pack/matrix.yaml").write_text(
@@ -184,6 +190,34 @@ def agent_stream(data, *extra_events):
         },
     ]
     return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
+def final_text(text, *extra_events):
+    events = [
+        *extra_events,
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "result": text,
+        },
+    ]
+    return "\n".join(json.dumps(event) for event in events) + "\n"
+
+
+def local_deepwiki(monkeypatch):
+    """DeepWiki is a hosted endpoint; tests substitute the local stdio fixture."""
+    monkeypatch.setattr(
+        run.agent,
+        "deepwiki_mcp",
+        lambda: {
+            "deepwiki": {
+                "command": sys.executable,
+                "args": [str(Path(server.__file__).parent / "mcp.py")],
+                "trust": True,
+            },
+        },
+    )
 
 
 def research_bundle(scenario, tmp_path, prepared):
@@ -700,14 +734,14 @@ def test_model_cannot_hide_acquisition_failure_as_unchanged(scenario, tmp_path):
 
 
 def test_model_cannot_propose_an_already_represented_version(scenario, tmp_path):
-    support = scenario[0] / "docs/supported-runners.md"
+    support = scenario[0] / "docs/support-records.md"
     support.write_text(support.read_text().replace("0.29.0", "0.30.0"))
     scenario = (scenario[0], commit(scenario[0]), *scenario[2:])
     prepared = prepare(scenario, tmp_path)
     bundle = research_bundle(scenario, tmp_path, prepared)
     raw = json.loads((bundle / "proposal.json").read_text())
     raw["groups"][0]["patch"] = raw["groups"][0]["patch"].split(
-        "diff --git a/docs/supported-runners.md",
+        "diff --git a/docs/support-records.md",
     )[0]
     (bundle / "proposal.json").write_text(json.dumps(raw))
     checked = tmp_path / "checked"
@@ -732,7 +766,7 @@ def test_model_cannot_propose_an_already_represented_version(scenario, tmp_path)
 
 
 def test_ready_rows_cannot_target_an_already_represented_variant(scenario, tmp_path):
-    support = scenario[0] / "docs/supported-runners.md"
+    support = scenario[0] / "docs/support-records.md"
     support.write_text(
         support.read_text().replace(
             "<!-- runner-support-records:end -->",
@@ -850,7 +884,7 @@ def test_missing_research_configuration_keeps_six_failure_assessments(
 
 def test_all_represented_means_no_agent_without_model_secrets(scenario, tmp_path):
     repo = scenario[0]
-    support = repo / "docs/supported-runners.md"
+    support = repo / "docs/support-records.md"
     rows = []
     for backend, service, variants in run.discovery.SUBSCRIPTIONS:
         for variant in variants:
@@ -1256,6 +1290,7 @@ def test_real_controller_qwen_loads_canonical_policy_skill_and_native_mcp(
 ):
     prepared = prepare(scenario, tmp_path)
     context = json.loads((prepared / "context.json").read_text())
+    local_deepwiki(monkeypatch)
     monkeypatch.setattr(
         server,
         "FINALS",
@@ -1339,6 +1374,73 @@ def test_real_controller_qwen_loads_canonical_policy_skill_and_native_mcp(
         == 0
     )
     assert len(scenario[2].prs) == 1
+
+
+@pytest.mark.usefixtures("pinned_tools")
+def test_real_controller_repairs_prose_analysis_before_proposal(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    local_deepwiki(monkeypatch)
+    invalid = (
+        "Here is the completed analysis.\n```json\n"
+        + json.dumps(analysis(scenario, context))
+        + "\n```"
+    )
+    monkeypatch.setattr(
+        server,
+        "FINALS",
+        server.scripted(
+            [invalid, json.dumps(analysis(scenario, context))],
+            [json.dumps(proposal(scenario, context))],
+        ),
+    )
+    with server.endpoint(
+        "openai",
+        calls={
+            0: [("skill", {"skill": "runner-release-sync"})],
+            1: [],
+            2: [("skill", {"skill": "runner-release-sync"})],
+        },
+    ) as (url, requests):
+        monkeypatch.setenv("AUTO_SYNC_LLM_URL", url + "/v1")
+        monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+        monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-model-token")
+        monkeypatch.setenv("AUTO_SYNC_LLM_PROTOCOL", "openai")
+        monkeypatch.setenv("AUTO_SYNC_LLM_TIMEOUT", "2")
+        output = tmp_path / "research"
+        assert (
+            invoke(
+                "research",
+                "--repo",
+                scenario[0],
+                "--bundle",
+                prepared,
+                "--output",
+                output,
+            )
+            == 0
+        )
+    # analysis stage, one repair session, then the fresh proposal session.
+    assert len(requests) == 5
+    repair = json.dumps(requests[2]["body"])
+    assert "Here is the completed analysis." in repair
+    assert "invalid JSON" in repair
+    assert "raw JSON object" in repair
+    handed_off = json.loads((output / "analysis.json").read_text())
+    assert handed_off["identity"] == context["identity"]
+    raw = json.loads((output / "proposal.json").read_text())
+    assert raw["identity"] == context["identity"]
+    assert raw["groups"][0]["status"] == "ready"
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "analysis-repair-1",
+        "proposal",
+    ]
 
 
 def test_revision_preserves_human_work_and_recovers_original_command(
@@ -1692,6 +1794,9 @@ def test_model_cannot_forge_comment_or_original_context(
         "FINALS",
         [json.dumps(analysis(scenario, context)), json.dumps(raw)],
     )
+    local_deepwiki(monkeypatch)
+    # Rejected output must fail closed without repair sessions in this proof.
+    monkeypatch.setenv("AUTO_SYNC_MAX_REPAIR_ROUNDS", "0")
     with server.endpoint(
         "openai",
         calls={0: [("run_shell_command", {"command": command})], 1: []},
@@ -1795,6 +1900,7 @@ def test_turn_exhaustion_retains_redacted_research_diagnostics(
     def bounded(*args, **kwargs):
         return real(*args, **kwargs, max_turns=1)
 
+    local_deepwiki(monkeypatch)
     monkeypatch.setattr(run.agent, "run_agent", bounded)
     command = shlex.join(["printf", "%s", f"fake-token {header}"])
     with server.endpoint(
@@ -2126,7 +2232,7 @@ def test_research_phases_share_budget_and_deadline_with_fresh_sessions(
     assert result["durations"]["proposal_seconds"] == 8
 
 
-def test_analysis_stage_prose_output_stops_before_proposal(
+def test_analysis_stage_prose_output_exhausts_repair_rounds(
     scenario,
     tmp_path,
     monkeypatch,
@@ -2141,17 +2247,73 @@ def test_analysis_stage_prose_output_stops_before_proposal(
         + json.dumps(analysis(scenario, context))
         + "\n```"
     )
-    event = {
-        "type": "result",
-        "subtype": "success",
-        "is_error": False,
-        "result": fenced,
-    }
     calls = []
 
     def phase(_config, **kwargs):
         calls.append(kwargs)
-        return ProcessResult(0, json.dumps(event) + "\n", "", False, 10)
+        return ProcessResult(0, final_text(fenced), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    # Two bounded default rounds re-run the analysis stage, then fail closed.
+    assert len(calls) == 3
+    assert calls[1]["workspace"] == calls[0]["workspace"]
+    assert len({call["runtime_dir"] for call in calls}) == 3
+    for call in calls[1:]:
+        payload = json.loads(call["prompt"].split("\n", 1)[1])
+        assert payload["failed_reply"] == fenced
+        assert "invalid JSON" in payload["validation_error"]
+        assert "schema" in payload
+        assert "raw JSON object" in call["prompt"]
+        assert "upstream_sources" not in call["prompt"]
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "analysis-repair-1",
+        "analysis-repair-2",
+    ]
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "failed"
+    assert "analysis repair rounds exhausted" in result["reason"]
+    assert "invalid JSON" in result["reason"]
+    assert {c["status"] for c in result["candidates"]} == {"failed"}
+    assert not (output / "proposal.json").exists()
+    assert not (output / "analysis.json").exists()
+
+
+def test_zero_repair_rounds_fail_on_the_first_rejected_output(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_REPAIR_ROUNDS", "0")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    fenced = (
+        "Here is the completed analysis.\n```json\n"
+        + json.dumps(analysis(scenario, context))
+        + "\n```"
+    )
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, final_text(fenced), "", False, 10)
 
     monkeypatch.setattr(run.agent, "run_agent", phase)
     output = tmp_path / "research"
@@ -2170,7 +2332,357 @@ def test_analysis_stage_prose_output_stops_before_proposal(
     assert len(calls) == 1
     result = json.loads((output / "result.json").read_text())
     assert result["status"] == "failed"
+    assert "invalid JSON" in result["reason"]
     assert not (output / "proposal.json").exists()
+
+
+@pytest.mark.parametrize("limit", ["2.5", "-1", "invalid"])
+def test_invalid_repair_round_limit_fails_before_agent(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    limit,
+):
+    prepared = prepare(scenario, tmp_path)
+    monkeypatch.setenv("AUTO_SYNC_MAX_REPAIR_ROUNDS", limit)
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def observe(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(1, "", "controlled diagnostic stop")
+
+    monkeypatch.setattr(run.agent, "run_agent", observe)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    assert not calls
+    assert (
+        "non-negative integer"
+        in json.loads((output / "result.json").read_text())["reason"]
+    )
+
+
+def test_analysis_prose_output_is_repaired_once_and_reaches_proposal(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", "1000")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    fenced = (
+        "Here is the completed analysis.\n```json\n"
+        + json.dumps(analysis(scenario, context))
+        + "\n```"
+    )
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(0, final_text(fenced), "", False, 10)
+        if len(calls) == 2:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                20,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            30,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    assert calls[1]["workspace"] == calls[0]["workspace"]
+    assert calls[1]["runtime_dir"] != calls[0]["runtime_dir"]
+    assert calls[1]["max_session_tokens"] == 990
+    repair_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    stage_payload = json.loads(calls[0]["prompt"].split("\n", 1)[1])
+    assert repair_payload["schema"] == stage_payload["schema"]
+    assert repair_payload["failed_reply"] == fenced
+    assert "invalid JSON" in repair_payload["validation_error"]
+    proposal_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    saved = json.loads((output / "analysis.json").read_text())
+    assert proposal_payload["analysis"] == saved
+    assert (output / "proposal.json").is_file()
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "analysis-repair-1",
+        "proposal",
+    ]
+    assert set(diagnostic["phases"][1]) == set(diagnostic["phases"][0])
+    assert diagnostic["reported_tokens"] == 60
+    result = json.loads((output / "result.json").read_text())
+    assert result["usage"] == {"analysis": 30, "proposal": 30, "reported": 60}
+    assert result["durations"]["analysis_seconds"] >= 0
+    assert result["durations"]["proposal_seconds"] >= 0
+
+
+def test_repair_round_receives_validation_error_and_recovers(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    revision = git(scenario[4], "rev-parse", "HEAD")
+    paired = analysis(scenario, context)
+    target = next(c for c in paired["candidates"] if c["status"] == "analyzed")
+    # The production failure: a combined engine and plugin revision string.
+    target["source_revision"] = f"vllm {revision}; vllm-ascend {revision}"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(0, agent_stream(paired), "", False, 10)
+        if len(calls) == 2:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    assert (
+        repair_payload["validation_error"]
+        == "analyzed candidate lacks an exact revision"
+    )
+    assert repair_payload["failed_reply"] == json.dumps(paired)
+    assert "raw JSON object" in calls[1]["prompt"]
+    assert "repair session of the analysis stage" in calls[1]["prompt"]
+    assert 0 < calls[1]["deadline"] < run.agent.SESSION_DEADLINE
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "analysis-repair-1",
+        "proposal",
+    ]
+    assert (output / "proposal.json").is_file()
+
+
+def test_repair_rounds_exhaust_the_shared_token_budget(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", "100")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    fenced = "Certainly!\n```json\n{}\n```"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, final_text(fenced), "", False, 60)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    # The first repair spends the remaining budget; no further round starts.
+    assert len(calls) == 2
+    reason = json.loads((output / "result.json").read_text())["reason"]
+    assert "session token budget exhausted" in reason
+    assert "120 reported tokens reached the 100 limit" in reason
+
+
+def test_repair_rounds_exhaust_the_shared_deadline_before_proposal(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    monkeypatch.setattr(run.agent, "SESSION_DEADLINE", 20)
+    # The clock advances only inside the mocked sessions.
+    now = [10000.0]
+    monkeypatch.setattr(run.time, "monotonic", lambda: now[0])
+    fenced = "Certainly!\n```json\n{}\n```"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        now[0] += 12
+        return ProcessResult(0, final_text(fenced), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    # The first repair fits in the remaining deadline; the second cannot start.
+    assert len(calls) == 2
+    assert calls[1]["deadline"] == 8
+    reason = json.loads((output / "result.json").read_text())["reason"]
+    assert "research stage deadline exhausted by the analysis stage" in reason
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "analysis-repair-1",
+    ]
+
+
+def test_proposal_stage_prose_output_is_repaired_once(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_SESSION_TOKENS", "1000")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    fenced = (
+        "The proposal follows.\n```json\n"
+        + json.dumps(proposal(scenario, context))
+        + "\n```"
+    )
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(0, final_text(fenced), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    assert calls[2]["workspace"] == calls[1]["workspace"]
+    assert calls[2]["runtime_dir"] != calls[1]["runtime_dir"]
+    assert calls[2]["max_session_tokens"] == 980
+    assert calls[2]["deadline"] < run.agent.SESSION_DEADLINE
+    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    assert repair_payload["failed_reply"] == fenced
+    assert "invalid JSON" in repair_payload["validation_error"]
+    stage_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    assert repair_payload["schema"] == stage_payload["schema"]
+    assert "repair session of the proposal stage" in calls[2]["prompt"]
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    result = json.loads((output / "result.json").read_text())
+    assert result["usage"] == {"analysis": 10, "proposal": 20, "reported": 30}
+    assert (output / "proposal.json").is_file()
 
 
 @pytest.mark.parametrize("corrupt", ["ready", "revision", "evidence"])
@@ -2182,6 +2694,8 @@ def test_forged_analysis_never_reaches_proposal_stage(
 ):
     prepared = prepare(scenario, tmp_path)
     context = json.loads((prepared / "context.json").read_text())
+    # Validation stays strict on its own; repair recovery is tested separately.
+    monkeypatch.setenv("AUTO_SYNC_MAX_REPAIR_ROUNDS", "0")
     monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
     monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
     monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
@@ -2423,6 +2937,7 @@ def test_actual_qwen_deadline_yields_complete_failure(
     def bounded(*args, **kwargs):
         return real(*args, **kwargs, deadline=0.2)
 
+    local_deepwiki(monkeypatch)
     monkeypatch.setattr(run.agent, "run_agent", bounded)
     with server.endpoint("openai", delay=2, tools=False) as (url, _requests):
         monkeypatch.setenv("AUTO_SYNC_LLM_URL", url + "/v1")
@@ -2513,7 +3028,7 @@ def test_simulated_merge_prepared_dedup_and_measured_promotion(scenario, tmp_pat
         ]
         == "unchanged"
     )
-    support = (scenario[0] / "docs/supported-runners.md").read_text()
+    support = (scenario[0] / "docs/support-records.md").read_text()
     assert "0.30.0 | - | linux/amd64 | prepared" in support
     job = {
         "backend": "cuda",
