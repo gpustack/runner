@@ -11,9 +11,10 @@ No personal skills, cached sessions, or off-repository instruction files are req
 
 ## Discovery and release policy
 
-Weekly discovery runs on Monday at 01:23 UTC, or 09:23 in Asia/Shanghai.
+Weekly discovery runs on Sunday at 13:07 UTC, or 21:07 in Asia/Shanghai.
 Maintainers can also start discovery manually.
 Scheduled and manual discovery use one frozen default-branch revision for controller code, instructions, and validators.
+A failed scheduled or manual run re-dispatches itself once with the standard configuration; the retried run never retries again.
 
 There are six subscriptions:
 
@@ -190,6 +191,7 @@ No local model installation or interactive login is needed.
 Scheduled and manual runs read these repository or organization settings.
 A manual dispatch can additionally override the runner profile, the token budget, the repair-round bound,
 and the thinking, sampling, and reasoning-effort settings; each dispatch field pre-fills its documented default.
+The `attempt` field is an internal retry guard; leave it at `1`.
 The `llm-*` names below are the workflow's internal settings.
 
 | GitHub configuration | Kind | Setting or purpose |
@@ -210,7 +212,7 @@ The `llm-*` names below are the workflow's internal settings.
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_HEADER` | Optional Variable | `llm-auth-header`: custom authentication header name |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS` | Optional Secret | `llm-extra-headers`: `K=V,K=V`; values may contain credentials |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` | Optional Variable | `llm-extra-body`: JSON object without credentials |
-| `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS` | Optional Variable | `max-session-tokens`: positive cumulative reported-token budget; default `10000000` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS` | Optional Variable | `max-session-tokens`: positive cumulative reported-token budget; default `20000000` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS` | Optional Variable | `max-repair-rounds`: non-negative repair-session bound per research stage; default `2` |
 | `CI_PRT_GENERATOR_ID` | Required Secret | Existing GitHub App ID |
 | `CI_PRT_GENERATOR_KEY` | Required Secret | Existing GitHub App private key |

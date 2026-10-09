@@ -54,7 +54,7 @@ def model_boundary(workflow):
 
 def test_triggers_queue_and_job_boundaries():
     workflow = load(WORKFLOW)
-    assert workflow["on"]["schedule"] == [{"cron": "23 1 * * 1"}]
+    assert workflow["on"]["schedule"] == [{"cron": "7 13 * * 0"}]
     assert "workflow_dispatch" in workflow["on"]
     assert workflow["on"]["issue_comment"]["types"] == ["created"]
     assert workflow["concurrency"] == {
@@ -62,7 +62,7 @@ def test_triggers_queue_and_job_boundaries():
         "queue": "max",
         "cancel-in-progress": False,
     }
-    assert set(workflow["jobs"]) == {"research", "validation", "publication"}
+    assert set(workflow["jobs"]) == {"research", "validation", "publication", "retry"}
     for job in workflow["jobs"].values():
         assert (
             job["runs-on"]
@@ -159,6 +159,7 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
         "llm-temperature",
         "llm-top-p",
         "llm-reasoning-effort",
+        "attempt",
     }
     assert set(invocation["inputs"]) == dispatch
     for name in dispatch - {
@@ -179,7 +180,7 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
     assert invocation["inputs"]["llm-reasoning-effort"]["default"] == "low"
     env = step(workflow["jobs"]["research"], "proposal")["env"]
     assert env["AUTO_SYNC_MAX_SESSION_TOKENS"] == (
-        "${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}"
+        "${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '20000000' }}"
     )
     assert env["AUTO_SYNC_MAX_REPAIR_ROUNDS"] == (
         "${{ inputs.max-repair-rounds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS || '2' }}"
@@ -220,6 +221,25 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
             "${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_" + config + " }}"
         )
     assert "BOT_LOGIN" not in WORKFLOW.read_text().replace("AUTO_SYNC_BOT_LOGIN", "")
+
+
+def test_failed_run_redispatches_exactly_once():
+    workflow = load(WORKFLOW)
+    retry = workflow["jobs"]["retry"]
+    assert retry["needs"] == ["research", "validation", "publication"]
+    condition = retry["if"]
+    assert "failure()" in condition
+    assert "github.event_name == 'schedule'" in condition
+    assert "github.event_name == 'workflow_dispatch'" in condition
+    assert "inputs.attempt != '2'" in condition
+    assert retry["permissions"] == {"actions": "write"}
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    assert inputs["attempt"]["type"] == "string"
+    assert inputs["attempt"]["default"] == "1"
+    dispatch = retry["steps"][-1]
+    assert dispatch["env"]["GH_TOKEN"] == "${{ github.token }}"  # noqa: S105 - workflow expression fixture.
+    assert "gh workflow run auto-sync.yml" in dispatch["run"]
+    assert "-f attempt=2" in dispatch["run"]
 
 
 def test_app_scope_identity_and_clean_validation():
@@ -294,8 +314,8 @@ def test_verified_cache_is_saved_before_agent_and_revisions_restore_only():
     assert "bootstrap.sh" in bootstrap["run"]
     assert "--cache-key" in step(research, "tool-key")["run"]
     assert restore["with"]["path"] == "${{ runner.temp }}/auto-sync-tools"
-    for job in workflow["jobs"].values():
-        uv = step(job, "uv")
+    for name in ["research", "validation", "publication"]:
+        uv = step(workflow["jobs"][name], "uv")
         assert uv["uses"] == "astral-sh/setup-uv@v7"
         assert uv["with"]["enable-cache"] is True
         assert uv["with"]["version"] == "0.8.24"

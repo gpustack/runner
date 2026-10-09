@@ -2065,7 +2065,7 @@ def test_invalid_session_token_limit_fails_before_agent(
     )
 
 
-@pytest.mark.parametrize("limit,expected", [(None, 10_000_000), ("250000", 250_000)])
+@pytest.mark.parametrize("limit,expected", [(None, 20_000_000), ("250000", 250_000)])
 def test_session_token_limit_reaches_agent(
     scenario,
     tmp_path,

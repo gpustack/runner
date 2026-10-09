@@ -2,7 +2,8 @@ name: Runner Auto Sync
 
 on:
   schedule:
-    - cron: "23 1 * * 1"
+    # Weekly, Sunday 21:07 in Asia/Shanghai (13:07 UTC).
+    - cron: "7 13 * * 0"
   workflow_dispatch:
     inputs:
       # Choice large GitHub hosted runner.
@@ -20,7 +21,7 @@ on:
         description: 'Max session tokens, the cumulative reported-token budget across all sessions.'
         required: false
         type: string
-        default: "10000000"
+        default: "20000000"
       max-repair-rounds:
         description: 'Max repair rounds, the repair sessions allowed per research stage; 0 disables repairs.'
         required: false
@@ -64,6 +65,12 @@ on:
           - medium
           - high
           - max
+      # Internal retry guard; leave at 1 for manual runs.
+      attempt:
+        description: 'Attempt counter, one automatic retry re-dispatches with 2.'
+        required: false
+        type: string
+        default: "1"
   issue_comment:
     types: [created]
 
@@ -188,7 +195,7 @@ jobs:
           AUTO_SYNC_LLM_EXTRA_HEADERS: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS }}
           AUTO_SYNC_LLM_EXTRA_BODY: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY }}
           AUTO_SYNC_LLM_AUTH_TOKEN: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
-          AUTO_SYNC_MAX_SESSION_TOKENS: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}
+          AUTO_SYNC_MAX_SESSION_TOKENS: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '20000000' }}
           AUTO_SYNC_MAX_REPAIR_ROUNDS: ${{ inputs.max-repair-rounds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS || '2' }}
         run: |
           uv run python -m tools.auto_sync.run research --repo "$GITHUB_WORKSPACE" \
@@ -370,3 +377,25 @@ jobs:
           path: ${{ runner.temp }}/auto-sync-publication.json
           if-no-files-found: warn
           retention-days: 30
+
+  retry:
+    name: Retry once on failure
+    needs: [research, validation, publication]
+    if: >-
+      failure() &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      inputs.attempt != '2'
+    runs-on: ${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      # A fresh run re-freezes the default branch and re-acquires upstream
+      # state; the retry uses the standard configuration, not dispatch inputs.
+      - name: Re-dispatch one retry run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh workflow run auto-sync.yml
+          --ref "${{ github.event.repository.default_branch }}"
+          -f attempt=2
