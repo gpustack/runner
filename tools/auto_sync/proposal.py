@@ -560,6 +560,18 @@ def _analysis_evidence(candidate, evidence):
                 supplied.add(value)
         if isinstance(record.get("path"), str):
             roots.append(Path(record["path"]))
+    # A whitespace-only deviation from exactly one supplied key is that key;
+    # models keep inserting a space into the supplied name@version form.
+    for index, item in enumerate(entries):
+        if not isinstance(item, str):
+            continue
+        keys = [
+            key
+            for key in evidence
+            if re.sub(r"\s+", "", key) == re.sub(r"\s+", "", item)
+        ]
+        if len(keys) == 1:
+            entries[index] = keys[0]
     rejected = []
     for item in entries:
         require(isinstance(item, str) and bool(item.strip()), "invalid evidence entry")
