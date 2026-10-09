@@ -646,7 +646,8 @@ def test_real_cli_shell_stdin_is_eof(tool_bin, workspace, tmp_path):
         "command": 'python3 -c \'import sys; print("SHELL_EOF_" + str(sys.stdin.read() == ""))\'',
         "description": "Check stdin EOF",
         "is_background": False,
-        "timeout": 1000,
+        # python3 cold starts on a contended CI runner can exceed a 1000 ms timeout.
+        "timeout": 10000,
     }
     with endpoint("openai", calls=[("run_shell_command", command)]) as (url, requests):
         result = run_agent(
