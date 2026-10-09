@@ -66,7 +66,7 @@ DISABLED_TOOLS = [
 ]
 MAX_SESSION_TURNS = 180
 MAX_TOOL_CALLS = 180
-MAX_SESSION_TOKENS = 10_000_000
+MAX_SESSION_TOKENS = 20_000_000
 # Bounded fresh sessions that may re-run one stage after rejected output.
 MAX_REPAIR_ROUNDS = 2
 # Outer supervision limit shared by the analysis and proposal sessions.

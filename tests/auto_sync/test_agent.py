@@ -1403,7 +1403,7 @@ def test_run_agent_default_limit_does_not_stop_below_threshold(
     )
     assert result.returncode == 0
     assert "token budget" not in result.stderr
-    assert calls[0].max_tokens == 10_000_000
+    assert calls[0].max_tokens == 20_000_000
     assert calls[0].tokens == 100
     assert result.reported_tokens == 100
 
