@@ -820,6 +820,63 @@ def _repair_prompt(phase: str, schema: dict, failed_reply: str, error: str) -> s
     )
 
 
+def _check_group_patches(
+    repo: Path,
+    identity: dict,
+    data: dict,
+    scratch: Path,
+    env: dict,
+) -> dict:
+    """
+    Apply every checkable ready group's patch to a fresh frozen-head clone.
+
+    A malformed patch must fail here, where a repair session can correct
+    it, instead of in the validation job where no repair exists. A ready
+    group whose dependencies are not all ready is validated later instead.
+    The --whitespace=error flag mirrors the downstream validation and
+    publication applications, which reject whitespace-damaged patches.
+    """
+    groups = {g["id"]: g for g in data["groups"]}
+    ready = {g["id"] for g in data["groups"] if g["status"] == "ready"}
+    checkable = set()
+    changed = True
+    while changed:
+        changed = False
+        for identifier in ready - checkable:
+            if all(d in checkable for d in groups[identifier]["depends_on"]):
+                checkable.add(identifier)
+                changed = True
+    if not checkable:
+        return data
+    work = scratch / "patch-check"
+    shutil.rmtree(work, ignore_errors=True)
+    _clone(repo, identity["head_sha"], work, env)
+    applied = set()
+    while checkable - applied:
+        progressed = False
+        for identifier in sorted(checkable - applied):
+            if not set(groups[identifier]["depends_on"]) <= applied:
+                continue
+            try:
+                _git(
+                    env,
+                    work,
+                    "apply",
+                    "--whitespace=error",
+                    "-",
+                    text=groups[identifier]["patch"],
+                )
+            except proposal.ProposalError as exc:
+                msg = (
+                    f"group {identifier} patch does not apply to the frozen head: {exc}"
+                )
+                raise proposal.ProposalError(msg) from None
+            applied.add(identifier)
+            progressed = True
+        proposal.require(progressed, "group patch order is unresolvable")
+    return data
+
+
 def _research(args, scratch):
     context = _context(args.bundle, args.repo)
     prepared = _read(args.bundle / "result.json")
@@ -1089,6 +1146,13 @@ def _research(args, scratch):
         msg = f"{phase} repair rounds exhausted: {last}"
         raise proposal.ProposalError(msg)
 
+    def finalize_proposal(data):
+        bound = _bind_discovery(
+            proposal.validate_proposal(data, identity, engine_prereleases=permissions),
+            context,
+        )
+        return _check_group_patches(args.repo, identity, bound, scratch, env)
+
     try:
         analysis, reported = research_phase(
             "analysis",
@@ -1155,14 +1219,7 @@ def _research(args, scratch):
             _agent_workspace(args.repo, identity, scratch / "workspace", env),
             proposal_prompt,
             schema,
-            lambda data: _bind_discovery(
-                proposal.validate_proposal(
-                    data,
-                    identity,
-                    engine_prereleases=permissions,
-                ),
-                context,
-            ),
+            finalize_proposal,
             budget=remaining,
             deadline=deadline,
         )
