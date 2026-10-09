@@ -817,6 +817,18 @@ def _repair_prompt(
             " An evidence entry rejected by the error must be replaced with the"
             " matching key from supplied_evidence_keys."
         )
+    correction = (
+        "This is a pure format and field correction: do not research again, do not edit any "
+        "file, and do not access the network for new investigation. "
+    )
+    if phase == "proposal":
+        # A patch rejection is only correctable in the reused workspace.
+        correction = (
+            "This is a pure format and field correction: do not research again and do not "
+            "access the network for new investigation. When the error rejects a group's patch, "
+            "rewrite the patch files referenced by patch_file entries in the reused workspace "
+            "and keep those references; do not edit any other file. "
+        )
     return (
         "Use the canonical runner-release-sync skill and trusted AGENTS.md. "
         f"You are a repair session of the {phase} stage of one bounded research run. "
@@ -824,9 +836,8 @@ def _repair_prompt(
         "Your entire final reply must be one raw JSON object: the first character must be "
         "'{' and the last must be '}'. "
         "Return raw JSON only, without Markdown or code fences. "
-        "This is a pure format and field correction: do not research again, do not edit any "
-        "file, and do not access the network for new investigation. "
-        "Preserve every fact, field and value that the validation error does not reject. "
+        + correction
+        + "Preserve every fact, field and value that the validation error does not reject. "
         "The rejected final reply is supplied as failed_reply, the exact error as "
         "validation_error, and the required schema as schema."
         + guidance
@@ -1263,6 +1274,8 @@ def _research(args, scratch):
             "Use tests/auto_sync/fixtures/proposals/ready.json for field shape only; supply your own identity and evidence. "
             "Group IDs contain only letters, digits, underscores and hyphens. "
             "Do not hand-escape diffs or create commits and rebases to split groups. "
+            "Groups whose patches touch the same file are not independent: declare depends_on for the later "
+            "group and generate its patch against the tree with the dependency's patch already applied. "
             "Check ordered component patches with git apply --check before editing recipes; fuzzy patch checks are insufficient. "
             "Assess all six subscriptions and retain independent outcomes. "
             f"Budget: {agent.MAX_SESSION_TURNS} session turns and {agent.MAX_TOOL_CALLS} tool calls. "

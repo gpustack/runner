@@ -2278,6 +2278,8 @@ def test_analysis_stage_prose_output_exhausts_repair_rounds(
         assert "invalid JSON" in payload["validation_error"]
         assert "schema" in payload
         assert "raw JSON object" in call["prompt"]
+        # Only the proposal-stage repair may rewrite patch files.
+        assert "do not edit any file" in call["prompt"]
         assert "upstream_sources" not in call["prompt"]
     diagnostic = json.loads((output / "diagnostics.json").read_text())
     assert [phase["name"] for phase in diagnostic["phases"]] == [
@@ -3147,6 +3149,75 @@ def test_proposal_stage_inapplicable_patch_is_repaired_once(
         "proposal-repair-1",
     ]
     assert (output / "proposal.json").is_file()
+
+
+def test_proposal_repair_rewrites_a_rejected_patch_file(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    # The production failure: a patch generated against a tree where another
+    # group's patch was already applied no longer applies to the frozen head.
+    # The repair session corrects it by rewriting the referenced patch file
+    # in the reused workspace instead of returning an inline patch.
+    draft = proposal(scenario, context)
+    patch = draft["groups"][0].pop("patch")
+    draft["groups"][0]["patch_file"] = "patches/candidate.patch"
+    broken = patch.replace("\n@@", "\n @@")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        target = Path(kwargs["workspace"]) / draft["groups"][0]["patch_file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if len(calls) == 2:
+            target.write_text(broken)
+        else:
+            target.write_text(patch)
+        return ProcessResult(0, agent_stream(draft), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_prompt = calls[2]["prompt"]
+    assert "rewrite the patch files referenced by patch_file entries" in repair_prompt
+    repair_payload = json.loads(repair_prompt.split("\n", 1)[1])
+    assert "cuda-vllm patch does not apply" in repair_payload["validation_error"]
+    assert repair_payload["failed_reply"] == json.dumps(draft)
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    saved = json.loads((output / "proposal.json").read_text())
+    assert saved["groups"][0]["patch"] == patch
+    assert "patch_file" not in saved["groups"][0]
 
 
 @pytest.mark.parametrize("breaker", [broken_patch, whitespace_patch])
