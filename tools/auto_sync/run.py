@@ -796,6 +796,30 @@ def _agent_workspace(repo, identity, target, env):
     return target
 
 
+def _repair_prompt(phase: str, schema: dict, failed_reply: str, error: str) -> str:
+    """Ask one fresh bounded session to correct a rejected final reply."""
+    return (
+        "Use the canonical runner-release-sync skill and trusted AGENTS.md. "
+        f"You are a repair session of the {phase} stage of one bounded research run. "
+        "The previous stage session's final reply was rejected; return the corrected JSON. "
+        "Your entire final reply must be one raw JSON object: the first character must be "
+        "'{' and the last must be '}'. "
+        "Return raw JSON only, without Markdown or code fences. "
+        "This is a pure format and field correction: do not research again, do not edit any "
+        "file, and do not access the network for new investigation. "
+        "Preserve every fact, field and value that the validation error does not reject. "
+        "The rejected final reply is supplied as failed_reply, the exact error as "
+        "validation_error, and the required schema as schema.\n"
+        + json.dumps(
+            {
+                "schema": schema,
+                "validation_error": error,
+                "failed_reply": failed_reply,
+            },
+        )
+    )
+
+
 def _research(args, scratch):
     context = _context(args.bundle, args.repo)
     prepared = _read(args.bundle / "result.json")
@@ -824,6 +848,13 @@ def _research(args, scratch):
         msg = "The session token limit must be a positive integer"
         raise model.ConfigurationError(msg)
     max_session_tokens = int(limit)
+    rounds = os.environ.get("AUTO_SYNC_MAX_REPAIR_ROUNDS", "").strip() or str(
+        agent.MAX_REPAIR_ROUNDS,
+    )
+    if not re.fullmatch(r"[0-9]+", rounds):
+        msg = "The repair round limit must be a non-negative integer"
+        raise model.ConfigurationError(msg)
+    max_repair_rounds = int(rounds)
     config = model.normalize_inputs(inputs)
     github = _github()
     proposal.require(
@@ -860,7 +891,11 @@ def _research(args, scratch):
                 "reason": "Explain the result.",
                 "engine_version": "discovered engine version or null",
                 "plugin_version": "discovered plugin version or null",
-                "source_revision": "acquired exact upstream commit or null",
+                "source_revision": (
+                    "exact commit of the candidate engine repository (vllm or sglang upstream) or null; "
+                    "for a CANN vLLM pair use the vllm engine commit and record the "
+                    "vllm-ascend plugin commit in findings or evidence"
+                ),
                 "evidence": [
                     "supplied evidence key, supplied path, repository-relative path or https URL",
                 ],
@@ -915,12 +950,16 @@ def _research(args, scratch):
         bool(os.environ.get("AUTO_SYNC_TOOL_BIN")),
         "required pinned tool directory is missing",
     )
-    mcp_servers = agent.github_mcp(
-        tool_bin,
-        os.environ.get("AUTO_SYNC_GITHUB_TOKEN", ""),
-    )
+    mcp_servers = {
+        **agent.github_mcp(
+            tool_bin,
+            os.environ.get("AUTO_SYNC_GITHUB_TOKEN", ""),
+        ),
+        **agent.deepwiki_mcp(),
+    }
     agent_started = time.monotonic()
     phases = []
+    reported_total = 0
     analysis = None
 
     def record(name: str, result, started: float) -> None:
@@ -970,32 +1009,102 @@ def _research(args, scratch):
         msg = f"agent process failed or timed out (exit {result.returncode}): {reason[-1000:]}"
         raise proposal.ProposalError(msg)
 
-    try:
+    def session(
+        name: str,
+        workspace: Path,
+        prompt: str,
+        *,
+        budget: int,
+        deadline: float | None = None,
+    ):
+        """Run one bounded stage session and account it against the shared budget."""
+        nonlocal reported_total
         started = time.monotonic()
+        extra = {} if deadline is None else {"deadline": deadline}
         result = agent.run_agent(
             config,
-            workspace=_agent_workspace(
+            workspace=workspace,
+            tool_bin=tool_bin,
+            prompt=prompt,
+            runtime_dir=scratch / f"runtime-{name}",
+            max_session_tokens=budget,
+            mcp_servers=mcp_servers,
+            progress=lambda line: _print_progress(f"[{name}] {line}"),
+            **extra,
+        )
+        record(name, result, started)
+        reported_total += result.reported_tokens
+        if result.returncode != 0 or result.timed_out:
+            failed(result, reported_total)
+        return result
+
+    def research_phase(
+        phase: str,
+        workspace: Path,
+        prompt: str,
+        schema: dict,
+        finalize,
+        budget: int,
+        deadline: float | None = None,
+    ):
+        """
+        Run one stage, then bounded fresh repair sessions for rejected output.
+
+        A malformed event stream or failed process is never repaired; a reply
+        that parses but fails validation, or text that fails to parse, returns
+        to a fresh session with the exact error until the rounds are exhausted.
+        """
+        result = session(phase, workspace, prompt, budget=budget, deadline=deadline)
+        spent = result.reported_tokens
+        last = ""
+        for rounds in range(max_repair_rounds + 1):
+            reply = proposal.final_reply_text(result)
+            try:
+                return finalize(proposal.parse_reply(reply)), spent
+            except proposal.ProposalError as error:
+                last = str(error)
+            if rounds == max_repair_rounds:
+                break
+            deadline = agent.SESSION_DEADLINE - (time.monotonic() - agent_started)
+            proposal.require(
+                deadline > 0,
+                f"research stage deadline exhausted by the {phase} stage",
+            )
+            proposal.require(
+                reported_total < max_session_tokens,
+                f"session token budget exhausted by the {phase} stage: "
+                f"{reported_total} reported tokens reached the "
+                f"{max_session_tokens} limit",
+            )
+            result = session(
+                f"{phase}-repair-{rounds + 1}",
+                workspace,
+                _repair_prompt(phase, schema, reply, last),
+                budget=max_session_tokens - reported_total,
+                deadline=deadline,
+            )
+            spent += result.reported_tokens
+        msg = f"{phase} repair rounds exhausted: {last}"
+        raise proposal.ProposalError(msg)
+
+    try:
+        analysis, reported = research_phase(
+            "analysis",
+            _agent_workspace(
                 args.repo,
                 identity,
                 scratch / "workspace-analysis",
                 env,
             ),
-            tool_bin=tool_bin,
-            prompt=analysis_prompt,
-            runtime_dir=scratch / "runtime-analysis",
-            max_session_tokens=max_session_tokens,
-            mcp_servers=mcp_servers,
-            progress=lambda line: _print_progress(f"[analysis] {line}"),
-        )
-        record("analysis", result, started)
-        reported = result.reported_tokens
-        if result.returncode != 0 or result.timed_out:
-            failed(result, reported)
-        analysis = proposal.validate_analysis(
-            proposal.parse_agent_output(result),
-            identity,
-            found=found,
-            evidence=evidence,
+            analysis_prompt,
+            analysis_schema,
+            lambda data: proposal.validate_analysis(
+                data,
+                identity,
+                found=found,
+                evidence=evidence,
+            ),
+            budget=max_session_tokens,
         )
         remaining = max_session_tokens - reported
         proposal.require(
@@ -1039,29 +1148,21 @@ def _research(args, scratch):
             "Do not run candidate validation or repository-wide tests here.\n"
             + json.dumps({**shared, "analysis": analysis, "schema": schema})
         )
-        started = time.monotonic()
-        result = agent.run_agent(
-            config,
-            workspace=_agent_workspace(args.repo, identity, scratch / "workspace", env),
-            tool_bin=tool_bin,
-            prompt=proposal_prompt,
-            runtime_dir=scratch / "runtime-proposal",
-            deadline=deadline,
-            max_session_tokens=remaining,
-            mcp_servers=mcp_servers,
-            progress=lambda line: _print_progress(f"[proposal] {line}"),
-        )
-        record("proposal", result, started)
-        reported += result.reported_tokens
-        if result.returncode != 0 or result.timed_out:
-            failed(result, reported)
-        raw = _bind_discovery(
-            proposal.validate_proposal(
-                proposal.parse_agent_output(result),
-                identity,
-                engine_prereleases=permissions,
+        raw, _ = research_phase(
+            "proposal",
+            _agent_workspace(args.repo, identity, scratch / "workspace", env),
+            proposal_prompt,
+            schema,
+            lambda data: _bind_discovery(
+                proposal.validate_proposal(
+                    data,
+                    identity,
+                    engine_prereleases=permissions,
+                ),
+                context,
             ),
-            context,
+            budget=remaining,
+            deadline=deadline,
         )
     finally:
         # Restore both input and output only after supervised children finish.
@@ -1081,18 +1182,26 @@ def _research(args, scratch):
         if analysis is not None:
             _write(args.output / "analysis.json", analysis)
     _write(args.output / "proposal.json", raw)
+
+    def stage_sum(prefix: str, field: str):
+        return sum(
+            p[field]
+            for p in phases
+            if p["name"] == prefix or p["name"].startswith(prefix + "-")
+        )
+
     return _result(
         "research",
         "ready",
         "Analysis and proposal sessions completed.",
         candidates=raw["candidates"],
         durations={
-            "analysis_seconds": phases[0]["agent_seconds"],
-            "proposal_seconds": phases[1]["agent_seconds"],
+            "analysis_seconds": round(stage_sum("analysis", "agent_seconds"), 3),
+            "proposal_seconds": round(stage_sum("proposal", "agent_seconds"), 3),
         },
         usage={
-            "analysis": phases[0]["reported_tokens"],
-            "proposal": phases[1]["reported_tokens"],
+            "analysis": stage_sum("analysis", "reported_tokens"),
+            "proposal": stage_sum("proposal", "reported_tokens"),
             "reported": sum(p["reported_tokens"] for p in phases),
         },
     )

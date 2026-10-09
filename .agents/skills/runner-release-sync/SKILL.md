@@ -6,7 +6,8 @@ description: Research upstream GPUStack Runner releases and prepare scoped packa
 # Runner release sync
 
 Use the model and read-only GitHub MCP already configured by the workflow.
-The research stage runs two sequential headless sessions: analysis, then proposal.
+The research stage runs two sequential headless stages: analysis, then proposal.
+A stage whose final reply fails the output contract receives bounded fresh repair sessions that return one corrected raw JSON object; they change no validation rule and no research budget.
 The proposal session receives only the validated analysis summary, never the analysis transcript.
 Do not launch another agent, request interactive confirmation, or wait for review.
 Return a complete assessment within the supplied limits.
@@ -92,6 +93,7 @@ Research completion is not compatibility confirmation.
 ## Proposal output
 
 The proposal session starts fresh from the validated analysis and prepares the version-bump edits.
+If its final reply is rejected, a bounded repair session receives the rejected reply and the exact error and must return the corrected raw JSON object.
 Follow the [proposal output contract](../../../docs/release-automation.md#proposal-output).
 Return raw JSON only, without Markdown or code fences.
 Return JSON with the supplied frozen identity and an assessment for every subscription.

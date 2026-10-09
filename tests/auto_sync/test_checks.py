@@ -17,7 +17,7 @@ from tools.auto_sync.discovery import promote_support
 from tools.auto_sync.proposal import ProposalError
 
 FIXTURE = Path(__file__).parent / "fixtures/proposals/ready.json"
-SUPPORT = "docs/supported-runners.md"
+SUPPORT = "docs/support-records.md"
 SUPPORT_START = "<!-- runner-support-records:start -->\n| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n"
 SUPPORT_END = "<!-- runner-support-records:end -->\n"
 

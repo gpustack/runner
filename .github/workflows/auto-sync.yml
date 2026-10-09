@@ -53,6 +53,9 @@ on:
       max-session-tokens:
         type: string
         required: false
+      max-repair-rounds:
+        type: string
+        required: false
     secrets:
       llm-auth-token:
         required: true
@@ -189,6 +192,7 @@ jobs:
           AUTO_SYNC_LLM_EXTRA_BODY: ${{ inputs.llm-extra-body || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY }}
           AUTO_SYNC_LLM_AUTH_TOKEN: ${{ secrets.llm-auth-token || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
           AUTO_SYNC_MAX_SESSION_TOKENS: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS || '10000000' }}
+          AUTO_SYNC_MAX_REPAIR_ROUNDS: ${{ inputs.max-repair-rounds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS || '2' }}
         run: |
           uv run python -m tools.auto_sync.run research --repo "$GITHUB_WORKSPACE" \
             --bundle "$RUNNER_TEMP/auto-sync-prepared" --output "$RUNNER_TEMP/auto-sync-research"

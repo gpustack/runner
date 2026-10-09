@@ -67,6 +67,8 @@ DISABLED_TOOLS = [
 MAX_SESSION_TURNS = 180
 MAX_TOOL_CALLS = 180
 MAX_SESSION_TOKENS = 10_000_000
+# Bounded fresh sessions that may re-run one stage after rejected output.
+MAX_REPAIR_ROUNDS = 2
 # Outer supervision limit shared by the analysis and proposal sessions.
 SESSION_DEADLINE = 3300
 
@@ -367,6 +369,15 @@ def github_mcp(tool_bin: Path, token: str) -> dict:
             "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": token},
             "trust": True,
             "timeout": 30000,
+        },
+    }
+
+
+def deepwiki_mcp() -> dict:
+    """Use the hosted DeepWiki documentation server; it holds no credentials."""
+    return {
+        "deepwiki": {
+            "httpUrl": "https://mcp.deepwiki.com/mcp",
         },
     }
 

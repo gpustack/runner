@@ -14,6 +14,17 @@ FINAL = json.dumps({"status": "unchanged", "summary": "Fixture complete"})
 FINALS = None
 
 
+def scripted(*phases: list[str]) -> list[str]:
+    """
+    Flatten per-phase final-reply sequences into FINALS entries.
+
+    Research dispatches one fresh session per stage and per repair round, so a
+    phase that must first fail then succeed lists its finals in dispatch order,
+    for example scripted([invalid, valid], [proposal]).
+    """
+    return [text for phase in phases for text in phase]
+
+
 @contextmanager
 def endpoint(protocol, *, delay=0, tools=True, calls=None, path=None):
     requests = []

@@ -6,7 +6,7 @@ Auto-sync does not build service images, publish images, merge PRs, or measure i
 
 The canonical instructions are `.agents/skills/runner-release-sync/SKILL.md`.
 `AGENTS.md` supplies project conventions. `.claude/skills` links to the same skill directory.
-The workflow configures the model and read-only GitHub MCP before starting one headless Qwen invocation.
+The workflow configures the model, the read-only GitHub MCP, and the hosted DeepWiki MCP before the research stage starts its headless Qwen sessions.
 No personal skills, cached sessions, or off-repository instruction files are required.
 
 ## Discovery and release policy
@@ -34,8 +34,8 @@ Keep the actual plugin version explicit, including its prerelease suffix.
 Historical `(rc)` text has unknown plugin identity; do not derive a plugin suffix from it.
 Other engine prereleases require an explicit maintainer request.
 
-Read both `gpustack_runner/runner.py.json` and [Supported runners](supported-runners.md) from the frozen default branch.
-An exact identity in either source prevents another discovery proposal.
+Read `gpustack_runner/runner.py.json`, [Support records](support-records.md), and [Supported runners](supported-runners.md) from the frozen default branch.
+An exact identity in any source prevents another discovery proposal.
 A merged `prepared` record counts while Pack is pending; an unmerged proposal does not.
 Compare structured backend, service, accelerator variant, engine version, and actual Ascend plugin version.
 Runtime lines and CPU platforms are evaluated when preparing the proposal and promoting its support record.
@@ -94,12 +94,20 @@ Do not populate the generated catalog with guessed package versions.
 
 ## Analysis handoff
 
-Research runs as two sequential independent headless sessions: analysis, then proposal.
+Research runs as two sequential independent headless stages: analysis, then proposal.
 The analysis session confirms compatibility facts and returns analysis schema 1 JSON; it never edits files or proposes changes.
 The controller validates that JSON against the frozen identity, the discovered selection, and the acquired source revisions.
 Forged statuses, missing evidence, or out-of-scope evidence references end the run before the proposal session starts.
 The proposal session starts with a fresh conversation containing only the validated analysis, never the analysis transcript.
-Both sessions share the reported-token budget and the outer deadline; analysis consumption reduces what the proposal session may spend.
+
+When a stage's final reply fails the existing parse or validation gates, the controller starts bounded fresh repair sessions instead of failing immediately.
+A repair session receives the rejected reply text, the exact parse or validation error, and the stage schema, and must return one corrected raw JSON object without researching, editing, or accessing the network again.
+Repair output passes through the same parse and validation pipeline; no gate is relaxed and process failures, timeouts, or missing final results are never repaired.
+`AUTO_SYNC_MAX_REPAIR_ROUNDS` bounds the repair sessions per stage; default `2`, and `0` disables repairs.
+When the rounds are exhausted the run fails with the last error, exactly as an unrepairable rejection does.
+
+All stage and repair sessions share one reported-token budget and the outer deadline; earlier consumption reduces what later sessions may spend.
+A stage that exhausts either shared limit fails before starting another session.
 The validated analysis persists as `analysis.json` beside `proposal.json` in the research artifact.
 
 ## Proposal output
@@ -201,6 +209,7 @@ Reusable invocation keeps the `llm-*` names.
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_HEADERS` | Optional Secret | `llm-extra-headers`: `K=V,K=V`; values may contain credentials |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` | Optional Variable | `llm-extra-body`: JSON object without credentials |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS` | Optional Variable | `max-session-tokens`: positive cumulative reported-token budget; default `10000000` |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_REPAIR_ROUNDS` | Optional Variable | `max-repair-rounds`: non-negative repair-session bound per research stage; default `2` |
 | `CI_PRT_GENERATOR_ID` | Required Secret | Existing GitHub App ID |
 | `CI_PRT_GENERATOR_KEY` | Required Secret | Existing GitHub App private key |
 | `AUTOSYNC_RUNNER` | Optional Variable | Linux runner label; default `ubuntu-22.04-4x` |
@@ -370,7 +379,7 @@ Search the selected recipe, catalog identity and referenced patches. Avoid dumpi
 The token budget counts reported input and output, including cached input once.
 Usage arrives after requests, so an in-flight request can exceed the budget. Provider quotas are required for a strict billing limit.
 Cached tokens may have different prices; cumulative usage does not establish an invoice amount.
-Its artifact contains `diagnostics.json` with one entry per session phase: exit code, timeout flag, elapsed agent time, reported tokens, parsed events, and stderr, plus the total reported tokens.
+Its artifact contains `diagnostics.json` with one entry per session phase, including each bounded repair session: exit code, timeout flag, elapsed agent time, reported tokens, parsed events, and stderr, plus the total reported tokens.
 Model tokens, GitHub tokens, and configured secret header values are redacted before upload.
 Inspect this file to locate repeated requests and tool failures. A diagnostic event is not an accepted proposal.
 Research failure reasons use structured CLI errors when available. Stderr remains in the diagnostic artifact.
@@ -448,7 +457,7 @@ Maintainers review the proposal, merge it, and run Pack for the combinations lis
 Pack builds native platform images, records output digests, collects installed dependencies, validates manifests, and proposes catalog updates.
 It promotes support only when this invocation measures the declared engine/plugin identity across every intended platform.
 Partial coverage or missing measurements leaves support `prepared`.
-See [Packaging](packaging.md) for the production path and [Supported runners](supported-runners.md) for status rules.
+See [Packaging](packaging.md) for the production path and [Support records](support-records.md) for status rules.
 
 Offline static and CLI tests do not verify real provider access, GitHub MCP permissions, or live PR publication.
 Those remain commissioning checks. Actual amd64/arm64 final-image collection requires Pack after merge.

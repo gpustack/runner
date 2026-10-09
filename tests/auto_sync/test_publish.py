@@ -18,7 +18,7 @@ from tools.auto_sync import publish as publication
 from tools.auto_sync.checks import report_digest, validate_candidate, verify_artifact
 from tools.auto_sync.publish import BRANCH, GitHub, prepare_context, publish
 
-SUPPORT = "docs/supported-runners.md"
+SUPPORT = "docs/support-records.md"
 BOT = "runner-sync[bot]"
 REPOSITORY = "gpustack/runner"
 
