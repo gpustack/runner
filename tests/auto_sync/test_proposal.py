@@ -579,12 +579,34 @@ def test_analysis_blocked_requires_specific_unknowns(analysis):
         check_analysis(analysis)
 
 
-@pytest.mark.parametrize("missing", ["candidates", "identity", "schema_version"])
+@pytest.mark.parametrize("missing", ["candidates", "identity"])
 def test_analysis_requires_complete_fields(analysis, missing):
     frozen = copy.deepcopy(analysis["identity"])
     del analysis[missing]
     with pytest.raises(ProposalError, match="analysis fields"):
         check_analysis(analysis, identity=frozen)
+
+
+def test_analysis_missing_schema_version_defaults_to_one(analysis):
+    # The production failure: repair sessions rebuilt the truncated reply and
+    # dropped the constant field in every round.
+    del analysis["schema_version"]
+    result = check_analysis(analysis)
+    assert result["schema_version"] == 1
+    assert "schema_version" not in analysis
+
+
+def test_analysis_unknown_schema_version_is_rejected(analysis):
+    analysis["schema_version"] = 2
+    with pytest.raises(ProposalError, match="unsupported analysis schema"):
+        check_analysis(analysis)
+
+
+def test_proposal_missing_schema_version_defaults_to_one(proposal):
+    del proposal["schema_version"]
+    result = validate_proposal(proposal, proposal["identity"])
+    assert result["schema_version"] == 1
+    assert "schema_version" not in proposal
 
 
 def test_analysis_rejects_duplicate_and_missing_subscriptions(analysis):
