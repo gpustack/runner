@@ -64,7 +64,7 @@ def test_triggers_queue_and_job_boundaries():
     }
     assert set(workflow["jobs"]) == {"research", "validation", "publication"}
     for job in workflow["jobs"].values():
-        assert job["runs-on"] == "${{ vars.AUTOSYNC_RUNNER || 'ubuntu-22.04-4x' }}"
+        assert job["runs-on"] == "${{ vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}"
         assert 0 < job["timeout-minutes"] <= 60
 
 
