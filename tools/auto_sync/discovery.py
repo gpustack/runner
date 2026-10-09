@@ -283,9 +283,9 @@ def _read_sources(repo):
     # Explicit status records and historical tables live in separate documents;
     # merging keeps represented-version detection identical to the single-file era.
     support = parse_support(
-        records.read_text(),
+        records.read_text(encoding="utf-8"),
         require_explicit=True,
-    ) + parse_support(history.read_text())
+    ) + parse_support(history.read_text(encoding="utf-8"))
     return {"catalog": catalog, "support": support}
 
 
