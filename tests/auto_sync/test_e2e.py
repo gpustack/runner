@@ -2760,6 +2760,113 @@ def test_proposal_stage_prose_output_is_repaired_once(
     assert (output / "proposal.json").is_file()
 
 
+def test_proposal_patch_file_is_inlined_by_the_controller(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    draft = proposal(scenario, context)
+    patch = draft["groups"][0].pop("patch")
+    draft["groups"][0]["patch_file"] = "patches/candidate.patch"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        target = kwargs["workspace"] / draft["groups"][0]["patch_file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(patch)
+        return ProcessResult(0, agent_stream(draft), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 2
+    assert "group.patch_file" in calls[1]["prompt"]
+    saved = json.loads((output / "proposal.json").read_text())
+    assert saved["groups"][0]["patch"] == patch
+    assert "patch_file" not in saved["groups"][0]
+
+
+def test_proposal_patch_file_outside_workspace_is_repaired(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    escaped = proposal(scenario, context)
+    escaped["groups"][0].pop("patch")
+    escaped["groups"][0]["patch_file"] = "../escape.patch"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(0, agent_stream(escaped), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    assert "resolves outside the base directory" in repair_payload["validation_error"]
+    assert repair_payload["failed_reply"] == json.dumps(escaped)
+    assert (output / "proposal.json").is_file()
+
+
 def broken_patch(scenario, context):
     raw = proposal(scenario, context)
     group = raw["groups"][0]
