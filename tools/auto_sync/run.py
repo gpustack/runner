@@ -852,7 +852,8 @@ def _research(args, scratch):
         "Batch independent file reads and registry queries. Complete one independent compatibility group before "
         "expanding research to others. Record unresolved candidates as blocked with the specific missing fact. "
         "Return completed groups even when other candidates remain blocked. "
-        "The separate trusted validation job runs validate_candidate and the repository-wide tests; do not run those here.\n"
+        "The separate trusted validation job runs validate_candidate; repository CI runs the test suite. "
+        "Do not run candidate validation or repository-wide tests here.\n"
         + json.dumps(
             {
                 "context": context,

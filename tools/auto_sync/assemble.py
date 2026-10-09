@@ -1,8 +1,9 @@
 """
 Assemble a proposal from a JSON draft whose groups reference patch files.
 
-A group may use "patch_file" instead of "patch". The file is read as UTF-8 data,
-relative paths resolve against the draft directory, and nothing else changes.
+A group may use "patch_file" instead of "patch". Files are UTF-8 data.
+Relative paths resolve against the draft directory.
+Resolved targets must stay inside it, including through symlinks.
 Semantic validation stays with the trusted controller.
 """
 
@@ -30,7 +31,17 @@ def assemble(draft, base: Path):
         name = group["patch_file"]
         require(isinstance(name, str) and name, "patch_file must be a string")
         try:
-            group["patch"] = (base / name).read_bytes().decode("utf-8")
+            target = (base / name).resolve()
+            base_resolved = base.resolve()
+        except (OSError, RuntimeError) as exc:
+            msg = f"cannot resolve patch_file {name}: {exc}"
+            raise ProposalError(msg) from exc
+        require(
+            target.is_relative_to(base_resolved),
+            f"patch_file {name} resolves outside the draft directory",
+        )
+        try:
+            group["patch"] = target.read_bytes().decode("utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             msg = f"cannot read patch_file {name}: {exc}"
             raise ProposalError(msg) from exc
