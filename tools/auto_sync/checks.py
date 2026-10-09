@@ -34,6 +34,13 @@ from tools.auto_sync.proposal import (
     validate_proposal,
 )
 
+# A package choice is keyed by its canonical name, but the installed
+# distribution can carry a backend-qualified name for the same recipe pin.
+_PACKAGE_ALIASES = {
+    "mooncake-transfer-engine": "mooncake",
+    "mooncake-transfer-engine-rocm": "mooncake",
+}
+
 
 def _run(argv, env, *, cwd=None, text=None):
     try:
@@ -357,7 +364,11 @@ def _check_rows(repo, rules, rows, baseline, ascend_pairs):
                         name in args and version(args[name]) == version(row[field]),
                         f"compatibility {field} differs from the effective recipe",
                     )
-            packages = {p["name"].lower(): p for p in row["packages"]}
+            packages = {}
+            for p in row["packages"]:
+                key = _PACKAGE_ALIASES.get(p["name"].lower(), p["name"].lower())
+                require(key not in packages, "duplicate additional packages")
+                packages[key] = p
             if any(
                 Path(patch["path"]).parts[3] == "vllm_omni"
                 and patch["disposition"] != "remove"

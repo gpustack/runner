@@ -148,6 +148,70 @@ def test_new_support_record_rejects_a_full_runtime_patch_version(candidate):
     assert "runtime line" in result["groups"][0]["validation"]["error"]
 
 
+def mooncake(candidate, entries):
+    """Pin mooncake in the fixture recipe and declare the given package choices."""
+    repo, proposal = candidate
+    dockerfile = repo / "pack/cuda/Dockerfile.vllm"
+    dockerfile.write_text(
+        dockerfile.read_text().replace(
+            "FROM ${VLLM_BASE_IMAGE} AS vllm\n",
+            "ARG VLLM_MOONCAKE_VERSION=0.3.13.post1\nFROM ${VLLM_BASE_IMAGE} AS vllm\n",
+        ),
+    )
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "mooncake pin")
+    sha = git(repo, "rev-parse", "HEAD")
+    proposal["identity"].update(default_sha=sha, head_sha=sha)
+    for name, choice_version in entries:
+        proposal["groups"][0]["rows"][0]["packages"].append(
+            {
+                "name": name,
+                "version": choice_version,
+                "decision": "retain",
+                "reason": "Keep the mooncake pin.",
+                "sources": ["https://github.com/mooncake-project/mooncake"],
+            },
+        )
+    return candidate
+
+
+def test_additional_package_distribution_name_matches_the_canonical_pin(candidate):
+    # The production failure: the ROCm recipe pins mooncake through the
+    # mooncake-transfer-engine-rocm distribution, which the model declared
+    # instead of the canonical mooncake choice key.
+    checked = validate(
+        mooncake(candidate, [("mooncake-transfer-engine-rocm", "0.3.13.post1")]),
+    )
+    assert checked["groups"][0]["status"] == "ready"
+
+
+def test_additional_package_distribution_name_requires_the_exact_pin(candidate):
+    result = validate(
+        mooncake(candidate, [("mooncake-transfer-engine-rocm", "0.3.12")]),
+    )
+    assert result["groups"][0]["status"] == "failed"
+    assert (
+        "differs from the effective recipe pin"
+        in (result["groups"][0]["validation"]["error"])
+    )
+
+
+def test_additional_package_alias_collision_is_rejected(candidate):
+    result = validate(
+        mooncake(
+            candidate,
+            [
+                ("mooncake", "0.3.13.post1"),
+                ("mooncake-transfer-engine-rocm", "0.3.13.post1"),
+            ],
+        ),
+    )
+    assert result["groups"][0]["status"] == "failed"
+    assert (
+        "duplicate additional packages" in (result["groups"][0]["validation"]["error"])
+    )
+
+
 @pytest.mark.parametrize(
     "path",
     [
