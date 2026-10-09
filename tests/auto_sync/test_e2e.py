@@ -2536,11 +2536,11 @@ def test_analysis_evidence_key_mismatch_is_repaired_with_supplied_keys(
     monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
     monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
     monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
-    spaced = analysis(scenario, context)
-    target = next(c for c in spaced["candidates"] if c["status"] == "analyzed")
-    # The production failure: a spaced key instead of the supplied exact key.
+    mismatched = analysis(scenario, context)
+    target = next(c for c in mismatched["candidates"] if c["status"] == "analyzed")
+    # A mismatch beyond whitespace stays rejected; only a repair can fix it.
     target["evidence"] = [
-        "vllm-project/vllm @0.30.0" if e == "vllm-project/vllm@0.30.0" else e
+        "vllm-project/vllm@v0.30.0" if e == "vllm-project/vllm@0.30.0" else e
         for e in target["evidence"]
     ]
     calls = []
@@ -2548,7 +2548,7 @@ def test_analysis_evidence_key_mismatch_is_repaired_with_supplied_keys(
     def phase(_config, **kwargs):
         calls.append(kwargs)
         if len(calls) == 1:
-            return ProcessResult(0, agent_stream(spaced), "", False, 10)
+            return ProcessResult(0, agent_stream(mismatched), "", False, 10)
         if len(calls) == 2:
             return ProcessResult(
                 0,
@@ -2594,6 +2594,59 @@ def test_analysis_evidence_key_mismatch_is_repaired_with_supplied_keys(
         "analysis-repair-1",
         "proposal",
     ]
+    assert (output / "proposal.json").is_file()
+
+
+def test_analysis_evidence_key_whitespace_is_normalized_without_repair(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    # The production failure: the model writes a space into the supplied key
+    # in every session, so repair rounds could never correct it.
+    spaced = analysis(scenario, context)
+    target = next(c for c in spaced["candidates"] if c["status"] == "analyzed")
+    target["evidence"] = [
+        "vllm-project/vllm @0.30.0" if e == "vllm-project/vllm@0.30.0" else e
+        for e in target["evidence"]
+    ]
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(0, agent_stream(spaced), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 2
+    saved = json.loads((output / "analysis.json").read_text())
+    analyzed = next(c for c in saved["candidates"] if c["status"] == "analyzed")
+    assert "vllm-project/vllm@0.30.0" in analyzed["evidence"]
     assert (output / "proposal.json").is_file()
 
 

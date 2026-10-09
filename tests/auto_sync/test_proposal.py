@@ -505,6 +505,23 @@ def test_analysis_evidence_rejection_names_the_offending_entry(analysis):
     assert entry[:120] + "..." in str(captured.value)
 
 
+def test_analysis_evidence_key_whitespace_is_normalized(analysis):
+    # The production failure: the model keeps writing a space into the
+    # supplied name@version key, which no repair round ever corrected.
+    analysis["candidates"][0]["evidence"] = [
+        "vllm-project/vllm @0.30.0",
+        "pack/cuda/Dockerfile.vllm",
+    ]
+    result = check_analysis(analysis)
+    assert result["candidates"][0]["evidence"][0] == "vllm-project/vllm@0.30.0"
+
+
+def test_analysis_evidence_key_beyond_whitespace_is_rejected(analysis):
+    analysis["candidates"][0]["evidence"] = ["vllm-project/vllm@v0.30.0"]
+    with pytest.raises(ProposalError, match="outside the supplied sources"):
+        check_analysis(analysis)
+
+
 @pytest.mark.parametrize(
     "entry",
     [
