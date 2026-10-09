@@ -1186,7 +1186,7 @@ def _research(args, scratch):
                     schema,
                     reply,
                     last,
-                    evidence_keys=evidence if phase == "analysis" else (),
+                    evidence_keys=list(evidence) if phase == "analysis" else (),
                 ),
                 budget=max_session_tokens - reported_total,
                 deadline=deadline,
