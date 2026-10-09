@@ -14,7 +14,7 @@ No personal skills, cached sessions, or off-repository instruction files are req
 Weekly discovery runs on Sunday at 13:07 UTC, or 21:07 in Asia/Shanghai.
 Maintainers can also start discovery manually.
 Scheduled and manual discovery use one frozen default-branch revision for controller code, instructions, and validators.
-A failed scheduled or manual run re-dispatches itself once with the standard configuration; the retried run never retries again.
+A failed scheduled or manual run re-dispatches itself once on the same ref with the standard configuration; the retried run never retries again.
 
 There are six subscriptions:
 

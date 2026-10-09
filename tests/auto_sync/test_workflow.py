@@ -239,6 +239,7 @@ def test_failed_run_redispatches_exactly_once():
     dispatch = retry["steps"][-1]
     assert dispatch["env"]["GH_TOKEN"] == "${{ github.token }}"  # noqa: S105 - workflow expression fixture.
     assert "gh workflow run auto-sync.yml" in dispatch["run"]
+    assert '--ref "${{ github.ref_name }}"' in dispatch["run"]
     assert "-f attempt=2" in dispatch["run"]
 
 

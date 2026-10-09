@@ -391,11 +391,12 @@ jobs:
       actions: write
     steps:
       # A fresh run re-freezes the default branch and re-acquires upstream
-      # state; the retry uses the standard configuration, not dispatch inputs.
+      # state; the retry re-dispatches on the same ref with the standard
+      # configuration, not dispatch inputs.
       - name: Re-dispatch one retry run
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           gh workflow run auto-sync.yml
-          --ref "${{ github.event.repository.default_branch }}"
+          --ref "${{ github.ref_name }}"
           -f attempt=2
