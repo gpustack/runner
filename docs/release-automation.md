@@ -107,6 +107,7 @@ When a stage's final reply fails the existing parse or validation gates, the con
 A repair session receives the rejected reply text, the exact parse or validation error, and the stage schema, and must return one corrected raw JSON object without researching, editing, or accessing the network again.
 An analysis-stage repair also receives the supplied evidence keys, so a rejected evidence reference can be mapped to the exact supplied key.
 A proposal-stage repair reuses the stage workspace after startup configuration paths (`.qwen`, `.env`, `.mcp.json`, `.claude/settings.json`) are stripped, so patch files must live outside them; the corrected reply keeps its `patch_file` references rather than inlining patches.
+When the error rejects a group's patch, that repair session may rewrite the referenced patch files in the reused workspace and edits no other file.
 Repair output passes through the same parse and validation pipeline; no gate is relaxed and process failures, timeouts, or missing final results are never repaired.
 `AUTO_SYNC_MAX_REPAIR_ROUNDS` bounds the repair sessions per stage; default `2`, and `0` disables repairs.
 When the rounds are exhausted the run fails with the last error, exactly as an unrepairable rejection does.
@@ -136,7 +137,7 @@ Its subscription is one of `cuda/vllm`, `cuda/sglang`, `rocm/vllm`, `rocm/sglang
 
 Each group has `id`, `status`, `reason`, `depends_on`, `report`, `patch`, and `rows`.
 Group IDs contain letters, digits, underscores, and hyphens, such as `cuda-vllm`.
-Use an empty dependency list when independent. A ready group requires a nonempty allowed-path patch and complete compatibility rows.
+Use an empty dependency list when independent. Groups whose patches touch the same file are not independent: declare `depends_on` for the later group and generate its patch against the tree with the dependency's patch already applied. A ready group requires a nonempty allowed-path patch and complete compatibility rows.
 An unchanged group carries no patch. Groups must not contain cyclic or unknown dependencies.
 
 Each row has these fields:

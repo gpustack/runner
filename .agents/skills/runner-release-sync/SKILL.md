@@ -93,7 +93,7 @@ Research completion is not compatibility confirmation.
 ## Proposal output
 
 The proposal session starts fresh from the validated analysis and prepares the version-bump edits.
-If its final reply is rejected, a bounded repair session receives the rejected reply and the exact error and must return the corrected raw JSON object.
+If its final reply is rejected, a bounded repair session receives the rejected reply and the exact error and must return the corrected raw JSON object. When the error rejects a group's patch, the repair session may rewrite the patch files referenced by `patch_file` entries in the reused workspace and must keep those references; it edits no other file.
 Follow the [proposal output contract](../../../docs/release-automation.md#proposal-output).
 Return raw JSON only, without Markdown or code fences.
 Return JSON with the supplied frozen identity and an assessment for every subscription.
@@ -104,6 +104,7 @@ Cite only bare https URLs in every `sources` list (row, manifest, package, and p
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
 Write each group's patch to a UTF-8 file inside a `patches/` directory at the session workspace root and set the group's `patch_file` to its workspace-relative path.
+Groups whose patches touch the same file are not independent: declare `depends_on` for the later group and generate its patch against the tree with the dependency's patch already applied.
 Startup configuration paths (`.qwen`, `.env`, `.mcp.json`, `.claude/settings.json`) are stripped before every repair session; never store patch files in them.
 Return the draft JSON as the final result; the controller inlines patch files before validation. Do not create commits or rebases to split group patches.
 Exit success alone does not establish a valid proposal. Missing or malformed output is a failure.
