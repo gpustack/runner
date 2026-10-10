@@ -38,6 +38,10 @@ Keep the actual plugin version explicit, including its prerelease suffix.
 Historical `(rc)` text has unknown plugin identity; do not derive a plugin suffix from it.
 Other engine prereleases require an explicit maintainer request.
 
+The reviewed `pack/prereleases.yaml` names the additional package keys that may select a prerelease version when no stable release satisfies compatibility.
+The controller freezes the list from the frozen default branch; a proposal cannot grant itself prerelease permission, and an unknown key fails preparation.
+Engines remain stable-only in discovery mode regardless of the whitelist.
+
 Read `gpustack_runner/runner.py.json`, [Support records](support-records.md), and [Supported runners](supported-runners.md) from the frozen default branch.
 An exact identity in any source prevents another discovery proposal.
 A merged `prepared` record counts while Pack is pending; an unmerged proposal does not.
@@ -87,10 +91,18 @@ The newest additional package is not necessarily compatible.
 Preserve existing cross-image LMCache protocol constraints and group dependent changes together.
 Independent ready groups can proceed while blocked groups remain unchanged.
 
+Every `ARG *_VERSION` and `*_COMMIT` pin in a selected recipe is proposal-owned.
+Update any of them, including LMCache and vllm-omni pins, when compatibility evidence requires it.
+
 Every affected patch needs one disposition: retain, adapt, remove, or add.
 Record its reason, applicable versions and platforms, and upstream issue or commit evidence.
+Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied sources.
+Removal is an explicit file deletion in the group patch, with the reason in the group report. Never block a group on patch state alone.
 Apply each component's patch sequence against the exact selected source revision when available.
 If source is unavailable, mark application checks unverified. Successful application does not prove runtime behavior.
+
+Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected release no longer supports, citing the upstream scoping, and add a variant back when support returns.
+Before changing an existing pin, patch, variant, or support row, read [Support records](support-records.md) and the file's git history; cite the introducing commit when a disposition overrides an earlier decision.
 
 Keep proposed support rows `prepared`, with explicit engine, plugin, runtime, variant, and intended platforms.
 Do not populate the generated catalog with guessed package versions.

@@ -336,6 +336,26 @@ def test_forged_output_permission_and_cann_prerelease_are_rejected(proposal):
         )
 
 
+def test_prerelease_additional_package_requires_the_whitelist(proposal):
+    raw = copy.deepcopy(proposal)
+    raw["groups"][0]["rows"][0]["packages"] = [
+        {
+            "name": "lmcache",
+            "version": "0.5.6rc3",
+            "decision": "update",
+            "reason": "The selected SGLang requires the unified MP connector.",
+            "sources": ["https://github.com/LMCache/LMCache/releases/tag/v0.5.6rc3"],
+        },
+    ]
+    with pytest.raises(ProposalError, match="stable"):
+        validate_proposal(raw, raw["identity"])
+    with pytest.raises(ProposalError, match="stable"):
+        validate_proposal(raw, raw["identity"], prerelease_packages={"mooncake"})
+    accepted = validate_proposal(raw, raw["identity"], prerelease_packages={"lmcache"})
+    row = accepted["groups"][0]["rows"][0]
+    assert row["packages"][0]["version"] == "0.5.6rc3"
+
+
 ANALYSIS_FIXTURE = Path(__file__).parent / "fixtures/proposals/analysis.json"
 ANALYSIS_FOUND = [
     {

@@ -13,6 +13,7 @@ import json
 import re
 from pathlib import Path
 
+import yaml
 from packaging.version import InvalidVersion, Version
 
 SUBSCRIPTIONS = (
@@ -58,6 +59,16 @@ COLUMNS = [
     "Platforms",
     "Status",
 ]
+PRERELEASE_KEYS = frozenset(
+    {
+        "lmcache",
+        "mooncake",
+        "lmcache-ascend",
+        "vllm-omni",
+        "diffusers",
+        "vllm-ascend",
+    },
+)
 
 
 class DiscoveryError(ValueError):
@@ -287,6 +298,41 @@ def _read_sources(repo):
         require_explicit=True,
     ) + parse_support(history.read_text(encoding="utf-8"))
     return {"catalog": catalog, "support": support}
+
+
+def prerelease_packages(repo: Path) -> list[str]:
+    """
+    Reviewed package keys allowed to select a prerelease version.
+
+    The controller reads the whitelist from the frozen default checkout, so a
+    candidate cannot grant itself prerelease permission. An absent file keeps
+    the stable-only policy.
+    """
+    path = Path(repo) / "pack" / "prereleases.yaml"
+    if not path.resolve().is_relative_to(Path(repo).resolve()):
+        msg = "prerelease whitelist escapes the frozen checkout"
+        raise DiscoveryError(msg)
+    if not path.is_file():
+        return []
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        msg = f"malformed prerelease whitelist: {exc}"
+        raise DiscoveryError(msg) from exc
+    if data is None:
+        return []
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"packages"}
+        or not isinstance(data["packages"], list)
+        or not all(isinstance(key, str) for key in data["packages"])
+    ):
+        msg = "malformed prerelease whitelist"
+        raise DiscoveryError(msg)
+    if any(key not in PRERELEASE_KEYS for key in data["packages"]):
+        msg = "prerelease whitelist names an unknown package key"
+        raise DiscoveryError(msg)
+    return sorted(set(data["packages"]))
 
 
 def _releases(rows, *, plugin=False):

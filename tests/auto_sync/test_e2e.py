@@ -876,6 +876,138 @@ def test_ready_rows_cannot_target_an_already_represented_variant(scenario, tmp_p
     assert "variant" in checked["groups"][0]["reason"]
 
 
+def test_prerelease_whitelist_reaches_the_research_prompt(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    path = scenario[0] / "pack" / "prereleases.yaml"
+    path.write_text("packages: [lmcache, vllm-omni]\n")
+    scenario = (scenario[0], commit(scenario[0]), *scenario[2:])
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    # The whitelist is frozen from the default checkout, never the candidate.
+    assert context["prerelease_packages"] == ["lmcache", "vllm-omni"]
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, final_text("not json"), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            tmp_path / "research",
+        )
+        == 1
+    )
+    prompt = calls[0]["prompt"]
+    assert "whitelisted keys in prerelease_packages" in prompt
+    payload = json.loads(prompt.split("\n", 1)[1])
+    assert payload["prerelease_packages"] == ["lmcache", "vllm-omni"]
+
+
+def test_component_source_trees_reach_the_research_prompt(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    scenario[2].releases["LMCache/LMCache"] = []
+    scenario[2].releases["vllm-project/vllm-omni"] = []
+    dockerfile = scenario[0] / "pack/cuda/Dockerfile.vllm"
+    dockerfile.write_text(
+        dockerfile.read_text().replace(
+            "FROM ${VLLM_BASE_IMAGE} AS vllm",
+            "ARG VLLM_OMNI_COMMIT=\nFROM ${VLLM_BASE_IMAGE} AS vllm",
+        ),
+    )
+    scenario = (scenario[0], commit(scenario[0]), *scenario[2:])
+    prepared = prepare(scenario, tmp_path)
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, final_text("not json"), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            tmp_path / "research",
+        )
+        == 1
+    )
+    payload = json.loads(calls[0]["prompt"].split("\n", 1)[1])
+    supplied = payload["upstream_sources"]["LMCache/LMCache@0.5.4"]
+    assert supplied["repository"] == "LMCache/LMCache"
+    assert supplied["source"].startswith(
+        "https://github.com/LMCache/LMCache/tree/",
+    )
+    # An empty recipe pin cannot resolve a tree; it is recorded, not fatal.
+    assert payload["source_errors"]["vllm-project/vllm-omni@"] == (
+        "recipe pin is empty"
+    )
+
+
+def test_policy_sentences_reach_stage_prompts(scenario, tmp_path, monkeypatch):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                final_text(json.dumps(analysis(scenario, context))),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(0, final_text("not json"), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            tmp_path / "research",
+        )
+        == 1
+    )
+    analysis_prompt = calls[0]["prompt"]
+    assert "Never block a group on patch state alone" in analysis_prompt
+    assert "cite the introducing commit" in analysis_prompt
+    proposal_prompt = calls[1]["prompt"]
+    assert "proposal-owned" in proposal_prompt
+    assert "Rotate variants with evidence" in proposal_prompt
+    assert "whitelisted keys in prerelease_packages" in proposal_prompt
+
+
 @pytest.mark.parametrize(
     "architecture,descriptor_variant,config_variant,expected,valid",
     [

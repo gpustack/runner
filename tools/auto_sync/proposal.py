@@ -386,7 +386,7 @@ def _patch_decision(patch, row):
     )
 
 
-def _row(row, ready, engine_prereleases):
+def _row(row, ready, engine_prereleases, prerelease_packages):
     fields = {
         "backend",
         "service",
@@ -495,7 +495,12 @@ def _row(row, ready, engine_prereleases):
                 package["version"],
                 r"[0-9a-f]{7,40}",
             ):
-                version(package["version"])
+                selected = version(package["version"])
+                require(
+                    not selected.is_prerelease
+                    or package["name"].lower() in prerelease_packages,
+                    "additional package must use the stable release policy",
+                )
         else:
             require(
                 package["decision"] == "disable" or not ready,
@@ -704,6 +709,7 @@ def validate_proposal(
     expected_identity: dict,
     *,
     engine_prereleases: set | None = None,
+    prerelease_packages: set | None = None,
 ) -> dict:
     """Return a normalized copy or fail closed before any candidate file is read."""
     try:
@@ -746,6 +752,17 @@ def validate_proposal(
                 and str(parsed) == item[2],
                 "invalid exact engine prerelease permission",
             )
+        package_permission = (
+            prerelease_packages if prerelease_packages is not None else set()
+        )
+        require(
+            isinstance(package_permission, set)
+            and all(
+                isinstance(key, str) and key == key.lower() and key
+                for key in package_permission
+            ),
+            "invalid package prerelease permission",
+        )
         data = copy.deepcopy(data)
         require(isinstance(data["groups"], list), "invalid compatibility groups")
         groups = {}
@@ -772,7 +789,7 @@ def validate_proposal(
             )
             ready = group["status"] == "ready"
             for row in group["rows"]:
-                _row(row, ready, permission)
+                _row(row, ready, permission, package_permission)
                 manifest = row["manifest"]
                 if manifest is not None:
                     image = row["base_image"]

@@ -1,0 +1,9 @@
+# Canonical package keys allowed to select a prerelease version when no
+# stable release satisfies compatibility. Auto-sync reads this list from the
+# frozen default checkout, so a proposal cannot grant itself permission.
+# Valid keys: lmcache, mooncake, lmcache-ascend, vllm-omni, diffusers,
+# vllm-ascend (the CANN plugin).
+packages:
+  - lmcache
+  - vllm-ascend
+  - vllm-omni
