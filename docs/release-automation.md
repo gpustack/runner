@@ -269,6 +269,8 @@ They cannot replace the selected model, credentials, messages, or tool control.
 An explicit extra-body `enable_thinking` replaces convenience thinking and receives no conflicting implicit thinking default.
 If extra-body explicitly supplies both `enable_thinking` and `thinking`, contradictory states are rejected.
 Matching explicit states are preserved.
+A stage reply that ends mid-structure was cut off at the provider's single-message output ceiling.
+Raise the ceiling with `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` (for example `{"max_tokens": 32768}` on the openai protocol) when the provider honors a larger value.
 Context-window and modality overrides belong to the selected Qwen provider's `generationConfig`, not HTTP `extra_body`.
 `llm-modalities` accepts boolean overrides for `image`, `pdf`, `audio`, and `video`.
 Pinned Qwen replaces overrides for the MiniMax-M3 family. Explicit overrides for those models are rejected before launch.

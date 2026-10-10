@@ -104,6 +104,7 @@ The proposal session starts fresh from the validated analysis and prepares the v
 If its final reply is rejected, a bounded repair session receives the rejected reply and the exact error and must return the corrected raw JSON object. When the error rejects a group's patch, the repair session may rewrite the patch files referenced by `patch_file` entries in the reused workspace and must keep those references; it edits no other file.
 Follow the [proposal output contract](../../../docs/release-automation.md#proposal-output).
 Return raw JSON only, without Markdown or code fences.
+The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected. Keep every reason and report concise so the complete object fits.
 Return JSON with the supplied frozen identity and an assessment for every subscription.
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
 A candidate's status is the strongest status among its referenced groups (`ready` over `failed` over `blocked` over `unchanged`); a candidate without groups is never `ready`.

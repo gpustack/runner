@@ -35,6 +35,7 @@ from tools.auto_sync.run import (
     _permissions,
     _redact,
     _registry,
+    _repair_prompt,
     _source,
     _strip_untrusted_config,
 )
@@ -1012,6 +1013,7 @@ def test_policy_sentences_reach_stage_prompts(scenario, tmp_path, monkeypatch):
     assert "source decision whose version is the pinned hex revision" in proposal_prompt
     assert "strongest group status" in proposal_prompt
     assert "Patch disposition versions are bare releases" in proposal_prompt
+    assert "one model message with a hard output ceiling" in proposal_prompt
 
 
 def pack_run_fixture(scenario):
@@ -3154,6 +3156,39 @@ def test_proposal_stage_prose_output_is_repaired_once(
     result = json.loads((output / "result.json").read_text())
     assert result["usage"] == {"analysis": 10, "proposal": 20, "reported": 30}
     assert (output / "proposal.json").is_file()
+
+
+def test_repair_prompt_guides_a_truncated_reply():
+    reply = '{"schema_version": 1, "candidates": [{"subscription": "cu'
+    error = (
+        "invalid JSON: Expecting ',' delimiter: line 1 column "
+        f"{len(reply) + 1} (char {len(reply)})"
+    )
+    prompt = _repair_prompt("proposal", {}, reply, error)
+    assert "cut off mid-structure at the model output ceiling" in prompt
+    assert "drop every other character" not in prompt
+
+
+def test_repair_prompt_guides_prose_around_a_reply():
+    reply = 'Leading prose.\n{"schema_version": 1}'
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        reply,
+        "invalid JSON: Expecting value: line 1 column 1 (char 0)",
+    )
+    assert "drop every other character" in prompt
+    assert "cut off mid-structure" not in prompt
+
+
+def test_repair_prompt_treats_an_empty_reply_as_prose():
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        "",
+        "invalid JSON: Expecting value: line 1 column 1 (char 0)",
+    )
+    assert "cut off mid-structure" not in prompt
 
 
 def test_proposal_patch_file_is_inlined_by_the_controller(
