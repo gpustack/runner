@@ -17,6 +17,7 @@ from pathlib import Path
 from urllib.parse import quote, urlsplit
 
 import requests
+import yaml
 
 from tools.auto_sync import agent, assemble, checks, discovery, model, proposal, publish
 from tools.auto_sync.agent import _print_progress
@@ -241,6 +242,17 @@ def _permissions(context: dict) -> set:
     return result if len(counts) == len(result) else set()
 
 
+def _package_prereleases(context: dict) -> set:
+    """Frozen prerelease whitelist from the default checkout; never candidate input."""
+    packages = context.get("prerelease_packages", [])
+    proposal.require(
+        isinstance(packages, list)
+        and all(key in discovery.PRERELEASE_KEYS for key in packages),
+        "invalid frozen prerelease packages",
+    )
+    return set(packages)
+
+
 def _source(
     api: PublicUpstream,
     name: str,
@@ -335,6 +347,70 @@ def _selected_sources(api, releases, found, root, env, permissions=()):
         except (ValueError, OSError, KeyError, TypeError) as exc:
             errors[f"{name}@{selected}"] = str(exc)
     return sources, evidence, errors
+
+
+COMPONENT_SOURCES = {
+    "OMNI_COMMIT": ("vllm-project/vllm-omni", "{}"),
+    "LMCACHE_VERSION": ("LMCache/LMCache", "v{}"),
+}
+
+
+def _recipe_pins(env, repo, sha, backend, service):
+    """Effective pins of one recipe from the trusted store at the frozen default."""
+    try:
+        text = _git(env, repo, "show", f"{sha}:pack/{backend}/Dockerfile.{service}")
+    except proposal.ProposalError:
+        return {}
+    try:
+        matrix = yaml.safe_load(_git(env, repo, "show", f"{sha}:pack/matrix.yaml"))
+    except proposal.ProposalError:
+        matrix = None
+    overrides = [
+        argument
+        for rule in (matrix or {}).get("rules", [])
+        if isinstance(rule, dict)
+        and rule.get("backend") == backend
+        and service in rule.get("services", [])
+        for argument in rule.get("args", [])
+    ]
+    try:
+        return checks.recipe_arguments(text, overrides)
+    except proposal.ProposalError:
+        return {}
+
+
+def _component_sources(api, repo, sha, found, root, env):
+    """
+    Exact source trees for the component pins (vllm-omni, LMCache) of recipes.
+
+    Research verifies component patches against these trees. An unresolvable pin
+    is recorded instead of failing the run, exactly like engine source errors.
+    """
+    evidence, errors = {}, {}
+    for candidate in found:
+        backend, service = candidate["backend"], candidate["service"]
+        args = _recipe_pins(env, repo, sha, backend, service)
+        for suffix, (name, template) in COMPONENT_SOURCES.items():
+            pin = args.get(f"{service.upper()}_{suffix}")
+            if pin is None:
+                continue
+            key = f"{name}@{pin}"
+            if key in evidence or key in errors:
+                continue
+            if not pin:
+                errors[key] = "recipe pin is empty"
+                continue
+            try:
+                tree, resolved = _source(api, name, template.format(pin), root, env)
+                evidence[key] = {
+                    "repository": name,
+                    "revision": resolved,
+                    "path": str(tree),
+                    "source": f"https://github.com/{name}/tree/{resolved}",
+                }
+            except (ValueError, OSError, KeyError, TypeError) as exc:
+                errors[key] = str(exc)
+    return evidence, errors
 
 
 def _registry(row: dict, env: dict) -> dict:
@@ -472,6 +548,7 @@ def _acquire_candidate(
             raw,
             context["identity"],
             engine_prereleases=permissions,
+            prerelease_packages=_package_prereleases(context),
         ),
         context,
     )
@@ -707,6 +784,8 @@ def _prepare(args, scratch):
     found = discovery.discover(frozen, releases, pairs)
     _write(args.output / "discovery.json", found)
     context["discovery"] = found
+    # The whitelist is read from the frozen default checkout, never the candidate.
+    context["prerelease_packages"] = discovery.prerelease_packages(frozen)
     _write(args.output / "context.json", context)
     candidates = _candidates(found)
     if context["status"] == "deferred":
@@ -974,6 +1053,7 @@ def _research(args, scratch):
     env = _env(scratch / "home")
     identity = context["identity"]
     permissions = _permissions(context)
+    packages = _package_prereleases(context)
     releases, upstream_errors = _releases(PublicUpstream())
     _, evidence, source_errors = _selected_sources(
         PublicUpstream(),
@@ -983,6 +1063,16 @@ def _research(args, scratch):
         env,
         permissions,
     )
+    component_evidence, component_errors = _component_sources(
+        PublicUpstream(),
+        args.repo,
+        identity["default_sha"],
+        found,
+        scratch / "upstreams",
+        env,
+    )
+    evidence.update(component_evidence)
+    source_errors.update(component_errors)
     shared = {
         "context": context,
         "discovery": found,
@@ -990,6 +1080,7 @@ def _research(args, scratch):
         "upstream_errors": upstream_errors,
         "source_errors": source_errors,
         "authorized_prereleases": sorted(permissions),
+        "prerelease_packages": sorted(packages),
     }
     analysis_schema = {
         "schema_version": 1,
@@ -1028,6 +1119,8 @@ def _research(args, scratch):
         "referenced requirements/installers/patches, and inspect registries with crane. "
         "The discovered selection is the next release line above the catalog, not necessarily the newest "
         "upstream release; research that selection only, never a newer line. "
+        "Additional packages use stable releases only; the whitelisted keys in prerelease_packages "
+        "may use a prerelease when no stable release satisfies compatibility. "
         "Do not edit files, execute source scripts, run Pack, service builds, candidate validation or repository-wide tests, or write to GitHub. "
         "Read relevant ranges of release_notes_path for the current compatibility group. "
         "Complete release records and assets remain available at release_metadata_path. "
@@ -1037,6 +1130,12 @@ def _research(args, scratch):
         "expanding research to others. "
         "Research completion is not compatibility confirmation: report analyzed, blocked or unchanged only. "
         "Review every affected patch against the exact selected source revision and record the outcome in patches. "
+        "Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the "
+        "issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied sources, "
+        "and record the reason. Never block a group on patch state alone. "
+        "Before changing an existing pin, patch, variant or support row, read docs/support-records.md and run "
+        "git log and git show on the files to change; cite the introducing commit when a disposition overrides "
+        "an earlier decision. "
         "Cite only supplied evidence keys, supplied paths, repository-relative paths or bare https URLs in evidence; "
         "an entry is one exact reference, so record image tags and digests in findings, never appended to a URL. "
         "Record unresolved candidates as blocked with the specific missing fact in reason and unknowns. "
@@ -1219,6 +1318,7 @@ def _research(args, scratch):
                 assemble.assemble(data, proposal_workspace),
                 identity,
                 engine_prereleases=permissions,
+                prerelease_packages=packages,
             ),
             context,
         )
@@ -1265,11 +1365,23 @@ def _research(args, scratch):
             "Name each additional package choice by its canonical key (lmcache, mooncake, lmcache-ascend, vllm-omni, "
             "diffusers) behind the recipe's <SERVICE>_<KEY> pin, never the installed distribution name such as "
             "mooncake-transfer-engine-rocm. "
+            "Additional packages use stable releases only; the whitelisted keys in prerelease_packages "
+            "may use a prerelease when no stable release satisfies compatibility. "
             "Cite only bare https URLs in every sources list (row, manifest, package and patch); never a local path "
             "or a repository-relative path. "
             "Read the exact upstream trees, Dockerfiles and referenced requirements/installers/patches. "
             "The discovered selection is the next release line above the catalog, not necessarily the newest "
             "upstream release; propose that selection only, never a newer line. "
+            "Every ARG *_VERSION and *_COMMIT pin in a selected recipe is proposal-owned: change any of them, "
+            "including LMCache and vllm-omni pins, when compatibility evidence requires it. "
+            "Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the "
+            "issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied "
+            "sources, and record the reason. Never block a group on patch state alone. "
+            "Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected "
+            "release no longer supports, citing the upstream scoping, and add a variant back when support returns. "
+            "Before changing an existing pin, patch, variant or support row, read docs/support-records.md and run "
+            "git log and git show on the files to change; cite the introducing commit when a disposition overrides "
+            "an earlier decision. "
             "Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane. "
             "For unavailable source or conflicting/ambiguous feedback, preserve blocked/failed assessments and finish. "
             "The patch is relative to the current workspace head; write each group's patch to a UTF-8 file inside a "
@@ -1373,6 +1485,7 @@ def _validate(args, scratch):
         sources=sources,
         ascend_pairs=pairs,
         engine_prereleases=_permissions(context),
+        prerelease_packages=_package_prereleases(context),
     )
     _write(args.output / "artifact.json", checked)
     candidates = checked["candidates"]
@@ -1408,6 +1521,7 @@ def _publish(args, scratch):
         artifact,
         context["identity"],
         engine_prereleases=_permissions(context),
+        prerelease_packages=_package_prereleases(context),
     )
     data, sources, pairs = _acquire_candidate(raw, context, scratch)
     proposal.require(
@@ -1422,6 +1536,7 @@ def _publish(args, scratch):
         sources=sources,
         ascend_pairs=pairs,
         engine_prereleases=_permissions(context),
+        prerelease_packages=_package_prereleases(context),
     )
     fields = {
         k: result[k] for k in ("pr_number", "commit_sha", "revalidation") if k in result

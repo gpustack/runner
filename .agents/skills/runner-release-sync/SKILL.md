@@ -52,15 +52,22 @@ Manifest availability is artifact evidence; it does not prove package or GPU com
 
 Evaluate Python, Torch, runtime, accelerator family, plugin, Mooncake, LMCache, LMCache-Ascend, Diffusers, and applicable Omni packages together.
 Choose additional packages for the selected combination, rather than their newest version alone.
+Select stable additional packages; only the whitelisted keys in `prerelease_packages` may select a prerelease.
+Treat every `ARG *_VERSION` and `*_COMMIT` pin in a selected recipe as proposal-owned: update any of them, including LMCache and vllm-omni pins, when compatibility evidence requires it.
 Preserve shared LMCache protocol constraints. Group dependent changes; keep independent blocked groups unchanged.
 Keep unknown fields explicit. Missing compatibility-table entries do not establish incompatibility.
 Conflicting evidence blocks the affected group.
 
 Give every affected patch a disposition: retain, adapt, remove, or add.
 State its reason, applicable versions and platforms, and upstream issue or commit evidence.
+Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied sources.
+Removal is an explicit file deletion in the group patch, with the reason in the group report. Never block a group on patch state alone.
 Check ordered patch application against the exact selected source revision.
 Use `git apply --check` before editing recipes. A fuzzy application check can miss failures that trusted validation rejects.
 If the source is unavailable, report the check as unverified. Application success is not runtime validation.
+
+Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected release no longer supports, citing the upstream scoping, and add a variant back when support returns.
+Before changing an existing pin, patch, variant, or support row, read `docs/support-records.md` and the file's git history (`git log`, `git show`); cite the introducing commit when a disposition overrides an earlier decision.
 
 Edit only selected service recipes, related patches, matrix entries, and allowed support prose.
 Keep proposed support `prepared`. Do not fabricate catalog dependencies or mark images as published.

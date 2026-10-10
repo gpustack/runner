@@ -860,6 +860,7 @@ def publish(
     sources=None,
     ascend_pairs=None,
     engine_prereleases=None,
+    prerelease_packages=None,
 ):
     """
     Recheck an artifact with trusted code and publish only its accepted patch.
@@ -876,7 +877,12 @@ def publish(
     try:
         identity = context["identity"]
         validate_identity(identity)
-        raw = verify_artifact(artifact, identity, engine_prereleases=engine_prereleases)
+        raw = verify_artifact(
+            artifact,
+            identity,
+            engine_prereleases=engine_prereleases,
+            prerelease_packages=prerelease_packages,
+        )
         checked = artifact
         revalidation = validate_candidate(
             Path(repo),
@@ -885,6 +891,7 @@ def publish(
             sources=sources,
             ascend_pairs=ascend_pairs,
             engine_prereleases=engine_prereleases,
+            prerelease_packages=prerelease_packages,
         )
         require(
             revalidation["patch"] == checked["patch"]

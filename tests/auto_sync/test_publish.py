@@ -695,7 +695,12 @@ def test_publication_recheck_receives_independent_upstream_sources_and_pairs(
         == "published"
     )
     assert observed == [
-        {"sources": sources, "ascend_pairs": pairs, "engine_prereleases": None},
+        {
+            "sources": sources,
+            "ascend_pairs": pairs,
+            "engine_prereleases": None,
+            "prerelease_packages": None,
+        },
     ]
 
 

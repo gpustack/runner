@@ -12,6 +12,7 @@ from tools.auto_sync.discovery import (
     canonical_variant,
     discover,
     parse_support,
+    prerelease_packages,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -541,3 +542,39 @@ def test_sglang_post_release_is_latest_for_all_backends(tmp_path, upstream, pair
 def test_empty_release_query_blocks_instead_of_unchanged(tmp_path, upstream, pairs):
     upstream["vllm-project/vllm"] = []
     assert selected(repository(tmp_path), upstream, pairs)["status"] == "blocked"
+
+
+def whitelisted(repo, text):
+    path = repo / "pack" / "prereleases.yaml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    return path
+
+
+def test_prerelease_whitelist_is_sorted_and_absent_file_keeps_stable_only(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    assert prerelease_packages(repo) == []
+    whitelisted(repo, "packages: [vllm-omni, lmcache, lmcache]\n")
+    assert prerelease_packages(repo) == ["lmcache", "vllm-omni"]
+    whitelisted(repo, "packages: []\n")
+    assert prerelease_packages(repo) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "packages: [lmcache, unknown-key]\n",
+        "packages: lmcache\n",
+        "other: [lmcache]\n",
+        "packages: [lmcache]\nextra: true\n",
+        "packages: [LMCache]\n",
+        "packages: [",
+    ],
+)
+def test_malformed_prerelease_whitelist_fails_preparation(tmp_path, text):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    whitelisted(repo, text)
+    with pytest.raises(DiscoveryError, match="prerelease whitelist"):
+        prerelease_packages(repo)

@@ -190,14 +190,19 @@ def _check_matrix_scope(before, after, rows):
 def _arguments(repo, rule, service):
     path = _safe_file(repo, f"pack/{rule['backend']}/Dockerfile.{service}")
     require(path.is_file(), "selected recipe is missing")
+    return recipe_arguments(path.read_text(), rule.get("args", []))
+
+
+def recipe_arguments(text, overrides=()):
+    """Effective ARG defaults from recipe text plus matrix rule overrides."""
     defaults = {}
-    for line in path.read_text().splitlines():
+    for line in text.splitlines():
         if line.startswith("FROM "):
             break
         match = re.fullmatch(r"ARG ([A-Z][A-Z0-9_]*)=(.*)", line)
         if match:
             defaults[match[1]] = match[2].strip('"')
-    defaults.update(argument.split("=", 1) for argument in rule.get("args", []))
+    defaults.update(argument.split("=", 1) for argument in overrides)
 
     def expand(name, stack=()):
         require(
@@ -746,6 +751,7 @@ def verify_artifact(
     expected_identity: dict,
     *,
     engine_prereleases: set | None = None,
+    prerelease_packages: set | None = None,
 ) -> dict:
     """
     Check transport integrity and return proposal data for clean-runner rechecks.
@@ -806,6 +812,7 @@ def verify_artifact(
             raw,
             expected_identity,
             engine_prereleases=engine_prereleases,
+            prerelease_packages=prerelease_packages,
         )
     except (ValueError, TypeError, KeyError, AttributeError) as exc:
         if isinstance(exc, ProposalError):
@@ -822,6 +829,7 @@ def validate_candidate(
     sources: dict | None = None,
     ascend_pairs: dict | None = None,
     engine_prereleases: set | None = None,
+    prerelease_packages: set | None = None,
 ) -> dict:
     """
     Return checked data and only accepted groups' patch; malformed data raises.
@@ -839,6 +847,7 @@ def validate_candidate(
         proposal,
         expected_identity,
         engine_prereleases=engine_prereleases,
+        prerelease_packages=prerelease_packages,
     )
     with tempfile.TemporaryDirectory(prefix="runner-proposal-") as temporary:
         scratch = Path(temporary)

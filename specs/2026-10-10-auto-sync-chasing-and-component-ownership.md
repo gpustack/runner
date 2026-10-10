@@ -173,18 +173,18 @@ PR mapping: PR 1 = T1 + T2 (branch `feat/auto-sync-incremental-chasing`, code co
       Owns: `tools/auto_sync/run.py` (bind + research/proposal prompts), `tests/auto_sync/test_e2e.py` (bind tests), `docs/release-automation.md`, `.agents/skills/runner-release-sync/SKILL.md`
       Acceptance: ready rows bind to the selected candidate; a row whose variant sits outside the discovery universe is allowed (re-add path) while represented variants are rejected; prompts state the next-line rule; docs and skill describe chasing.
       Verify: `uv run pytest tests/auto_sync/test_e2e.py -q -k "bind or represented"`
-- [ ] **T3 · Prerelease whitelist configuration**
+- [x] **T3 · Prerelease whitelist configuration**
       Blocked by: None
       Owns: `pack/prereleases.yaml`, `tools/auto_sync/run.py` (prepare freeze), `tools/auto_sync/proposal.py` (row policy), `tests/auto_sync/test_proposal.py`, whitelist-focused e2e additions in `tests/auto_sync/test_e2e.py`
       Gate: review
       Acceptance: the whitelist is read from the frozen default checkout and frozen into the bundle as `prerelease_packages`; unknown keys and malformed files fail preparation; an absent file keeps stable-only; whitelisted package rows may select prereleases; engine rows stay stable-only in discover mode; the list reaches the research prompt.
       Verify: `uv run pytest tests/auto_sync/test_proposal.py tests/auto_sync/test_e2e.py -q -k "prerelease or whitelist"`
-- [ ] **T4 · Component source-tree supply (vllm-omni, LMCache)**
+- [x] **T4 · Component source-tree supply (vllm-omni, LMCache)**
       Blocked by: None
       Owns: `tools/auto_sync/run.py` (`_selected_sources` and recipe-pin resolution), component-source additions in `tests/auto_sync/test_e2e.py`
       Acceptance: the controller resolves `VLLM_OMNI_COMMIT` and `SGLANG_LMCACHE_VERSION` from selected recipes and supplies those trees beside the engine/plugin trees; unresolvable pins land in `source_errors` and are reported as unverified.
       Verify: `uv run pytest tests/auto_sync/test_e2e.py -q -k "source"`
-- [ ] **T5 · Policy prompts and documentation (patch duty, ownership, rotation, history)**
+- [x] **T5 · Policy prompts and documentation (patch duty, ownership, rotation, history)**
       Blocked by: T3, T4
       Owns: `tools/auto_sync/run.py` (prompt sections), `.agents/skills/runner-release-sync/SKILL.md`, `docs/release-automation.md`
       Acceptance: research and proposal prompts state the patch adapt/delete duty, full component ownership, variant rotation rules, and the support-records/git-history consultation requirement; SKILL.md and docs match the prompts; mkdocs strict build passes.
