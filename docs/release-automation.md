@@ -24,9 +24,12 @@ There are six subscriptions:
 | ROCm | `vllm-project/vllm` | `sgl-project/sglang` |
 | CANN | `vllm-project/vllm-ascend` with its documented stable vLLM engine | `sgl-project/sglang` and documented CANN artifacts |
 
-Select only the newest eligible release per subscription. Stable engines include post releases.
-Exclude drafts and unrelated release streams. Do not propose older missing versions as catch-up work.
-If the newest candidate is blocked, report it instead of selecting an older release.
+Chase upstream one release line at a time per subscription. Stable engines include post releases.
+The chase base is the highest engine version among the subscription's catalog and explicit support records; CANN/vLLM chases the plugin version and pairs it with the documented stable engine.
+Select the lowest `(major, minor)` line above the base, then the highest version within that line under PEP 440 ordering.
+Exclude drafts and unrelated release streams. A subscription without any record selects the newest eligible release.
+Do not skip ahead to a newer line, even when the selected candidate is blocked; report the block instead.
+The discovery variant universe follows current records: a variant deliberately dropped from the matrix and support records is not chased again.
 
 CANN/vLLM uses the stable vLLM engine version for Runner releases and image tags.
 Ascend plugin prereleases are normal candidates, paired with the stable engine documented upstream.
