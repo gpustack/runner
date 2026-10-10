@@ -227,6 +227,15 @@ def _pair(records: list) -> dict:
                 "engine_version": parsed.pop(),
                 "source": f"https://github.com/{discovery.ASCEND}/releases/tag/{quote(release['tag_name'], safe='')}",
             }
+    # A post release reissues its line's fixes and never changes the engine
+    # alignment, so its notes omit the relationship statement; inherit the
+    # line base's documented pair instead of blocking the chase forever.
+    for selected in eligible:
+        if str(selected) in result or not selected.is_postrelease:
+            continue
+        base = str(discovery.version(".".join(map(str, selected.release))))
+        if base in result:
+            result[str(selected)] = result[base]
     return result
 
 
