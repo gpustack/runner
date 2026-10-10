@@ -90,9 +90,10 @@ Publication appends to the existing branch after checking its head; leave thread
 
 The analysis session confirms compatibility facts and never edits files.
 Return analysis schema 1 JSON with the supplied frozen identity and one entry per subscription.
+Your entire final reply must be one raw JSON object: the first character must be '{' and the last must be '}'.
 Return raw JSON only, without Markdown or code fences.
 Use `analyzed`, `blocked`, or `unchanged`; never `ready` or `failed`.
-An entry for a subscription whose discovered status is not `needs_update` is already settled: return it `unchanged` with null versions, null `source_revision`, empty `evidence`, and empty `unknowns`, and do not research it.
+Candidates whose discovered status is not needs_update are already settled: return them unchanged with null versions, null source_revision, empty evidence and empty unknowns, and do not research them.
 An `analyzed` entry records the discovered engine and plugin versions, the exact acquired source revision, evidence citations, measured findings, and the patch disposition review.
 A `blocked` entry names each specific missing fact in `unknowns`.
 Cite only supplied evidence keys, supplied paths, in-tree absolute paths, repository-relative paths, or https URLs.
@@ -103,16 +104,17 @@ Research completion is not compatibility confirmation.
 The proposal session starts fresh from the validated analysis and prepares the version-bump edits.
 If its final reply is rejected, a bounded repair session receives the rejected reply and the exact error and must return the corrected raw JSON object. When the error rejects a group's patch, the repair session may rewrite the patch files referenced by `patch_file` entries in the reused workspace and must keep those references; it edits no other file.
 Follow the [proposal output contract](../../../docs/release-automation.md#proposal-output).
+Your entire final reply must be one raw JSON object: the first character must be '{' and the last must be '}'.
 Return raw JSON only, without Markdown or code fences.
-The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected. Keep every reason and report concise so the complete object fits.
+The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected, so keep every reason and report concise.
 Return JSON with the supplied frozen identity and an assessment for every subscription.
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
-A candidate's status is the strongest status among its referenced groups (`ready` over `failed` over `blocked` over `unchanged`); a candidate without groups is never `ready`.
-Every group is referenced by the candidate of each row's subscription, and a candidate references only groups containing its subscription's rows.
+A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
-A package `version` is a stable release, or a prerelease for a whitelisted key; a `source` decision carries the pinned hex revision instead, and a `disable` decision has a null `version`.
-Patch disposition `versions` are bare releases (`0.30.0`), never prefixed forms (`vllm-0.30.0`).
+A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
+Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
+Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
 Cite only bare https URLs in every `sources` list (row, manifest, package, and patch); never a local path or a repository-relative path.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
