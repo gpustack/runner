@@ -106,6 +106,8 @@ Follow the [proposal output contract](../../../docs/release-automation.md#propos
 Return raw JSON only, without Markdown or code fences.
 Return JSON with the supplied frozen identity and an assessment for every subscription.
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
+A candidate's status is the strongest status among its referenced groups (`ready` over `failed` over `blocked` over `unchanged`); a candidate without groups is never `ready`.
+Every group is referenced by the candidate of each row's subscription, and a candidate references only groups containing its subscription's rows.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
 A package `version` is a stable release, or a prerelease for a whitelisted key; a `source` decision carries the pinned hex revision instead, and a `disable` decision has a null `version`.

@@ -1010,6 +1010,7 @@ def test_policy_sentences_reach_stage_prompts(scenario, tmp_path, monkeypatch):
     assert "Rotate variants with evidence" in proposal_prompt
     assert "whitelisted keys in prerelease_packages" in proposal_prompt
     assert "source decision whose version is the pinned hex revision" in proposal_prompt
+    assert "strongest group status" in proposal_prompt
 
 
 def pack_run_fixture(scenario):
