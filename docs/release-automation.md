@@ -241,6 +241,7 @@ The `llm-*` names below are the workflow's internal settings.
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR` | Optional Variable | `llm-thinking-clear`: boolean string; default `true` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE` | Optional Variable | `llm-temperature`: numeric value |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P` | Optional Variable | `llm-top-p`: numeric value |
+| `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS` | Optional Variable | `llm-max-tokens`: positive integer per-reply output ceiling; default `32768` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT` | Optional Variable | `llm-reasoning-effort`: `minimal`, `low`, `medium`, `high`, or `max` |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT` | Optional Variable | `llm-timeout`: positive request timeout in seconds |
 | `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE` | Optional Variable | `llm-context-window-size`: positive integer |
@@ -263,6 +264,7 @@ OpenAI-compatible defaults are thinking `disabled`, thinking-clear `true`, tempe
 GLM's `enable_thinking` also receives native `thinking.clear_thinking`. Explicit native clearing choices take precedence.
 This provider setting clears cross-turn history. It does not disable current reasoning or guarantee removal within a tool chain.
 Reasoning effort is empty by default. Request timeout defaults to `3600` seconds and is separate from command and session limits.
+The per-reply output ceiling defaults to `32768` max tokens on every protocol.
 Do not inject those thinking or sampling defaults into Responses or Anthropic requests.
 Validate settings before making provider requests; unsupported explicit combinations fail instead of being silently dropped.
 
@@ -273,7 +275,9 @@ If extra-body explicitly supplies both `enable_thinking` and `thinking`, contrad
 Matching explicit states are preserved.
 A stage reply that ends mid-structure was cut off at the provider's single-message output ceiling.
 The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected, so keep every reason and report concise.
-Raise the ceiling with `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` (for example `{"max_tokens": 32768}` on the openai protocol) when the provider honors a larger value.
+The controller sends an explicit per-reply `max_tokens` ceiling unless an input already sets one.
+The `llm-max-tokens` dispatch input or `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS` raises it when the provider honors a larger value.
+Explicit extra-body `max_tokens` or `max_output_tokens` fields take final precedence.
 Context-window and modality overrides belong to the selected Qwen provider's `generationConfig`, not HTTP `extra_body`.
 `llm-modalities` accepts boolean overrides for `image`, `pdf`, `audio`, and `video`.
 Pinned Qwen replaces overrides for the MiniMax-M3 family. Explicit overrides for those models are rejected before launch.

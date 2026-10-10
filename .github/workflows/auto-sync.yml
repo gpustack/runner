@@ -54,6 +54,11 @@ on:
         required: false
         type: string
         default: "0.9"
+      llm-max-tokens:
+        description: 'LLM max tokens, the per-reply output token ceiling.'
+        required: false
+        type: string
+        default: "32768"
       llm-reasoning-effort:
         description: 'LLM reasoning effort, the reasoning effort level.'
         required: false
@@ -191,6 +196,7 @@ jobs:
           AUTO_SYNC_LLM_THINKING_CLEAR: ${{ inputs.llm-thinking-clear || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING_CLEAR }}
           AUTO_SYNC_LLM_TEMPERATURE: ${{ inputs.llm-temperature || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE }}
           AUTO_SYNC_LLM_TOP_P: ${{ inputs.llm-top-p || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P }}
+          AUTO_SYNC_LLM_MAX_TOKENS: ${{ inputs.llm-max-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS }}
           AUTO_SYNC_LLM_REASONING_EFFORT: ${{ inputs.llm-reasoning-effort || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT }}
           AUTO_SYNC_LLM_TIMEOUT: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TIMEOUT }}
           AUTO_SYNC_LLM_CONTEXT_WINDOW_SIZE: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}

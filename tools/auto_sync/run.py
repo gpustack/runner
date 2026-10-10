@@ -37,6 +37,7 @@ LLM_INPUTS = (
     "thinking-clear",
     "temperature",
     "top-p",
+    "max-tokens",
     "reasoning-effort",
     "timeout",
     "context-window-size",

@@ -23,6 +23,9 @@ class ConfigurationError(ValueError):
 
 
 EFFORTS = {"minimal", "low", "medium", "high", "max"}
+# Providers cap replies low when max_tokens is absent; send an explicit
+# ceiling unless any input already sets one.
+DEFAULT_MAX_TOKENS = 32768
 PROTECTED = {
     "model",
     "messages",
@@ -146,6 +149,7 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
         "thinking-clear",
         "temperature",
         "top-p",
+        "max-tokens",
         "reasoning-effort",
         "timeout",
         "context-window-size",
@@ -297,7 +301,15 @@ def normalize_inputs(inputs: Mapping[str, str]) -> ModelConfig:
             msg = "Unsupported llm-reasoning-effort"
             raise ConfigurationError(msg)
         body["reasoning_effort"] = effort
+    if value := values.get("llm-max-tokens"):
+        # Qwen stores this as a JavaScript number; require an exact integer.
+        if not re.fullmatch(r"[0-9]+", value) or not 0 < int(value) <= 2**53 - 1:
+            msg = "llm-max-tokens must be a positive safe integer"
+            raise ConfigurationError(msg)
+        body["max_tokens"] = int(value)
     body.update(extra)
+    if not any(key in body for key in ("max_tokens", "max_output_tokens")):
+        body["max_tokens"] = DEFAULT_MAX_TOKENS
     _validate_body(protocol, body, model)
     auth_header = values.get("llm-auth-header", "")
     if auth_header and not HEADER.fullmatch(auth_header):

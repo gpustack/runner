@@ -101,6 +101,7 @@ def test_chat_defaults_and_headers():
         "temperature": 0.4,
         "top_p": 0.9,
         "thinking": {"type": "disabled", "clear_thinking": True},
+        "max_tokens": 32768,
     }
     assert (
         config.generation_config("fake-first")["customHeaders"]["X-Token"]
@@ -407,6 +408,55 @@ def test_responses_native_output_limit_maps_to_sampling_limit():
     assert (
         config.generation_config("fake-first")["samplingParams"]["max_tokens"] == 2048
     )
+
+
+@pytest.mark.parametrize("protocol", ["openai", "openai-responses", "anthropic"])
+def test_max_tokens_default_reaches_every_protocol(protocol):
+    config = normalize_inputs(inputs(**{"llm-protocol": protocol}))
+    assert config.body["max_tokens"] == 32768
+    assert (
+        config.generation_config("fake-first")["samplingParams"]["max_tokens"] == 32768
+    )
+    config = normalize_inputs(
+        inputs(**{"llm-protocol": protocol, "llm-max-tokens": " 65536 "}),
+    )
+    assert config.body["max_tokens"] == 65536
+
+
+def test_explicit_output_limits_replace_the_default():
+    config = normalize_inputs(inputs(**{"llm-extra-body": '{"max_tokens":8192}'}))
+    assert config.body["max_tokens"] == 8192
+    config = normalize_inputs(
+        inputs(
+            **{
+                "llm-protocol": "openai-responses",
+                "llm-extra-body": '{"max_output_tokens":8192}',
+            },
+        ),
+    )
+    assert "max_tokens" not in config.body
+    assert (
+        config.generation_config("fake-first")["samplingParams"]["max_tokens"] == 8192
+    )
+    with pytest.raises(ConfigurationError, match="Conflicting Responses"):
+        normalize_inputs(
+            inputs(
+                **{
+                    "llm-protocol": "openai-responses",
+                    "llm-max-tokens": "65536",
+                    "llm-extra-body": '{"max_output_tokens":8192}',
+                },
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["0", "-1", "1.5", "1e6", "true", "NaN", "9007199254740992"],
+)
+def test_invalid_max_tokens_fail_before_request(value):
+    with pytest.raises(ConfigurationError, match="llm-max-tokens"):
+        normalize_inputs(inputs(**{"llm-max-tokens": value}))
 
 
 def test_anthropic_thinking_cannot_silently_replace_temperature():

@@ -158,6 +158,7 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
         "llm-thinking-clear",
         "llm-temperature",
         "llm-top-p",
+        "llm-max-tokens",
         "llm-reasoning-effort",
         "pack-run-url",
     }
@@ -190,6 +191,7 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
         "thinking-clear",
         "temperature",
         "top-p",
+        "max-tokens",
         "reasoning-effort",
     ]:
         config = name.replace("-", "_").upper()
