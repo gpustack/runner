@@ -975,6 +975,28 @@ def _agent_workspace(repo, identity, target, env):
     return target
 
 
+def _checker_seed(workspace: Path, files: dict) -> None:
+    """Trusted checker copy and per-stage seed; a dot-dir repair sessions keep."""
+    target = workspace / ".autosync"
+    shutil.copytree(
+        Path(__file__).parent,
+        target / "tools" / "auto_sync",
+        ignore=shutil.ignore_patterns("__pycache__"),
+        dirs_exist_ok=True,
+    )
+    seed = target / "seed"
+    seed.mkdir(parents=True, exist_ok=True)
+    for name, data in files.items():
+        _write(seed / name, data)
+    # Keep git add -A from sweeping the checker into a candidate patch.
+    exclude = workspace / ".git" / "info" / "exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.touch()
+    if ".autosync" not in exclude.read_text(encoding="utf-8").splitlines():
+        with exclude.open("a", encoding="utf-8") as stream:
+            stream.write(".autosync\n")
+
+
 def _repair_prompt(
     phase: str,
     schema: dict,
@@ -1410,14 +1432,23 @@ def _research(args, scratch):
         return _check_group_patches(args.repo, identity, bound, scratch, env)
 
     try:
+        analysis_workspace = _agent_workspace(
+            args.repo,
+            identity,
+            scratch / "workspace-analysis",
+            env,
+        )
+        _checker_seed(
+            analysis_workspace,
+            {
+                "identity.json": identity,
+                "discovery.json": found,
+                "evidence.json": evidence,
+            },
+        )
         analysis, reported = research_phase(
             "analysis",
-            _agent_workspace(
-                args.repo,
-                identity,
-                scratch / "workspace-analysis",
-                env,
-            ),
+            analysis_workspace,
             analysis_prompt,
             analysis_schema,
             lambda data: proposal.validate_analysis(
@@ -1451,6 +1482,16 @@ def _research(args, scratch):
             identity,
             scratch / "workspace",
             env,
+        )
+        _checker_seed(
+            proposal_workspace,
+            {
+                "identity.json": identity,
+                "permissions.json": {
+                    "engine_prereleases": [list(item) for item in sorted(permissions)],
+                    "prerelease_packages": sorted(packages),
+                },
+            },
         )
         raw, _ = research_phase(
             "proposal",

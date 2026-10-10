@@ -9,6 +9,9 @@ Candidates whose discovered status is not needs_update are already settled: retu
 When pack_failure is supplied, diagnose the failed Pack run: map each failed job and step to the owning subscription, fold the diagnosis into this round's evaluation of that subscription, and keep the chasing rule when deciding the selection.
 Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
 Do not edit files, execute source scripts, run Pack, service builds, candidate validation or repository-wide tests, or write to GitHub.
+Before your final reply, write the draft JSON to a file inside .autosync/ and run PYTHONPATH=.autosync python -m tools.auto_sync.check_draft --stage analysis < <file> from the workspace root.
+Fix every INVALID line and re-check until the checker prints VALID; creating checker drafts inside .autosync/ is the only permitted exception to the file-editing ban.
+The checker is advisory: if it cannot run or its seed is missing, reply normally without it; the controller validation remains the only gate.
 Read relevant ranges of release_notes_path for the current compatibility group.
 Complete release records and assets remain available at release_metadata_path.
 Reuse the exact local upstream_sources paths; do not re-clone those trees.

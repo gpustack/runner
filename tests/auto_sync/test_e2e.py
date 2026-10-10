@@ -3,6 +3,7 @@
 
 import copy
 import hashlib
+import io
 import json
 import os
 import re
@@ -24,7 +25,7 @@ import server
 from boundaries import ExhaustedModel, GitHTTP, Registry, Upstreams, encoded
 from test_agent import _local_cli_process
 
-from tools.auto_sync import run
+from tools.auto_sync import check_draft, run
 from tools.auto_sync.agent import ProcessResult
 from tools.auto_sync.checks import _clone as clone_source
 from tools.auto_sync.checks import _git as source_git
@@ -3787,6 +3788,174 @@ def test_inapplicable_patch_fails_research_without_repair_rounds(
             (output / "diagnostics.json").read_text(),
         )["phases"]
     ] == ["analysis", "proposal"]
+
+
+def test_research_writes_checker_seed_per_stage(scenario, tmp_path, monkeypatch):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        workspace = Path(kwargs["workspace"])
+        seed = workspace / ".autosync" / "seed"
+        assert (seed / "identity.json").is_file()
+        assert (workspace / ".autosync/tools/auto_sync/check_draft.py").is_file()
+        exclude = workspace / ".git" / "info" / "exclude"
+        assert ".autosync" in exclude.read_text().splitlines()
+        if len(calls) == 1:
+            assert (seed / "discovery.json").is_file()
+            assert (seed / "evidence.json").is_file()
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        assert (seed / "permissions.json").is_file()
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 2
+
+
+def test_checker_seed_survives_repair_stripping(scenario, tmp_path, monkeypatch):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(0, final_text("not json"), "", False, 10)
+        if len(calls) == 2:
+            assert Path(kwargs["workspace"]) == Path(calls[0]["workspace"])
+            assert (
+                Path(kwargs["workspace"]) / ".autosync/seed/identity.json"
+            ).is_file()
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+
+
+def test_checker_stays_advisory_when_controller_rejects(
+    scenario,
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_MAX_REPAIR_ROUNDS", "0")
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        # The controller deletes its scratch afterwards; keep the seed.
+        shutil.copytree(
+            Path(kwargs["workspace"]) / ".autosync",
+            tmp_path / "kept-workspace" / ".autosync",
+            dirs_exist_ok=True,
+        )
+        return ProcessResult(
+            0,
+            agent_stream(whitespace_patch(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 1
+    )
+    result = json.loads((output / "result.json").read_text())
+    assert "cuda-vllm patch does not apply" in result["reason"]
+    assert len(calls) == 2
+    # The same draft passes the advisory checker on the seeded workspace.
+    capsys.readouterr()
+    monkeypatch.chdir(tmp_path / "kept-workspace")
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO(json.dumps(whitespace_patch(scenario, context))),
+    )
+    assert check_draft.main(["--stage", "proposal"]) == 0
+    assert capsys.readouterr().out.splitlines()[0] == "VALID"
 
 
 def test_repair_session_strips_model_created_startup_config(

@@ -21,6 +21,9 @@ For unavailable source or conflicting/ambiguous feedback, preserve blocked/faile
 The patch is relative to the current workspace head; write each group's patch to a UTF-8 file inside a patches/ directory at your workspace root and set group.patch_file to its path relative to your workspace root instead of an inline group.patch.
 Startup configuration paths (.qwen, .env, .mcp.json, .claude/settings.json) are stripped before every repair session; never store patch files in them.
 The controller inlines patch files before validation, so your final reply stays the small draft JSON.
+Before your final reply, write the draft JSON to a file inside .autosync/ and run PYTHONPATH=.autosync python -m tools.auto_sync.check_draft --stage proposal < <file> from the workspace root; the checker inlines patch_file references exactly as the controller does.
+Fix every INVALID line and re-check until the checker prints VALID; keep checker scratch inside .autosync/ and out of group patches.
+The checker is advisory: if it cannot run or its seed is missing, reply normally without it; the controller validation remains the only gate.
 Use tests/auto_sync/fixtures/proposals/ready.json for field shape only; supply your own identity and evidence.
 Group IDs contain only letters, digits, underscores and hyphens.
 Do not hand-escape diffs or create commits and rebases to split groups.
