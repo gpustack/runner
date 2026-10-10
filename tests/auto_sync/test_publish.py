@@ -187,6 +187,60 @@ def test_formal_single_pr_stable_identity_and_complete_mixed_report(scenario):
     assert git(repo, "status", "--porcelain") == ""
 
 
+def test_report_uses_headings_tables_and_a_collapsed_exact_record(scenario):
+    _, service, _, _, _ = scenario
+    initial(scenario)
+    body = service.prs[1]["body"]
+    assert "## Runner upgrade proposal" in body
+    assert "### Candidate outcomes" in body
+    assert "| Subscription | Status | Reason |" in body
+    assert "| cuda/vllm | ready | Upgrade the selected engine. |" in body
+    assert "| cann/sglang | failed | The upstream query failed. |" in body
+    assert "### Group `cuda-vllm`: ready" in body
+    assert (
+        "| Subscription | Variant | Runtime | Platform "
+        "| Old engine | New engine | Plugin | Evidence |" in body
+    )
+    assert (
+        "| cuda/vllm | - | 13.0.1 | linux/amd64 | 0.29.0 | 0.30.0 | - | inference |"
+        in body
+    )
+    # The exact record stays complete and parseable inside the collapsed block.
+    details = body.index(
+        "<details><summary>Exact row data and validation (JSON)</summary>",
+    )
+    fence = body.index("```json", details)
+    payload = json.loads(body[fence + 7 : body.index("```", fence + 7)])
+    assert payload["rows"][0]["engine_version"] == "0.30.0"
+    assert payload["validation"]
+
+
+def test_report_cell_escapes_markup_and_a_rowless_group_skips_the_table():
+    checked = {
+        "candidates": [
+            {
+                "subscription": "cuda/vllm",
+                "status": "ready",
+                "reason": "a | b\nline <two>",
+            },
+        ],
+        "groups": [
+            {
+                "id": "cann-vllm",
+                "status": "blocked",
+                "reason": "No pair.",
+                "report": "Report.",
+                "rows": [],
+                "validation": {"checks": []},
+            },
+        ],
+    }
+    body = publication._render_report(checked)  # noqa: SLF001 - the body format is exercised directly, without the fixture stack.
+    assert "a \\| b line &lt;two&gt;" in body
+    assert "#### Rows" not in body
+    assert "<details><summary>Exact row data and validation (JSON)</summary>" in body
+
+
 def test_weekly_and_manual_defer_any_older_managed_proposal_without_writes(scenario):
     _, service, api, context, artifact = scenario
     initial(scenario)
