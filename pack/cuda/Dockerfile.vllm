@@ -2,8 +2,8 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.1
 ARG CUDA_ARCHS
-ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-ubuntu2404
-ARG VLLM_VERSION=0.29.0
+ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-ubuntu2404
+ARG VLLM_VERSION=0.30.0
 ARG VLLM_TORCH_VERSION=2.13.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## Built from source, replacing the base's own lmcache: that one is a PyPI wheel compiled

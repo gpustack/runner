@@ -2,8 +2,8 @@ ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=9.0.0
 ARG CANN_ARCHS=910b
-ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.18-cann9.0.0-910b
-ARG SGLANG_VERSION=0.5.18
+ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.20-cann9.0.0-910b
+ARG SGLANG_VERSION=0.5.20
 ARG SGLANG_TORCH_VERSION=2.10.0
 ## Pinned below the CUDA/ROCm 0.5.4: this backend goes through LMCache-Ascend, whose matrix
 ## tops out at SGLang 0.5.8 / lmcache 0.4.4, and 0.5.x's renamed extensions would break its

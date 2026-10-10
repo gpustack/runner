@@ -2,11 +2,14 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=9.1.0
 ARG CANN_ARCHS=910b
-ARG CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0
-ARG VLLM_VERSION=0.23.0
+ARG CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1
+ARG VLLM_VERSION=0.27.1
 ARG VLLM_TORCH_VERSION=2.10.0
-ARG VLLM_LMCACHE_VERSION=0.4.3
-ARG VLLM_LMCACHE_ASCEND_VERSION=${VLLM_LMCACHE_VERSION}
+ARG VLLM_LMCACHE_VERSION=0.4.4
+## LMCache-Ascend ships a 0.5.x prerelease line (v0.5.6rc4) not whitelisted in
+## pack/prereleases.yaml, so the stable 0.4.4 line applies; its README matrix pairs
+## LMCache v0.4.4 1:1 with LMCache-Ascend v0.4.4.
+ARG VLLM_LMCACHE_ASCEND_VERSION=0.4.4
 ARG VLLM_MOONCAKE_VERSION=0.3.11.post1
 ARG VLLM_ROUTER_VERSION=0.1.15
 ARG VLLM_OMNI_COMMIT=4a24a517
@@ -393,11 +396,6 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
     tree -hs /workspace/patches
     pushd /vllm-workspace/vllm \
         && for f in /workspace/patches/vllm/*.patch; do patch -p1 < "$f" || exit 1; done
-    # vLLM Ascend fixed this upstream after 0.20.2rc1.
-    if [[ "${VLLM_VERSION}" == 0.20.* ]]; then
-        pushd /vllm-workspace/vllm-ascend \
-            && patch -p1 < /workspace/patches/vllm_ascend/*.patch
-    fi
     if pip show vllm_omni > /dev/null 2>&1; then \
         pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
             && patch -p1 < /workspace/patches/vllm_omni/*.patch; \

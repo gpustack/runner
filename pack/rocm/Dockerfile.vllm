@@ -2,8 +2,8 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.2.3
 ARG ROCM_ARCHS
-ARG VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.29.0
-ARG VLLM_VERSION=0.29.0
+ARG VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.30.0
+ARG VLLM_VERSION=0.30.0
 ARG VLLM_TORCH_VERSION=2.12.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ## The ROCm base ships no lmcache of its own, so it is always built from source here.
