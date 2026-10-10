@@ -3208,6 +3208,28 @@ def test_repair_prompt_guides_a_reply_truncated_at_end():
     assert "drop every other character" not in prompt
 
 
+def test_repair_prompt_guides_a_truncated_reply_with_trailing_newline():
+    reply = '{"schema_version": 1, "candidates": [{"subscription": "cu\n'
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        reply,
+        "invalid JSON: Invalid control character at: line 1 column 58 (char 57)",
+    )
+    assert "cut off mid-structure at the model output ceiling" in prompt
+    assert "drop every other character" not in prompt
+
+
+def test_repair_prompt_treats_a_blank_reply_as_prose():
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        "  \n ",
+        "invalid JSON: Expecting value: line 1 column 1 (char 0)",
+    )
+    assert "cut off mid-structure" not in prompt
+
+
 def test_repair_prompt_guides_a_reply_with_trailing_prose():
     reply = '{"schema_version": 1}\nTrailing prose.'
     prompt = _repair_prompt(

@@ -1025,12 +1025,13 @@ def _repair_prompt(
 
 def _truncated_reply(failed_reply: str) -> bool:
     """A reply cut at the output ceiling ends mid-structure, never wrapped in prose."""
-    if not failed_reply:
+    stripped = failed_reply.rstrip()
+    if not stripped:
         return False
     try:
-        json.loads(failed_reply)
+        json.loads(stripped)
     except json.JSONDecodeError as exc:
-        return exc.pos == len(failed_reply) or exc.msg.startswith("Unterminated string")
+        return exc.pos == len(stripped) or exc.msg.startswith("Unterminated string")
     return False
 
 
