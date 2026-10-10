@@ -92,6 +92,7 @@ The analysis session confirms compatibility facts and never edits files.
 Return analysis schema 1 JSON with the supplied frozen identity and one entry per subscription.
 Return raw JSON only, without Markdown or code fences.
 Use `analyzed`, `blocked`, or `unchanged`; never `ready` or `failed`.
+An entry for a subscription whose discovered status is not `needs_update` is already settled: return it `unchanged` with null versions, null `source_revision`, empty `evidence`, and empty `unknowns`, and do not research it.
 An `analyzed` entry records the discovered engine and plugin versions, the exact acquired source revision, evidence citations, measured findings, and the patch disposition review.
 A `blocked` entry names each specific missing fact in `unknowns`.
 Cite only supplied evidence keys, supplied paths, in-tree absolute paths, repository-relative paths, or https URLs.

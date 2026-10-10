@@ -1004,6 +1004,7 @@ def test_policy_sentences_reach_stage_prompts(scenario, tmp_path, monkeypatch):
     analysis_prompt = calls[0]["prompt"]
     assert "Never block a group on patch state alone" in analysis_prompt
     assert "cite the introducing commit" in analysis_prompt
+    assert "already settled" in analysis_prompt
     proposal_prompt = calls[1]["prompt"]
     assert "proposal-owned" in proposal_prompt
     assert "Rotate variants with evidence" in proposal_prompt

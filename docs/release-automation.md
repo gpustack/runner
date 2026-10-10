@@ -113,6 +113,8 @@ Do not populate the generated catalog with guessed package versions.
 Research runs as two sequential independent headless stages: analysis, then proposal.
 The analysis session confirms compatibility facts and returns analysis schema 1 JSON; it never edits files or proposes changes.
 The controller validates that JSON against the frozen identity, the discovered selection, and the acquired source revisions.
+A subscription whose discovered status is not `needs_update` is already settled and is not researched.
+The controller requires its entry to be `unchanged` with null versions, null `source_revision`, empty `evidence`, and empty `unknowns`.
 A reply missing the constant `schema_version` is read as schema 1.
 An evidence entry that differs from exactly one supplied evidence key only by whitespace is normalized to that key before the citation check.
 Forged statuses, missing evidence, or out-of-scope evidence references end the run before the proposal session starts.
