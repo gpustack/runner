@@ -1,6 +1,6 @@
 # Spec: Auto-Sync Chasing and Component Ownership
 
-Status: Planned
+Status: Shipped
 Type: Feature
 
 ## Summary
