@@ -25,3 +25,9 @@ Budget: $max_session_turns session turns and $max_tool_calls tool calls.
 Reserve the last $reserved_turns turns for the final JSON.
 === STAGE INPUT (JSON) ===
 $payload
+=== OUTPUT CONTRACT ===
+REQUIRED: Your entire final reply must be one raw JSON object: the first character must be '{' and the last must be '}'.
+REQUIRED: Return raw JSON only, without Markdown or code fences.
+REQUIRED: Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
+REQUIRED: Candidates whose discovered status is not needs_update are already settled: return them unchanged with null versions, null source_revision, empty evidence and empty unknowns, and do not research them.
+REQUIRED: The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected, so keep every reason and report concise.

@@ -39,6 +39,7 @@ Historical `(rc)` text has unknown plugin identity; do not derive a plugin suffi
 Other engine prereleases require an explicit maintainer request.
 
 The reviewed `pack/prereleases.yaml` names the additional package keys that may select a prerelease version when no stable release satisfies compatibility.
+Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
 The controller freezes the list from the frozen default branch; a proposal cannot grant itself prerelease permission, and an unknown key fails preparation.
 Engines remain stable-only in discovery mode regardless of the whitelist.
 
@@ -113,7 +114,7 @@ Do not populate the generated catalog with guessed package versions.
 Research runs as two sequential independent headless stages: analysis, then proposal.
 The analysis session confirms compatibility facts and returns analysis schema 1 JSON; it never edits files or proposes changes.
 The controller validates that JSON against the frozen identity, the discovered selection, and the acquired source revisions.
-A subscription whose discovered status is not `needs_update` is already settled and is not researched.
+Candidates whose discovered status is not needs_update are already settled: return them unchanged with null versions, null source_revision, empty evidence and empty unknowns, and do not research them.
 The controller requires its entry to be `unchanged` with null versions, null `source_revision`, empty `evidence`, and empty `unknowns`.
 A reply missing the constant `schema_version` is read as schema 1.
 An evidence entry that differs from exactly one supplied evidence key only by whitespace is normalized to that key before the citation check.
@@ -122,6 +123,8 @@ The proposal session starts with a fresh conversation containing only the valida
 
 When a stage's final reply fails the existing parse or validation gates, the controller starts bounded fresh repair sessions instead of failing immediately.
 A repair session receives the rejected reply text, the exact parse or validation error, and the stage schema, and must return one corrected raw JSON object without researching, editing, or accessing the network again.
+Your entire final reply must be one raw JSON object: the first character must be '{' and the last must be '}'.
+Return raw JSON only, without Markdown or code fences.
 An analysis-stage repair also receives the supplied evidence keys, so a rejected evidence reference can be mapped to the exact supplied key.
 A proposal-stage repair reuses the stage workspace after startup configuration paths (`.qwen`, `.env`, `.mcp.json`, `.claude/settings.json`) are stripped, so patch files must live outside them; the corrected reply keeps its `patch_file` references rather than inlining patches.
 When the error rejects a group's patch, that repair session may rewrite the referenced patch files in the reused workspace and edits no other file.
@@ -151,9 +154,7 @@ The top-level fields are:
 Each candidate has `subscription`, `status`, `groups`, and `reason`.
 Its subscription is one of `cuda/vllm`, `cuda/sglang`, `rocm/vllm`, `rocm/sglang`, `cann/vllm`, or `cann/sglang`.
 `groups` contains related group IDs. Keep a concrete reason even when no group is needed.
-A candidate references only groups that contain its subscription's rows, and every group is referenced by the candidate of each row's subscription.
-The candidate status is the strongest status among its groups: `ready` over `failed` over `blocked` over `unchanged`.
-A candidate without groups is never `ready`.
+A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.
 
 Each group has `id`, `status`, `reason`, `depends_on`, `report`, `patch`, and `rows`.
 Group IDs contain letters, digits, underscores, and hyphens, such as `cuda-vllm`.
@@ -183,12 +184,13 @@ The `name` is the canonical choice key behind the recipe pin: `lmcache`, `moonca
 Never use the installed distribution name (for example `mooncake-transfer-engine-rocm`) in place of the canonical key.
 Decisions are `retain`, `update`, `disable`, or `source`.
 `retain` keeps the current choice, `update` moves it to another release, `disable` drops it with a null `version`, and `source` builds it from a pinned source revision.
+A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
 The `version` is a stable PEP 440 release, or a prerelease for a whitelisted key; a `source` decision instead carries the pinned revision as 7–40 lowercase hex characters, such as the vllm-omni commit.
 Each patch choice contains `path`, `disposition`, `reason`, `versions`, `platforms`, `sources`, `source_repository`, and `source_revision`.
 Use an exact source commit or `null` when unavailable.
 For engine patches, `versions` includes the selected engine. For Ascend patches, it includes the selected plugin.
 For Omni patches, it states engine applicability; the source commit must match the declared Omni package pin.
-Every `versions` entry is one bare release such as `0.30.0`, never a prefixed form such as `vllm-0.30.0`.
+Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
 The controller resolves each selected release or package pin independently before checking the claimed commit.
 The controller independently acquires source and Ascend pairing evidence; an agent assertion cannot substitute for it.
 If independent target resolution fails, the checked source revision is `null` and its application check is unverified.
@@ -270,6 +272,7 @@ An explicit extra-body `enable_thinking` replaces convenience thinking and recei
 If extra-body explicitly supplies both `enable_thinking` and `thinking`, contradictory states are rejected.
 Matching explicit states are preserved.
 A stage reply that ends mid-structure was cut off at the provider's single-message output ceiling.
+The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected, so keep every reason and report concise.
 Raise the ceiling with `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_EXTRA_BODY` (for example `{"max_tokens": 32768}` on the openai protocol) when the provider honors a larger value.
 Context-window and modality overrides belong to the selected Qwen provider's `generationConfig`, not HTTP `extra_body`.
 `llm-modalities` accepts boolean overrides for `image`, `pdf`, `audio`, and `video`.

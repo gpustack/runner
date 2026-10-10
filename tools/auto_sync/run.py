@@ -53,6 +53,7 @@ PACK_RUN_URL = re.compile(
 JOB_LOG_LIMIT = 4000
 
 PROMPT_SENTINEL = "=== STAGE INPUT (JSON) ==="
+CONTRACT_SENTINEL = "=== OUTPUT CONTRACT ==="
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 
 
@@ -73,6 +74,11 @@ def _prompt(name: str, **values: str) -> str:
         f"prompt template {name} placeholder drift: missing {missing}, unused {unused}",
     )
     return string.Template(text).substitute(values)
+
+
+def prompt_payload(prompt: str) -> str:
+    """Payload section of an assembled stage prompt, between the two sentinels."""
+    return prompt.split(PROMPT_SENTINEL, 1)[1].split(CONTRACT_SENTINEL, 1)[0]
 
 
 def _env(home: Path) -> dict:

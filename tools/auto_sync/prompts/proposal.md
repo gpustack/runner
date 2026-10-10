@@ -40,3 +40,11 @@ The separate trusted validation job runs validate_candidate; repository CI runs 
 Do not run candidate validation or repository-wide tests here.
 === STAGE INPUT (JSON) ===
 $payload
+=== OUTPUT CONTRACT ===
+REQUIRED: Your entire final reply must be one raw JSON object: the first character must be '{' and the last must be '}'.
+REQUIRED: Return raw JSON only, without Markdown or code fences.
+REQUIRED: The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected, so keep every reason and report concise.
+REQUIRED: A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
+REQUIRED: Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
+REQUIRED: Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
+REQUIRED: A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.

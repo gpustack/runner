@@ -261,7 +261,7 @@ writes checker instructions into the reordered templates.
               `uv run pre-commit run --files <changed> --show-diff-on-failure`,
               `uv run mkdocs build --strict`
 
-- [ ] **T2 · Contract-last ordering + three-surface sync test (F2, F5)**
+- [x] **T2 · Contract-last ordering + three-surface sync test (F2, F5)**
       Blocked by: T1
       Owns: `tools/auto_sync/prompts/**`, `tools/auto_sync/run.py`, `tests/auto_sync/**`,
             `docs/release-automation.md`, `.agents/skills/runner-release-sync/SKILL.md`
