@@ -111,6 +111,7 @@ Every group is referenced by the candidate of each row's subscription, and a can
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
 A package `version` is a stable release, or a prerelease for a whitelisted key; a `source` decision carries the pinned hex revision instead, and a `disable` decision has a null `version`.
+Patch disposition `versions` are bare releases (`0.30.0`), never prefixed forms (`vllm-0.30.0`).
 Cite only bare https URLs in every `sources` list (row, manifest, package, and patch); never a local path or a repository-relative path.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.

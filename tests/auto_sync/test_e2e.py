@@ -1011,6 +1011,7 @@ def test_policy_sentences_reach_stage_prompts(scenario, tmp_path, monkeypatch):
     assert "whitelisted keys in prerelease_packages" in proposal_prompt
     assert "source decision whose version is the pinned hex revision" in proposal_prompt
     assert "strongest group status" in proposal_prompt
+    assert "Patch disposition versions are bare releases" in proposal_prompt
 
 
 def pack_run_fixture(scenario):
@@ -3140,6 +3141,8 @@ def test_proposal_stage_prose_output_is_repaired_once(
     stage_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
     assert repair_payload["schema"] == stage_payload["schema"]
     assert "repair session of the proposal stage" in calls[2]["prompt"]
+    # An unparseable reply needs only its surrounding prose dropped.
+    assert "drop every other character" in calls[2]["prompt"]
     # Analysis evidence keys are meaningless for a proposal-stage repair.
     assert "supplied_evidence_keys" not in repair_payload
     diagnostic = json.loads((output / "diagnostics.json").read_text())

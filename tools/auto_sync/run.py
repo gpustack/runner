@@ -971,6 +971,11 @@ def _repair_prompt(
         "This is a pure format and field correction: do not research again, do not edit any "
         "file, and do not access the network for new investigation. "
     )
+    if error.startswith("invalid JSON"):
+        guidance += (
+            " The rejected reply carries text outside its JSON object; return that same"
+            " object and drop every other character."
+        )
     if phase == "proposal":
         # A patch rejection is only correctable in the reused workspace.
         correction = (
@@ -1441,6 +1446,8 @@ def _research(args, scratch):
             "mooncake-transfer-engine-rocm. "
             "A package version is a stable release, except a source decision whose version is the pinned hex "
             "revision; a disable decision has a null version. "
+            "Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as "
+            "vllm-0.30.0. "
             "Additional packages use stable releases only; the whitelisted keys in prerelease_packages "
             "may use a prerelease when no stable release satisfies compatibility. "
             "Cite only bare https URLs in every sources list (row, manifest, package and patch); never a local path "
