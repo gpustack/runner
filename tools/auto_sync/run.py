@@ -1188,6 +1188,8 @@ def _research(args, scratch):
         "referenced requirements/installers/patches, and inspect registries with crane. "
         "The discovered selection is the next release line above the catalog, not necessarily the newest "
         "upstream release; research that selection only, never a newer line. "
+        "Candidates whose discovered status is not needs_update are already settled: return them unchanged "
+        "with null versions, null source_revision, empty evidence and empty unknowns, and do not research them. "
         "When pack_failure is supplied, diagnose the failed Pack run: map each failed job and step to "
         "the owning subscription, fold the diagnosis into this round's evaluation of that subscription, "
         "and keep the chasing rule when deciding the selection. "
