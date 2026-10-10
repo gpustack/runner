@@ -356,6 +356,24 @@ def test_prerelease_additional_package_requires_the_whitelist(proposal):
     assert row["packages"][0]["version"] == "0.5.6rc3"
 
 
+def test_source_decision_carries_a_pinned_revision(proposal):
+    raw = copy.deepcopy(proposal)
+    package = {
+        "name": "vllm-omni",
+        "version": "a" * 40,
+        "decision": "retain",
+        "reason": "The recipe builds vllm-omni from the pinned commit.",
+        "sources": ["https://github.com/vllm-project/vllm-omni/tree/" + "a" * 40],
+    }
+    raw["groups"][0]["rows"][0]["packages"] = [package]
+    with pytest.raises(ProposalError, match="Invalid version"):
+        validate_proposal(raw, raw["identity"])
+    package["decision"] = "source"
+    accepted = validate_proposal(raw, raw["identity"])
+    row = accepted["groups"][0]["rows"][0]
+    assert row["packages"][0]["version"] == "a" * 40
+
+
 ANALYSIS_FIXTURE = Path(__file__).parent / "fixtures/proposals/analysis.json"
 ANALYSIS_FOUND = [
     {

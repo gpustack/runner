@@ -179,6 +179,8 @@ Each package choice contains `name`, `version`, `decision`, `reason`, and `sourc
 The `name` is the canonical choice key behind the recipe pin: `lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, or `diffusers`.
 Never use the installed distribution name (for example `mooncake-transfer-engine-rocm`) in place of the canonical key.
 Decisions are `retain`, `update`, `disable`, or `source`.
+`retain` keeps the current choice, `update` moves it to another release, `disable` drops it with a null `version`, and `source` builds it from a pinned source revision.
+The `version` is a stable PEP 440 release, or a prerelease for a whitelisted key; a `source` decision instead carries the pinned revision as 7–40 lowercase hex characters, such as the vllm-omni commit.
 Each patch choice contains `path`, `disposition`, `reason`, `versions`, `platforms`, `sources`, `source_repository`, and `source_revision`.
 Use an exact source commit or `null` when unavailable.
 For engine patches, `versions` includes the selected engine. For Ascend patches, it includes the selected plugin.
