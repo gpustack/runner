@@ -36,6 +36,7 @@ from tools.auto_sync.run import (
     CONTRACT_SENTINEL,
     PROMPT_SENTINEL,
     _acquire_candidate,
+    _check_group_patches,
     _env,
     _permissions,
     _prompt,
@@ -990,6 +991,9 @@ def test_policy_sentences_reach_stage_prompts():
     assert "source decision whose version is the pinned hex revision" in proposal_prompt
     assert "strongest group status" in proposal_prompt
     assert "Patch disposition versions are bare releases" in proposal_prompt
+    assert (
+        "Every patch disposition must be expressed in the group diff" in proposal_prompt
+    )
     assert "one model message with a hard output ceiling" in proposal_prompt
 
 
@@ -3318,7 +3322,7 @@ def test_contract_keywords_sync_across_surfaces():
             match = re.fullmatch(r"(REQUIRED|NEVER): (.+)", line)
             assert match, line
             sentences.add(match.group(2))
-    assert len(sentences) == 8
+    assert len(sentences) == 9
     for surface in (
         ROOT / ".agents/skills/runner-release-sync/SKILL.md",
         ROOT / "docs/release-automation.md",
@@ -3598,6 +3602,239 @@ def whitespace_patch(scenario, context):
     lines[added] = lines[added].rstrip("\n") + " \n"
     group["patch"] = "".join(lines)
     return raw
+
+
+PATCH_FILE = "pack/cuda/patches/vllm/001_x.patch"
+
+NEW_FILE_DIFF = """\
+diff --git a/notes.txt b/notes.txt
+new file mode 100644
+index 0000000..ce01362
+--- /dev/null
++++ b/notes.txt
+@@ -0,0 +1 @@
++hello
+"""
+
+DELETE_PATCH_DIFF = f"""\
+diff --git a/{PATCH_FILE} b/{PATCH_FILE}
+deleted file mode 100644
+index ce01362..0000000
+--- a/{PATCH_FILE}
++++ /dev/null
+@@ -1 +0,0 @@
+-diff --git a/a b/a
+"""
+
+MODIFY_PATCH_DIFF = f"""\
+diff --git a/{PATCH_FILE} b/{PATCH_FILE}
+index ce01362..3b18e51 100644
+--- a/{PATCH_FILE}
++++ b/{PATCH_FILE}
+@@ -1 +1 @@
+-diff --git a/a b/a
++diff --git a/b b/b
+"""
+
+
+@pytest.fixture
+def patched_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "config", "user.name", "Fixture")
+    git(repo, "config", "user.email", "fixture@example.invalid")
+    target = repo / PATCH_FILE
+    target.parent.mkdir(parents=True)
+    target.write_text("diff --git a/a b/a\n")
+    (repo / "pack/matrix.yaml").write_text("rules: []\n")
+    return repo, commit(repo)
+
+
+def disposition_decision(disposition, path=PATCH_FILE):
+    return {"path": path, "disposition": disposition}
+
+
+def disposition_group(diff, decisions):
+    return {
+        "groups": [
+            {
+                "id": "cuda-vllm",
+                "status": "ready",
+                "depends_on": [],
+                "patch": diff,
+                "rows": [
+                    {"backend": "cuda", "service": "vllm", "patches": decisions},
+                ],
+            },
+        ],
+    }
+
+
+def check_dispositions(patched_repo, tmp_path, data):
+    repo, sha = patched_repo
+    return _check_group_patches(
+        repo,
+        {"head_sha": sha},
+        data,
+        tmp_path / "scratch",
+        _env(tmp_path / "home"),
+    )
+
+
+def test_disposition_remove_left_in_tree_fails(patched_repo, tmp_path):
+    # The run-38044169771 failure: remove declared, file never deleted.
+    data = disposition_group(NEW_FILE_DIFF, [disposition_decision("remove")])
+    with pytest.raises(
+        ProposalError,
+        match="declares remove but the patch still exists",
+    ):
+        check_dispositions(patched_repo, tmp_path, data)
+
+
+def test_disposition_remove_deleted_patch_passes(patched_repo, tmp_path):
+    data = disposition_group(DELETE_PATCH_DIFF, [disposition_decision("remove")])
+    assert check_dispositions(patched_repo, tmp_path, data) is data
+
+
+def test_disposition_retain_touched_patch_fails(patched_repo, tmp_path):
+    data = disposition_group(MODIFY_PATCH_DIFF, [disposition_decision("retain")])
+    with pytest.raises(
+        ProposalError,
+        match="disagree with the retain disposition",
+    ):
+        check_dispositions(patched_repo, tmp_path, data)
+
+
+def test_disposition_changed_patch_without_decision_fails(patched_repo, tmp_path):
+    data = disposition_group(MODIFY_PATCH_DIFF, [])
+    with pytest.raises(
+        ProposalError,
+        match="changed patch lacks a disposition",
+    ):
+        check_dispositions(patched_repo, tmp_path, data)
+
+
+def test_disposition_existing_patch_without_decision_fails(patched_repo, tmp_path):
+    data = disposition_group(NEW_FILE_DIFF, [])
+    with pytest.raises(
+        ProposalError,
+        match="affected existing patch lacks a disposition",
+    ):
+        check_dispositions(patched_repo, tmp_path, data)
+
+
+def test_disposition_add_missing_patch_fails(patched_repo, tmp_path):
+    decisions = [
+        disposition_decision("retain"),
+        disposition_decision("add", "pack/cuda/patches/vllm/002_new.patch"),
+    ]
+    data = disposition_group(NEW_FILE_DIFF, decisions)
+    with pytest.raises(
+        ProposalError,
+        match="declares add but the declared patch is missing",
+    ):
+        check_dispositions(patched_repo, tmp_path, data)
+
+
+def test_disposition_retained_patch_passes(patched_repo, tmp_path):
+    data = disposition_group(NEW_FILE_DIFF, [disposition_decision("retain")])
+    assert check_dispositions(patched_repo, tmp_path, data) is data
+
+
+def patch_decision(disposition):
+    return {
+        "path": PATCH_FILE,
+        "disposition": disposition,
+        "reason": "Reviewed against the selected engine.",
+        "versions": ["0.30.0"],
+        "platforms": ["linux/amd64"],
+        "sources": ["https://github.com/vllm-project/vllm/releases/tag/v0.30.0"],
+        "source_repository": "vllm-project/vllm",
+        "source_revision": None,
+    }
+
+
+def decided_proposal(scenario, context, disposition):
+    raw = proposal(scenario, context)
+    raw["groups"][0]["rows"][0]["patches"] = [patch_decision(disposition)]
+    return raw
+
+
+def test_proposal_stage_remove_left_in_tree_is_repaired_once(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    # The production failure: a report declaring a patch removal without
+    # deleting the file passed research and failed validation, where no
+    # repair exists. The research-stage disposition check rejects it into a
+    # repair session, which corrects the disposition to retain.
+    repo = scenario[0]
+    target = repo / PATCH_FILE
+    target.parent.mkdir(parents=True)
+    target.write_text("diff --git a/a b/a\n")
+    scenario = (repo, commit(repo), *scenario[2:])
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(
+                0,
+                agent_stream(decided_proposal(scenario, context, "remove")),
+                "",
+                False,
+                10,
+            )
+        return ProcessResult(
+            0,
+            agent_stream(decided_proposal(scenario, context, "retain")),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(prompt_payload(calls[2]["prompt"]))
+    assert (
+        "declares remove but the patch still exists"
+        in repair_payload["validation_error"]
+    )
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    assert (output / "proposal.json").is_file()
 
 
 def test_proposal_stage_inapplicable_patch_is_repaired_once(
