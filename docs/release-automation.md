@@ -90,6 +90,7 @@ Conflicting evidence blocks the affected group.
 
 Evaluate Mooncake, LMCache, LMCache-Ascend, Diffusers, and applicable Omni packages with the engine and runtime.
 The newest additional package is not necessarily compatible.
+Pin a companion package to the exact version its plugin's README or documentation compatibility matrix declares; never pair versions the matrix does not declare. On the cann backend a companion follows its Ascend plugin's matrix, never the reverse: LMCache pairs 1:1 with the LMCache version LMCache-Ascend declares, and when no declared line matches the selected engine or plugin, disable the package.
 Preserve existing cross-image LMCache protocol constraints and group dependent changes together.
 Independent ready groups can proceed while blocked groups remain unchanged.
 

@@ -52,6 +52,7 @@ Manifest availability is artifact evidence; it does not prove package or GPU com
 
 Evaluate Python, Torch, runtime, accelerator family, plugin, Mooncake, LMCache, LMCache-Ascend, Diffusers, and applicable Omni packages together.
 Choose additional packages for the selected combination, rather than their newest version alone.
+Pin a companion package to the exact version its plugin's README or documentation compatibility matrix declares; never pair versions the matrix does not declare. On the cann backend a companion follows its Ascend plugin's matrix, never the reverse: LMCache pairs 1:1 with the LMCache version LMCache-Ascend declares, and when no declared line matches the selected engine or plugin, disable the package.
 Select stable additional packages; only the whitelisted keys in `prerelease_packages` may select a prerelease.
 Treat every `ARG *_VERSION` and `*_COMMIT` pin in a selected recipe as proposal-owned: update any of them, including LMCache and vllm-omni pins, when compatibility evidence requires it.
 Preserve shared LMCache protocol constraints. Group dependent changes; keep independent blocked groups unchanged.
