@@ -1131,6 +1131,32 @@ def _check_dispositions(base: Path, work: Path, group: dict) -> None:
                 )
 
 
+def _check_patch_versions(data: dict) -> None:
+    # Mirror the trusted acquisition coverage rule where a repair session can
+    # still correct it: every kept patch on a ready group must list the
+    # version of the component it applies to — the selected plugin for Ascend
+    # patches, otherwise the selected engine.
+    for group in data["groups"]:
+        if group["status"] != "ready":
+            continue
+        for row in group["rows"]:
+            for patch in row["patches"]:
+                if patch["disposition"] == "remove":
+                    continue
+                parts = Path(patch["path"]).parts
+                applicable = row["engine_version"]
+                if len(parts) > 4 and parts[3] == "vllm_ascend":
+                    applicable = row["plugin_version"]
+                proposal.require(
+                    applicable is not None
+                    and discovery.version(applicable)
+                    in {discovery.version(v) for v in patch["versions"]},
+                    f"group {group['id']} patch {patch['path']} versions "
+                    f"{patch['versions']} do not cover the selected component "
+                    f"version {applicable}",
+                )
+
+
 def _check_group_patches(
     repo: Path,
     identity: dict,
@@ -1502,6 +1528,7 @@ def _research(args, scratch):
             ),
             context,
         )
+        _check_patch_versions(bound)
         return _check_group_patches(args.repo, identity, bound, scratch, env)
 
     try:
