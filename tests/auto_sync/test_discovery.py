@@ -171,6 +171,93 @@ def test_newest_stable_post_not_api_order_or_unrelated_stream(
     assert result["status"] == "needs_update"
 
 
+def test_chase_picks_next_line_not_newest(tmp_path, upstream, pairs):
+    upstream["vllm-project/vllm"] += [release("v0.30.1"), release("v0.31.0")]
+    repo = repository(tmp_path, rows=support_row())
+    result = selected(repo, upstream, pairs)
+    assert result["engine_version"] == "0.30.1"
+    assert result["current_version"] == "0.29.0"
+    assert result["latest_version"] == "0.31.0"
+    assert result["status"] == "needs_update"
+
+
+def test_chase_picks_highest_post_within_next_line(tmp_path, upstream, pairs):
+    upstream["vllm-project/vllm"] += [
+        release("v0.30.0"),
+        release("v0.30.0.post1"),
+        release("v0.31.0"),
+    ]
+    result = selected(repository(tmp_path, rows=support_row()), upstream, pairs)
+    assert result["engine_version"] == "0.30.0.post1"
+
+
+def test_chase_picks_patch_release_of_current_line_first(tmp_path, upstream, pairs):
+    upstream["vllm-project/vllm"] += [release("v0.29.1"), release("v0.30.0")]
+    result = selected(repository(tmp_path, rows=support_row()), upstream, pairs)
+    assert result["engine_version"] == "0.29.1"
+
+
+def test_chase_without_records_picks_newest(tmp_path, upstream, pairs):
+    upstream["vllm-project/vllm"] += [release("v0.30.0"), release("v0.31.0")]
+    result = selected(repository(tmp_path), upstream, pairs)
+    assert result["engine_version"] == "0.31.0"
+    assert result["current_version"] is None
+    assert result["status"] == "needs_update"
+
+
+def test_chase_cann_plugin_one_line_at_a_time(tmp_path, upstream, pairs):
+    upstream["vllm-project/vllm"] += [release("v0.23.0"), release("v0.24.0")]
+    upstream["vllm-project/vllm-ascend"] += [
+        release("v0.24.0rc1", prerelease=True),
+    ]
+    pairs["0.24.0rc1"] = {
+        "engine_version": "0.24.0",
+        "source": "https://github.com/vllm-project/vllm-ascend/releases/tag/v0.24.0rc1",
+    }
+    catalog = [
+        catalog_row(
+            backend="cann",
+            backend_version="9.1",
+            backend_variant=variant,
+            service_version="0.23.0",
+            dependencies={"vllm-ascend": "0.23.0"},
+        )
+        for variant in ["950", "a3", "910b", "310p"]
+    ]
+    result = selected(
+        repository(tmp_path, catalog=catalog),
+        upstream,
+        pairs,
+        "cann/vllm",
+    )
+    assert result["plugin_version"] == "0.24.0rc1"
+    assert result["engine_version"] == "0.24.0"
+    assert result["current_version"] == "0.23.0"
+    assert result["latest_version"] == "0.27.1rc1"
+    assert result["status"] == "needs_update"
+
+
+def test_dropped_variant_is_not_chased(tmp_path, upstream, pairs):
+    catalog = [
+        catalog_row(
+            backend="cann",
+            backend_version="9.1",
+            backend_variant=variant,
+            service_version="0.27.1",
+            dependencies={"vllm-ascend": "0.27.1rc1"},
+        )
+        for variant in ["950", "a3"]
+    ]
+    result = selected(
+        repository(tmp_path, catalog=catalog),
+        upstream,
+        pairs,
+        "cann/vllm",
+    )
+    assert [v["variant"] for v in result["variants"]] == ["950", "a3"]
+    assert result["status"] == "unchanged"
+
+
 def test_latest_ascend_without_pair_blocks_no_older_fallback(tmp_path, upstream, pairs):
     upstream["vllm-project/vllm-ascend"].append(release("v0.29.0rc2", prerelease=True))
     result = selected(repository(tmp_path), upstream, pairs, "cann/vllm")
@@ -228,10 +315,12 @@ def test_exact_plugin_and_variant_match(tmp_path, upstream, pairs):
             ),
         ],
     )
+    # The variant universe follows current records: only 950 and a3 are
+    # represented, so no other variant is chased.
     variants = selected(repo, upstream, pairs, "cann/vllm")["variants"]
+    assert [v["variant"] for v in variants] == ["950", "a3"]
     assert variants[0]["status"] == "unchanged"
     assert variants[1]["status"] == "needs_update"
-    assert variants[2]["status"] == "needs_update"
 
 
 def test_legacy_rc_is_partial_identity_not_a_plugin_match(tmp_path, upstream, pairs):

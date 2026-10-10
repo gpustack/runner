@@ -52,6 +52,79 @@ def git(repo, *args):
     ).stdout.strip()
 
 
+def test_discovery_bind_allows_a_variant_outside_the_universe():
+    # A variant dropped earlier is absent from the discovery universe; a
+    # ready group may add it back when upstream support returns.
+    discovery = [
+        {
+            "subscription": f"{backend}/{service}",
+            "backend": backend,
+            "service": service,
+            "status": "unchanged",
+            "variants": [{"variant": "", "status": "unchanged"}],
+            "engine_version": "0.29.0",
+            "plugin_version": None,
+        }
+        for backend, service, _ in run.discovery.SUBSCRIPTIONS
+    ]
+    cann = next(row for row in discovery if row["subscription"] == "cann/vllm")
+    cann.update(
+        status="needs_update",
+        engine_version="0.27.1",
+        plugin_version="0.27.1rc1",
+        variants=[
+            {"variant": "a3", "status": "needs_update"},
+            {"variant": "910b", "status": "unchanged"},
+        ],
+    )
+    context = {"identity": {"mode": "discover"}, "discovery": discovery}
+
+    def bound(variant):
+        row = {
+            "backend": "cann",
+            "service": "vllm",
+            "variant": variant,
+            "engine_version": "0.27.1",
+            "plugin_version": "0.27.1rc1",
+        }
+        data = {
+            "groups": [
+                {
+                    "id": "cann-vllm",
+                    "status": "ready",
+                    "reason": "Ready.",
+                    "depends_on": [],
+                    "report": {},
+                    "patch": "",
+                    "rows": [row],
+                },
+            ],
+            "candidates": [
+                {
+                    "subscription": entry["subscription"],
+                    "status": "ready"
+                    if entry["subscription"] == "cann/vllm"
+                    else "unchanged",
+                    "groups": ["cann-vllm"]
+                    if entry["subscription"] == "cann/vllm"
+                    else [],
+                    "reason": "Ready.",
+                }
+                for entry in discovery
+            ],
+        }
+        return run._bind_discovery(data, context)["groups"][0]  # noqa: SLF001 - the bind guard is exercised directly, without the fixture stack.
+
+    # 950 is outside the derived universe and may be added back; a3 is
+    # flagged needs_update. Both rows stay ready.
+    assert bound("950")["status"] == "ready"
+    assert bound("a3")["status"] == "ready"
+    # 910b is already represented at the candidate and cannot be proposed.
+    rejected = bound("910b")
+    assert rejected["status"] == "failed"
+    assert "already represented or blocked" in rejected["reason"]
+
+
 def commit(repo):
     git(repo, "add", ".")
     git(repo, "commit", "-qm", "fixture")
@@ -771,7 +844,11 @@ def test_ready_rows_cannot_target_an_already_represented_variant(scenario, tmp_p
     support.write_text(
         support.read_text().replace(
             "<!-- runner-support-records:end -->",
-            "| cann | 8.3.0 | vllm | a3 | 0.30.0 | 0.30.0rc1 | linux/amd64 | prepared |\n<!-- runner-support-records:end -->",
+            "| cann | 8.3.0 | vllm | a3 | 0.30.0 | 0.30.0rc1 | linux/amd64 | prepared |\n"
+            # A lagging variant keeps the candidate in needs_update, so the
+            # rejection comes from the variant guard rather than the candidate.
+            "| cann | 8.3.0 | vllm | 910b | 0.29.0 | 0.29.0rc1 | linux/amd64 | published |\n"
+            "<!-- runner-support-records:end -->",
         ),
     )
     scenario = (scenario[0], commit(scenario[0]), *scenario[2:])

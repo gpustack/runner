@@ -1,5 +1,5 @@
 """
-Select latest releases against catalog and support identities on a frozen checkout.
+Chase upstream releases one line at a time against a frozen checkout.
 
 The controller supplies complete upstream release lists and sourced Ascend pairs.
 This module does not fetch, build, or publish images. Pack calls ``promote`` only
@@ -327,7 +327,43 @@ def _key(record):
     )
 
 
-def _candidate(service, backend, releases, pairs):
+def _chase(base, eligible):
+    """One release line above the base: lowest line, highest member within it."""
+    if base is None:
+        return max(eligible)
+    above = [value for value in eligible if value > base]
+    if not above:
+        # Upstream offers nothing newer; the newest release keeps lagging
+        # variants visible exactly as before chasing existed.
+        return max(eligible)
+    line = min((value.epoch, value.major, value.minor) for value in above)
+    return max(
+        value for value in above if (value.epoch, value.major, value.minor) == line
+    )
+
+
+def _represented(sources, backend, service):
+    """Catalog and explicit support records for one subscription, pooled."""
+    return [
+        record
+        for records in sources.values()
+        for record in records
+        if record["backend"] == backend
+        and record["service"] == service
+        and record["status"] in {"prepared", "published"}
+    ]
+
+
+def _base(represented, backend, service):
+    """The version a subscription chases from; CANN vLLM chases its plugin."""
+    key = (
+        "plugin_version" if (backend, service) == ("cann", "vllm") else "engine_version"
+    )
+    versions = [version(record[key]) for record in represented if record[key]]
+    return max(versions) if versions else None
+
+
+def _candidate(service, backend, releases, pairs, base=None):
     engines = _releases(releases.get(UPSTREAMS[service]))
     versions = (
         _releases(releases.get(ASCEND), plugin=True)
@@ -336,11 +372,15 @@ def _candidate(service, backend, releases, pairs):
     )
     if not versions:
         return {"status": "blocked", "reason": "no eligible upstream release"}
-    latest = max(versions)
+    target = _chase(base, versions)
+    selected = {
+        "current_version": str(base) if base is not None else None,
+        "latest_version": str(max(versions)),
+    }
     if backend != "cann" or service != "vllm":
-        return {"engine_version": str(latest), "plugin_version": None}
-    candidate = {"plugin_version": str(latest)}
-    pair = pairs.get(str(latest))
+        return {**selected, "engine_version": str(target), "plugin_version": None}
+    candidate = {**selected, "plugin_version": str(target)}
+    pair = pairs.get(str(target))
     if (
         not isinstance(pair, dict)
         or not isinstance(pair.get("source"), str)
@@ -349,7 +389,7 @@ def _candidate(service, backend, releases, pairs):
         return {
             **candidate,
             "status": "blocked",
-            "reason": "latest Ascend plugin has no sourced stable-engine pair",
+            "reason": "selected Ascend plugin has no sourced stable-engine pair",
         }
     engine = version(pair.get("engine_version"))
     if (
@@ -396,10 +436,23 @@ def discover(repo: Path, releases: dict, ascend_pairs: dict) -> list[dict]:
             "service": service,
         }
         try:
-            result.update(_candidate(service, backend, releases, ascend_pairs))
+            represented = _represented(sources, backend, service)
+            result.update(
+                _candidate(
+                    service,
+                    backend,
+                    releases,
+                    ascend_pairs,
+                    _base(represented, backend, service),
+                ),
+            )
             if "status" not in result:
+                # The variant universe follows current records, so a variant
+                # deliberately dropped from the matrix is not chased forever.
+                current = sorted({record["variant"] for record in represented})
                 result["variants"] = [
-                    _match(result, variant, sources) for variant in variants
+                    _match(result, variant, sources)
+                    for variant in (current or variants)
                 ]
                 result["status"] = (
                     "needs_update"
