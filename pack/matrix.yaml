@@ -124,9 +124,9 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.29.0"
-  ## AMD ROCm 7.2.1 - SGLang 0.5.18 (rocm720-mi30x)
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.30.0"
+  ## AMD ROCm 7.2.1 - SGLang 0.5.21 (rocm720-mi30x)
   ##
   - backend: "rocm"
     services:
@@ -135,8 +135,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.21"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
@@ -149,17 +149,18 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-ubuntu2404"
-  ## NVIDIA CUDA 13.0.1 - SGLang 0.5.18
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-ubuntu2404"
+  ## NVIDIA CUDA 13.0.3 - SGLang 0.5.21
+  ## (upstream publishes no cu129 image for 0.5.21, so only the cu130 rule remains)
   ##
   - backend: "cuda"
     services:
       - "sglang"
     args:
-      - "CUDA_VERSION=13.0.1"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu130"
+      - "CUDA_VERSION=13.0.3"
+      - "SGLANG_VERSION=0.5.21"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-cu130"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
@@ -167,18 +168,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-cu129-ubuntu2404"
-  ## NVIDIA CUDA 12.9.1 - SGLang 0.5.18
-  ##
-  - backend: "cuda"
-    services:
-      - "sglang"
-    args:
-      - "CUDA_VERSION=12.9.1"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu129"
-      - "SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda12"
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-cu129-ubuntu2404"
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
   - backend: "cuda"
