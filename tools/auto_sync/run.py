@@ -45,6 +45,12 @@ LLM_INPUTS = (
     "extra-body",
 )
 
+PACK_RUN_URL = re.compile(
+    r"https://github\.com/([^/]+/[^/]+)/actions/runs/([0-9]+)(?:/job/([0-9]+))?/?",
+)
+
+JOB_LOG_LIMIT = 4000
+
 
 def _env(home: Path) -> dict:
     home.mkdir(parents=True, exist_ok=True)
@@ -759,6 +765,62 @@ def _ensure_head(repo, context, env):
     _git(env, repo, "update-ref", "refs/heads/auto-sync-source-" + sha, sha)
 
 
+def _job_log_tail(github, repository, job_id) -> str:
+    """Fetch the bounded tail of one job log; the API redirects to a signed URL."""
+    try:
+        with github.session.get(
+            f"{github.api_url}/repos/{repository}/actions/jobs/{job_id}/logs",
+            timeout=HTTP_TIMEOUT,
+            stream=True,
+        ) as response:
+            if response.status_code != 200:
+                return f"<log unavailable: HTTP {response.status_code}>"
+            tail = b""
+            for chunk in response.iter_content(8192):
+                tail = (tail + chunk)[-32768:]
+    except requests.RequestException as error:
+        return f"<log unavailable: {type(error).__name__}>"
+    return tail.decode("utf-8", "replace")[-JOB_LOG_LIMIT:]
+
+
+def _pack_failure(github, repository, url: str) -> dict:
+    """Summarize a supplied Pack run so research can diagnose its failed jobs."""
+    match = PACK_RUN_URL.fullmatch(url.strip())
+    if match is None or match.group(1) != repository:
+        msg = "pack run URL must name an actions run of the trusted repository"
+        raise proposal.ProposalError(msg)
+    run_id, job_id = match.group(2), match.group(3)
+    run = github.request("GET", f"/repos/{repository}/actions/runs/{run_id}")
+    jobs = github.request(
+        "GET",
+        f"/repos/{repository}/actions/runs/{run_id}/jobs?per_page=100",
+    ).get("jobs", [])
+    failed = [
+        job
+        for job in jobs
+        if job.get("conclusion") == "failure"
+        and (job_id is None or str(job.get("id")) == job_id)
+    ][:5]
+    return {
+        "url": url.strip(),
+        "run_id": int(run_id),
+        "conclusion": run.get("conclusion"),
+        "head_sha": run.get("head_sha"),
+        "failed_jobs": [
+            {
+                "name": job.get("name"),
+                "failed_steps": [
+                    step.get("name")
+                    for step in job.get("steps", [])
+                    if step.get("conclusion") == "failure"
+                ],
+                "log_excerpt": _job_log_tail(github, repository, job.get("id")),
+            }
+            for job in failed
+        ],
+    }
+
+
 def _prepare(args, scratch):
     github = _github()
     proposal.require(
@@ -776,6 +838,12 @@ def _prepare(args, scratch):
     _write(args.output / "context.json", context)
     if context["status"] in {"ignored", "duplicate", "blocked", "failed"}:
         return _result("prepare", context["status"], context["reason"])
+    if args.pack_run_url:
+        context["pack_failure"] = _pack_failure(
+            github,
+            args.repository,
+            args.pack_run_url,
+        )
     env = _env(scratch / "home")
     frozen = scratch / "frozen"
     _clone(args.repo, args.default_sha, frozen, env)
@@ -1081,6 +1149,7 @@ def _research(args, scratch):
         "source_errors": source_errors,
         "authorized_prereleases": sorted(permissions),
         "prerelease_packages": sorted(packages),
+        "pack_failure": context.get("pack_failure"),
     }
     analysis_schema = {
         "schema_version": 1,
@@ -1119,6 +1188,9 @@ def _research(args, scratch):
         "referenced requirements/installers/patches, and inspect registries with crane. "
         "The discovered selection is the next release line above the catalog, not necessarily the newest "
         "upstream release; research that selection only, never a newer line. "
+        "When pack_failure is supplied, diagnose the failed Pack run: map each failed job and step to "
+        "the owning subscription, fold the diagnosis into this round's evaluation of that subscription, "
+        "and keep the chasing rule when deciding the selection. "
         "Additional packages use stable releases only; the whitelisted keys in prerelease_packages "
         "may use a prerelease when no stable release satisfies compatibility. "
         "Do not edit files, execute source scripts, run Pack, service builds, candidate validation or repository-wide tests, or write to GitHub. "
@@ -1577,6 +1649,7 @@ def main(argv=None) -> int:
             command.add_argument("--repository", required=True)
             command.add_argument("--default-sha", required=True)
             command.add_argument("--event", type=Path)
+            command.add_argument("--pack-run-url", default="")
         else:
             command.add_argument("--bundle", type=Path, required=True)
     args = parser.parse_args(argv)

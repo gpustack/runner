@@ -189,7 +189,7 @@ PR mapping: PR 1 = T1 + T2 (branch `feat/auto-sync-incremental-chasing`, code co
       Owns: `tools/auto_sync/run.py` (prompt sections), `.agents/skills/runner-release-sync/SKILL.md`, `docs/release-automation.md`
       Acceptance: research and proposal prompts state the patch adapt/delete duty, full component ownership, variant rotation rules, and the support-records/git-history consultation requirement; SKILL.md and docs match the prompts; mkdocs strict build passes.
       Verify: `uv run pytest tests/auto_sync -q -k "prompt" && uv run mkdocs build --strict`
-- [ ] **T6 · `pack-run-url` dispatch input and pack failure ingestion**
+- [x] **T6 · `pack-run-url` dispatch input and pack failure ingestion**
       Blocked by: T3
       Owns: `.github/workflows/auto-sync.yml`, `tools/auto_sync/run.py` (CLI + prepare ingestion), pack-failure additions in `tests/auto_sync/test_e2e.py` and `tests/auto_sync/fixtures/e2e/`
       Gate: review
