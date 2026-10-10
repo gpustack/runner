@@ -14,6 +14,7 @@ Cite only bare https URLs in every sources list (row, manifest, package and patc
 Read the exact upstream trees, Dockerfiles and referenced requirements/installers/patches.
 The discovered selection is the next release line above the catalog, not necessarily the newest upstream release; propose that selection only, never a newer line.
 Every ARG *_VERSION and *_COMMIT pin in a selected recipe is proposal-owned: change any of them, including LMCache and vllm-omni pins, when compatibility evidence requires it.
+Pin a companion package to the exact version its plugin's README or documentation compatibility matrix declares for the selected line; on the cann backend LMCache follows the LMCache-Ascend matrix, never the reverse, and when no declared line matches the selected engine or plugin, disable the package instead of pairing versions the matrix does not declare.
 Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied sources, and record the reason. Never block a group on patch state alone.
 Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected release no longer supports, citing the upstream scoping, and add a variant back when support returns.
@@ -51,6 +52,7 @@ REQUIRED: Return raw JSON only, without Markdown or code fences.
 REQUIRED: The final reply is one model message with a hard output ceiling; a reply that exceeds it is cut off mid-structure and rejected, so keep every reason and report concise.
 REQUIRED: A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
 REQUIRED: Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
+REQUIRED: Pin a companion package to the exact version its plugin's README or documentation compatibility matrix declares; never pair versions the matrix does not declare.
 REQUIRED: Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
 REQUIRED: Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 REQUIRED: A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.
