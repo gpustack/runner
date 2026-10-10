@@ -1064,6 +1064,64 @@ def _truncated_reply(failed_reply: str) -> bool:
     return False
 
 
+def _check_dispositions(base: Path, work: Path, group: dict) -> None:
+    """
+    Mirror validation's disposition checks where a repair session can correct them.
+
+    The group diff must express every declared patch decision, and every
+    existing patch of an affected component needs a declared disposition;
+    validation rejects the same mismatches where no repair exists.
+    """
+    decisions = {d["path"]: d for row in group["rows"] for d in row["patches"]}
+    touched = set()
+    for match in re.finditer(
+        r"^diff --git a/(\S+) b/(\S+)$",
+        group["patch"],
+        re.MULTILINE,
+    ):
+        touched.update(path for path in match.groups() if path.endswith(".patch"))
+    for path, decision in decisions.items():
+        disposition = decision["disposition"]
+        exists = (work / path).exists()
+        if disposition == "remove":
+            proposal.require(
+                not exists,
+                f"group {group['id']} declares remove but the patch still exists: {path}",
+            )
+        else:
+            proposal.require(
+                exists,
+                f"group {group['id']} declares {disposition} but the declared patch is missing: {path}",
+            )
+        if path in touched:
+            existed = (base / path).exists()
+            proposal.require(
+                (disposition == "add" and not existed and exists)
+                or (disposition == "adapt" and existed and exists)
+                or (disposition == "remove" and existed and not exists),
+                f"group {group['id']} patch changes disagree with the {disposition} disposition: {path}",
+            )
+    for path in sorted(touched):
+        proposal.require(
+            path in decisions,
+            f"group {group['id']} changed patch lacks a disposition: {path}",
+        )
+    for row in group["rows"]:
+        components = {row["service"]}
+        if row["service"] == "vllm":
+            components |= {"vllm_ascend", "vllm_omni"}
+        for component in sorted(components):
+            directory = base / "pack" / row["backend"] / "patches" / component
+            if not directory.is_dir():
+                continue
+            for patch in sorted(directory.rglob("*.patch")):
+                path = patch.relative_to(base).as_posix()
+                proposal.require(
+                    path in decisions,
+                    f"group {group['id']} affected existing patch lacks a disposition: {path}",
+                )
+
+
 def _check_group_patches(
     repo: Path,
     identity: dict,
@@ -1079,6 +1137,7 @@ def _check_group_patches(
     group whose dependencies are not all ready is validated later instead.
     The --whitespace=error flag mirrors the downstream validation and
     publication applications, which reject whitespace-damaged patches.
+    Dispositions are checked against the resulting tree for the same reason.
     """
     groups = {g["id"]: g for g in data["groups"]}
     ready = {g["id"] for g in data["groups"] if g["status"] == "ready"}
@@ -1095,6 +1154,9 @@ def _check_group_patches(
     work = scratch / "patch-check"
     shutil.rmtree(work, ignore_errors=True)
     _clone(repo, identity["head_sha"], work, env)
+    base = scratch / "patch-check-base"
+    shutil.rmtree(base, ignore_errors=True)
+    _clone(repo, identity["head_sha"], base, env)
     applied = set()
     while checkable - applied:
         progressed = False
@@ -1117,6 +1179,7 @@ def _check_group_patches(
                 raise proposal.ProposalError(msg) from None
             applied.add(identifier)
             progressed = True
+            _check_dispositions(base, work, groups[identifier])
         proposal.require(progressed, "group patch order is unresolvable")
     return data
 

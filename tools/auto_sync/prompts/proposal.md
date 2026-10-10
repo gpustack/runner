@@ -14,6 +14,7 @@ Read the exact upstream trees, Dockerfiles and referenced requirements/installer
 The discovered selection is the next release line above the catalog, not necessarily the newest upstream release; propose that selection only, never a newer line.
 Every ARG *_VERSION and *_COMMIT pin in a selected recipe is proposal-owned: change any of them, including LMCache and vllm-omni pins, when compatibility evidence requires it.
 Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied sources, and record the reason. Never block a group on patch state alone.
+Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected release no longer supports, citing the upstream scoping, and add a variant back when support returns.
 Before changing an existing pin, patch, variant or support row, read docs/support-records.md and run git log and git show on the files to change; cite the introducing commit when a disposition overrides an earlier decision.
 Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane.
@@ -50,4 +51,5 @@ REQUIRED: The final reply is one model message with a hard output ceiling; a rep
 REQUIRED: A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
 REQUIRED: Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
 REQUIRED: Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
+REQUIRED: Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 REQUIRED: A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.

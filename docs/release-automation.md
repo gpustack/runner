@@ -191,6 +191,7 @@ Use an exact source commit or `null` when unavailable.
 For engine patches, `versions` includes the selected engine. For Ascend patches, it includes the selected plugin.
 For Omni patches, it states engine applicability; the source commit must match the declared Omni package pin.
 Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
+Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 The controller resolves each selected release or package pin independently before checking the claimed commit.
 The controller independently acquires source and Ascend pairing evidence; an agent assertion cannot substitute for it.
 If independent target resolution fails, the checked source revision is `null` and its application check is unverified.

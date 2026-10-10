@@ -115,6 +115,7 @@ Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-a
 A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
 Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
 Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
+Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 Cite only bare https URLs in every `sources` list (row, manifest, package, and patch); never a local path or a repository-relative path.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
