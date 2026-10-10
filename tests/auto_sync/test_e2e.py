@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import shutil
+import string
 import subprocess
 import sys
 import time
@@ -29,10 +30,13 @@ from tools.auto_sync.checks import _clone as clone_source
 from tools.auto_sync.checks import _git as source_git
 from tools.auto_sync.checks import _run as run_command
 from tools.auto_sync.checks import _source_patch_checks as source_patch_checks
+from tools.auto_sync.proposal import ProposalError
 from tools.auto_sync.run import (
+    PROMPT_SENTINEL,
     _acquire_candidate,
     _env,
     _permissions,
+    _prompt,
     _redact,
     _registry,
     _repair_prompt,
@@ -915,7 +919,7 @@ def test_prerelease_whitelist_reaches_the_research_prompt(
     )
     prompt = calls[0]["prompt"]
     assert "whitelisted keys in prerelease_packages" in prompt
-    payload = json.loads(prompt.split("\n", 1)[1])
+    payload = json.loads(prompt.split(PROMPT_SENTINEL, 1)[1])
     assert payload["prerelease_packages"] == ["lmcache", "vllm-omni"]
 
 
@@ -957,7 +961,7 @@ def test_component_source_trees_reach_the_research_prompt(
         )
         == 1
     )
-    payload = json.loads(calls[0]["prompt"].split("\n", 1)[1])
+    payload = json.loads(calls[0]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     supplied = payload["upstream_sources"]["LMCache/LMCache@0.5.4"]
     assert supplied["repository"] == "LMCache/LMCache"
     assert supplied["source"].startswith(
@@ -1124,7 +1128,7 @@ def test_pack_failure_reaches_the_research_prompt(scenario, tmp_path, monkeypatc
     )
     prompt = calls[0]["prompt"]
     assert "diagnose the failed Pack run" in prompt
-    payload = json.loads(prompt.split("\n", 1)[1])
+    payload = json.loads(prompt.split(PROMPT_SENTINEL, 1)[1])
     assert payload["pack_failure"]["run_id"] == 777
     assert payload["pack_failure"]["failed_jobs"][1]["log_excerpt"].endswith(
         "cann merge failed\n",
@@ -2343,7 +2347,7 @@ def test_research_reads_complete_release_records_on_demand(
 
     def observe(_config, **kwargs):
         prompt = kwargs["prompt"]
-        data = json.loads(prompt.split("\n", 1)[1])
+        data = json.loads(prompt.split(PROMPT_SENTINEL, 1)[1])
         record = data["upstream_sources"]["vllm-project/vllm@0.30.0"]
         assert marker not in prompt
         assert "asset-metadata-marker" not in prompt
@@ -2555,9 +2559,9 @@ def test_research_phases_share_budget_and_deadline_with_fresh_sessions(
     assert proposal_call["deadline"] == run.agent.SESSION_DEADLINE - 12
     # The proposal session receives the validated analysis, never the transcript.
     assert "ANALYSIS_TRANSCRIPT_NOISE" not in proposal_call["prompt"]
-    analysis_payload = json.loads(analysis_call["prompt"].split("\n", 1)[1])
+    analysis_payload = json.loads(analysis_call["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert "analysis" not in analysis_payload
-    proposal_payload = json.loads(proposal_call["prompt"].split("\n", 1)[1])
+    proposal_payload = json.loads(proposal_call["prompt"].split(PROMPT_SENTINEL, 1)[1])
     saved = json.loads((output / "analysis.json").read_text())
     assert proposal_payload["analysis"] == saved
     assert saved["identity"] == context["identity"]
@@ -2614,7 +2618,7 @@ def test_analysis_stage_prose_output_exhausts_repair_rounds(
     assert calls[1]["workspace"] == calls[0]["workspace"]
     assert len({call["runtime_dir"] for call in calls}) == 3
     for call in calls[1:]:
-        payload = json.loads(call["prompt"].split("\n", 1)[1])
+        payload = json.loads(call["prompt"].split(PROMPT_SENTINEL, 1)[1])
         assert payload["failed_reply"] == fenced
         assert "invalid JSON" in payload["validation_error"]
         assert "schema" in payload
@@ -2775,12 +2779,12 @@ def test_analysis_prose_output_is_repaired_once_and_reaches_proposal(
     assert calls[1]["workspace"] == calls[0]["workspace"]
     assert calls[1]["runtime_dir"] != calls[0]["runtime_dir"]
     assert calls[1]["max_session_tokens"] == 990
-    repair_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
-    stage_payload = json.loads(calls[0]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[1]["prompt"].split(PROMPT_SENTINEL, 1)[1])
+    stage_payload = json.loads(calls[0]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert repair_payload["schema"] == stage_payload["schema"]
     assert repair_payload["failed_reply"] == fenced
     assert "invalid JSON" in repair_payload["validation_error"]
-    proposal_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    proposal_payload = json.loads(calls[2]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     saved = json.loads((output / "analysis.json").read_text())
     assert proposal_payload["analysis"] == saved
     assert (output / "proposal.json").is_file()
@@ -2850,7 +2854,7 @@ def test_repair_round_receives_validation_error_and_recovers(
         == 0
     )
     assert len(calls) == 3
-    repair_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[1]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert (
         repair_payload["validation_error"]
         == "analyzed candidate lacks an exact revision"
@@ -2923,7 +2927,7 @@ def test_analysis_evidence_key_mismatch_is_repaired_with_supplied_keys(
         == 0
     )
     assert len(calls) == 3
-    repair_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[1]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert "outside the supplied sources" in repair_payload["validation_error"]
     assert repair_payload["supplied_evidence_keys"] == [
         "sgl-project/sglang@0.5.0",
@@ -3137,10 +3141,10 @@ def test_proposal_stage_prose_output_is_repaired_once(
     assert calls[2]["runtime_dir"] != calls[1]["runtime_dir"]
     assert calls[2]["max_session_tokens"] == 980
     assert calls[2]["deadline"] < run.agent.SESSION_DEADLINE
-    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[2]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert repair_payload["failed_reply"] == fenced
     assert "invalid JSON" in repair_payload["validation_error"]
-    stage_payload = json.loads(calls[1]["prompt"].split("\n", 1)[1])
+    stage_payload = json.loads(calls[1]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert repair_payload["schema"] == stage_payload["schema"]
     assert "repair session of the proposal stage" in calls[2]["prompt"]
     # An unparseable reply needs only its surrounding prose dropped.
@@ -3189,6 +3193,85 @@ def test_repair_prompt_treats_an_empty_reply_as_prose():
         "invalid JSON: Expecting value: line 1 column 1 (char 0)",
     )
     assert "cut off mid-structure" not in prompt
+
+
+def test_repair_prompt_guides_a_reply_truncated_at_end():
+    reply = '{"schema_version": 1, "candidates": ['
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        reply,
+        "invalid JSON: Expecting value: line 1 column "
+        f"{len(reply) + 1} (char {len(reply)})",
+    )
+    assert "cut off mid-structure at the model output ceiling" in prompt
+    assert "drop every other character" not in prompt
+
+
+def test_repair_prompt_guides_a_reply_with_trailing_prose():
+    reply = '{"schema_version": 1}\nTrailing prose.'
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        reply,
+        "invalid JSON: Extra data: line 1 column 21 (char 20)",
+    )
+    assert "drop every other character" in prompt
+    assert "cut off mid-structure" not in prompt
+
+
+def test_repair_prompt_guides_a_duplicate_key_reply():
+    reply = '{"schema_version": 1, "schema_version": 1}'
+    prompt = _repair_prompt(
+        "proposal",
+        {},
+        reply,
+        "invalid JSON: duplicate JSON key: schema_version",
+    )
+    assert "drop every other character" in prompt
+    assert "cut off mid-structure" not in prompt
+
+
+def test_prompt_templates_declare_exact_placeholders():
+    expected = {
+        "analysis": {
+            "max_session_turns",
+            "max_tool_calls",
+            "reserved_turns",
+            "payload",
+        },
+        "proposal": {
+            "max_session_turns",
+            "max_tool_calls",
+            "reserved_turns",
+            "payload",
+        },
+        "repair": {"phase", "correction", "guidance", "payload"},
+    }
+    prompt_dir = Path(run.__file__).parent / "prompts"
+    for name, identifiers in expected.items():
+        text = (prompt_dir / (name + ".md")).read_text(encoding="utf-8")
+        assert set(string.Template(text).get_identifiers()) == identifiers
+        assert text.count(PROMPT_SENTINEL) == 1
+
+
+def test_prompt_loader_rejects_placeholder_drift():
+    base = {"max_session_turns": "1", "max_tool_calls": "1", "reserved_turns": "1"}
+    with pytest.raises(ProposalError, match="placeholder drift"):
+        _prompt("analysis", **base)
+    with pytest.raises(ProposalError, match="placeholder drift"):
+        _prompt("analysis", payload="{}", bogus="1", **base)
+
+
+def test_assembled_prompts_carry_no_unsubstituted_placeholder():
+    rendered = _prompt(
+        "repair",
+        phase="analysis",
+        correction="correction text.",
+        guidance="",
+        payload="{}",
+    )
+    assert "$" not in rendered
 
 
 def test_proposal_patch_file_is_inlined_by_the_controller(
@@ -3292,7 +3375,7 @@ def test_proposal_patch_file_outside_workspace_is_repaired(
         == 0
     )
     assert len(calls) == 3
-    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[2]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert "resolves outside the base directory" in repair_payload["validation_error"]
     assert repair_payload["failed_reply"] == json.dumps(escaped)
     assert (output / "proposal.json").is_file()
@@ -3359,7 +3442,7 @@ def test_proposal_patch_file_in_stripped_directory_is_repaired(
         == 0
     )
     assert len(calls) == 4
-    repair_payload = json.loads(calls[3]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[3]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert "cannot read patch_file" in repair_payload["validation_error"]
     assert repair_payload["failed_reply"] == json.dumps(stripped)
     diagnostic = json.loads((output / "diagnostics.json").read_text())
@@ -3425,7 +3508,7 @@ def test_proposal_non_url_source_is_repaired_with_the_offending_entry(
         == 0
     )
     assert len(calls) == 3
-    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[2]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert (
         "invalid evidence source URL: 'pack/cuda/Dockerfile.vllm'"
         in repair_payload["validation_error"]
@@ -3516,7 +3599,7 @@ def test_proposal_stage_inapplicable_patch_is_repaired_once(
         == 0
     )
     assert len(calls) == 3
-    repair_payload = json.loads(calls[2]["prompt"].split("\n", 1)[1])
+    repair_payload = json.loads(calls[2]["prompt"].split(PROMPT_SENTINEL, 1)[1])
     assert "cuda-vllm patch does not apply" in repair_payload["validation_error"]
     diagnostic = json.loads((output / "diagnostics.json").read_text())
     assert [phase["name"] for phase in diagnostic["phases"]] == [
@@ -3582,7 +3665,7 @@ def test_proposal_repair_rewrites_a_rejected_patch_file(
     assert len(calls) == 3
     repair_prompt = calls[2]["prompt"]
     assert "rewrite the patch files referenced by patch_file entries" in repair_prompt
-    repair_payload = json.loads(repair_prompt.split("\n", 1)[1])
+    repair_payload = json.loads(repair_prompt.split(PROMPT_SENTINEL, 1)[1])
     assert "cuda-vllm patch does not apply" in repair_payload["validation_error"]
     assert repair_payload["failed_reply"] == json.dumps(draft)
     diagnostic = json.loads((output / "diagnostics.json").read_text())
