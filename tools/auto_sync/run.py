@@ -768,16 +768,16 @@ def _ensure_head(repo, context, env):
 def _job_log_tail(github, repository, job_id) -> str:
     """Fetch the bounded tail of one job log; the API redirects to a signed URL."""
     try:
-        response = github.session.get(
+        with github.session.get(
             f"{github.api_url}/repos/{repository}/actions/jobs/{job_id}/logs",
             timeout=HTTP_TIMEOUT,
             stream=True,
-        )
-        if response.status_code != 200:
-            return f"<log unavailable: HTTP {response.status_code}>"
-        tail = b""
-        for chunk in response.iter_content(8192):
-            tail = (tail + chunk)[-32768:]
+        ) as response:
+            if response.status_code != 200:
+                return f"<log unavailable: HTTP {response.status_code}>"
+            tail = b""
+            for chunk in response.iter_content(8192):
+                tail = (tail + chunk)[-32768:]
     except requests.RequestException as error:
         return f"<log unavailable: {type(error).__name__}>"
     return tail.decode("utf-8", "replace")[-JOB_LOG_LIMIT:]
