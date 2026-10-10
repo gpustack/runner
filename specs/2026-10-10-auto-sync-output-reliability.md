@@ -1,6 +1,6 @@
 # Spec: Auto-Sync Output Reliability
 
-Status: Built
+Status: Shipped
 Type: Feature
 
 ## Summary
