@@ -9,10 +9,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.auto_sync.discovery import (
     DiscoveryError,
+    _base,
+    _read_sources,
+    _represented,
     canonical_variant,
     discover,
     parse_support,
     prerelease_packages,
+    version,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -437,15 +441,20 @@ def test_linked_support_requires_markers_even_with_legacy_tables(
     missing,
 ):
     repo = repository(tmp_path)
-    upstream["vllm-project/vllm"].append(release("v0.30.0"))
+    # The injected record must advance past every represented cuda/vllm
+    # engine: a proposal branch legitimately records the former target, and
+    # re-adding that identity here fails discovery with a duplicate support
+    # identity. The catalog and legacy tables hold the represented versions,
+    # so derive the target through the same sources discovery reads.
+    records = (ROOT / "docs/support-records.md").read_text()
+    sources = _read_sources(ROOT)
+    base = _base(_represented(sources, "cuda", "vllm"), "cuda", "vllm")
+    target = version(f"{base.major}.{base.minor + 1}.0")
+    upstream["vllm-project/vllm"].append(release(f"v{target}"))
     path = repo / "docs/support-records.md"
-    text = (
-        (ROOT / "docs/support-records.md")
-        .read_text()
-        .replace(
-            "<!-- runner-support-records:end -->",
-            support_row(engine="0.30.0") + "<!-- runner-support-records:end -->",
-        )
+    text = records.replace(
+        "<!-- runner-support-records:end -->",
+        support_row(engine=str(target)) + "<!-- runner-support-records:end -->",
     )
     path.write_text(text)
     assert selected(repo, upstream, pairs)["status"] == "unchanged"
