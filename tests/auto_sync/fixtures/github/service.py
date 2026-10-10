@@ -10,6 +10,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
 
 
+class PlainText(str):
+    """Marker for a response body served as plain text instead of JSON."""
+
+    __slots__ = ()
+
+
 class FakeGitHub:
     def __init__(self, repo, repository, bot):
         self.repo = repo
@@ -29,6 +35,7 @@ class FakeGitHub:
         self.trees = {}
         self.authors = {}
         self.pending_pr = None
+        self.actions_runs = {}
 
     def git(self, *args, content=None, env=None, check=True):
         return subprocess.run(  # noqa: S603 - controlled fixture Git operations.
@@ -65,9 +72,14 @@ class FakeGitHub:
                     )
                 fixture.requests.append((method, self.path, copy.deepcopy(body)))
                 status, result = fixture.request(method, self.path, body)
-                data = json.dumps(result).encode()
+                if isinstance(result, PlainText):
+                    data = result.encode()
+                    content_type = "text/plain; charset=utf-8"
+                else:
+                    data = json.dumps(result).encode()
+                    content_type = "application/json"
                 self.send_response(status)
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
@@ -231,6 +243,21 @@ class FakeGitHub:
         if method == "GET":
             if route == "":
                 return 200, {"full_name": self.repository, "default_branch": "main"}
+            if route.startswith("/actions/runs/"):
+                parts = route.split("/")
+                record = self.actions_runs.get(parts[3])
+                if record is None:
+                    return 404, {}
+                if len(parts) == 5 and parts[4] == "jobs":
+                    jobs = record.get("jobs", [])
+                    return 200, {"total_count": len(jobs), "jobs": jobs}
+                return 200, record.get("run", {})
+            if route.startswith("/actions/jobs/") and route.endswith("/logs"):
+                job_id = route.split("/")[3]
+                for record in self.actions_runs.values():
+                    if job_id in record.get("logs", {}):
+                        return 200, PlainText(record["logs"][job_id])
+                return 404, PlainText("")
             if route == "/pulls":
                 state = query.get("state", ["open"])[0]
                 return self.page(

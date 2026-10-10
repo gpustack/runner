@@ -215,6 +215,9 @@ No local model installation or interactive login is needed.
 Scheduled and manual runs read these repository or organization settings.
 A manual dispatch can additionally override the runner profile, the token budget, the repair-round bound,
 and the thinking, sampling, and reasoning-effort settings; each dispatch field pre-fills its documented default.
+A manual dispatch can also pass `pack-run-url`, the URL of a failed Pack workflow run in this repository.
+Prepare then records the run's failed jobs, their failed steps, and bounded log excerpts in the frozen context,
+and the analysis stage diagnoses the failure against the owning subscription.
 The `llm-*` names below are the workflow's internal settings.
 
 | GitHub configuration | Kind | Setting or purpose |

@@ -159,6 +159,7 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
         "llm-temperature",
         "llm-top-p",
         "llm-reasoning-effort",
+        "pack-run-url",
     }
     assert set(invocation["inputs"]) == dispatch
     for name in dispatch - {
@@ -219,6 +220,8 @@ def test_dispatch_inputs_and_exact_configuration_mapping():
         assert env["AUTO_SYNC_LLM_" + config] == (
             "${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_" + config + " }}"
         )
+    prepare_env = step(workflow["jobs"]["research"], "prepare")["env"]
+    assert prepare_env["PACK_RUN_URL"] == "${{ inputs.pack-run-url }}"
     assert "BOT_LOGIN" not in WORKFLOW.read_text().replace("AUTO_SYNC_BOT_LOGIN", "")
 
 

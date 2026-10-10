@@ -65,6 +65,12 @@ on:
           - medium
           - high
           - max
+      # Failure diagnosis.
+      pack-run-url:
+        description: 'Pack run URL, a failed Pack workflow run for this sync to diagnose.'
+        required: false
+        type: string
+        default: ""
   issue_comment:
     types: [created]
 
@@ -156,10 +162,14 @@ jobs:
           AUTO_SYNC_GITHUB_TOKEN: ${{ steps.read-token.outputs.token }}
           AUTO_SYNC_BOT_LOGIN: ${{ steps.read-token.outputs.app-slug }}[bot]
           AUTO_SYNC_DEFAULT_SHA: ${{ steps.freeze.outputs.default-sha }}
+          PACK_RUN_URL: ${{ inputs.pack-run-url }}
         run: |
           args=()
           if [[ "$GITHUB_EVENT_NAME" == issue_comment ]]; then
             args+=(--event "$GITHUB_EVENT_PATH")
+          fi
+          if [[ -n "$PACK_RUN_URL" ]]; then
+            args+=(--pack-run-url "$PACK_RUN_URL")
           fi
           uv run python -m tools.auto_sync.run prepare --repo "$GITHUB_WORKSPACE" \
             --repository "$GITHUB_REPOSITORY" --default-sha "$AUTO_SYNC_DEFAULT_SHA" \

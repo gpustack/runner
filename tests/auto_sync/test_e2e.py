@@ -204,7 +204,7 @@ def invoke(*args):
     return code
 
 
-def prepare(scenario, tmp_path, event=None):
+def prepare(scenario, tmp_path, event=None, pack_run_url=None):
     repo, sha, *_ = scenario
     output = tmp_path / "prepared"
     argv = [
@@ -223,6 +223,8 @@ def prepare(scenario, tmp_path, event=None):
         path = tmp_path / "event.json"
         path.write_text(json.dumps(event))
         argv += ["--event", path]
+    if pack_run_url:
+        argv += ["--pack-run-url", pack_run_url]
     assert invoke(*argv) == 0
     return output
 
@@ -1006,6 +1008,130 @@ def test_policy_sentences_reach_stage_prompts(scenario, tmp_path, monkeypatch):
     assert "proposal-owned" in proposal_prompt
     assert "Rotate variants with evidence" in proposal_prompt
     assert "whitelisted keys in prerelease_packages" in proposal_prompt
+
+
+def pack_run_fixture(scenario):
+    api = scenario[2]
+    api.actions_runs["777"] = {
+        "run": {"conclusion": "failure", "head_sha": "deadbeef"},
+        "jobs": [
+            {
+                "id": 41,
+                "name": "pack (cuda, vllm)",
+                "conclusion": "failure",
+                "steps": [
+                    {"name": "Checkout", "conclusion": "success"},
+                    {"name": "Build", "conclusion": "failure"},
+                ],
+            },
+            {
+                "id": 42,
+                "name": "pack (rocm, vllm)",
+                "conclusion": "success",
+                "steps": [],
+            },
+            {
+                "id": 43,
+                "name": "pack (cann, vllm)",
+                "conclusion": "failure",
+                "steps": [{"name": "Merge", "conclusion": "failure"}],
+            },
+        ],
+        "logs": {
+            "41": "pull base image\nerror: cuda build failed\n",
+            "43": "resolve deps\nerror: cann merge failed\n",
+        },
+    }
+    return "https://github.com/" + REPOSITORY + "/actions/runs/777"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/other/repository/actions/runs/777",
+        "https://github.com/" + REPOSITORY + "/actions/runs/abc",
+        "not a url",
+    ],
+)
+def test_pack_run_url_rejects_a_foreign_or_malformed_url(scenario, tmp_path, url):
+    output = tmp_path / "prepared"
+    assert (
+        invoke(
+            "prepare",
+            "--repo",
+            scenario[0],
+            "--repository",
+            REPOSITORY,
+            "--default-sha",
+            scenario[1],
+            "--output",
+            output,
+            "--pack-run-url",
+            url,
+        )
+        == 1
+    )
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "failed"
+    assert "pack run URL" in result["reason"]
+
+
+def test_pack_failure_reaches_the_research_prompt(scenario, tmp_path, monkeypatch):
+    prepared = prepare(scenario, tmp_path, pack_run_url=pack_run_fixture(scenario))
+    context = json.loads((prepared / "context.json").read_text())
+    failure = context["pack_failure"]
+    assert failure["run_id"] == 777
+    assert failure["conclusion"] == "failure"
+    assert failure["failed_jobs"] == [
+        {
+            "name": "pack (cuda, vllm)",
+            "failed_steps": ["Build"],
+            "log_excerpt": "pull base image\nerror: cuda build failed\n",
+        },
+        {
+            "name": "pack (cann, vllm)",
+            "failed_steps": ["Merge"],
+            "log_excerpt": "resolve deps\nerror: cann merge failed\n",
+        },
+    ]
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        return ProcessResult(0, final_text("not json"), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            tmp_path / "research",
+        )
+        == 1
+    )
+    prompt = calls[0]["prompt"]
+    assert "diagnose the failed Pack run" in prompt
+    payload = json.loads(prompt.split("\n", 1)[1])
+    assert payload["pack_failure"]["run_id"] == 777
+    assert payload["pack_failure"]["failed_jobs"][1]["log_excerpt"].endswith(
+        "cann merge failed\n",
+    )
+
+
+def test_pack_run_url_scoped_to_one_job(scenario, tmp_path):
+    url = pack_run_fixture(scenario) + "/job/43"
+    prepared = prepare(scenario, tmp_path, pack_run_url=url)
+    context = json.loads((prepared / "context.json").read_text())
+    failure = context["pack_failure"]
+    assert [job["name"] for job in failure["failed_jobs"]] == ["pack (cann, vllm)"]
+    assert failure["failed_jobs"][0]["failed_steps"] == ["Merge"]
 
 
 @pytest.mark.parametrize(
