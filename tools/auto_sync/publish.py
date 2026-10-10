@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import json
 import os
 import re
@@ -418,9 +419,16 @@ def _same_publication(record, checked):
     return all(record.get(key) == value for key, value in expected.items())
 
 
+def _cell(text):
+    # A PR-body table cell keeps the full text, unlike the truncated job
+    # summary; collapse whitespace and escape markup so one cell stays a cell.
+    text = html.escape(" ".join(str(text).split()), quote=False)
+    return re.sub(r"([\\`*_\[\]|])", r"\\\1", text)
+
+
 def _render_report(checked, commit_sha=None):
     lines = [
-        "Runner upgrade proposal",
+        "## Runner upgrade proposal",
         "",
         "Configuration is proposed for human review. Image builds, measured dependencies, and GPU execution remain unverified.",
         "Run Pack after merge for the accepted combinations.",
@@ -428,29 +436,57 @@ def _render_report(checked, commit_sha=None):
     ]
     if commit_sha:
         lines += [f"Commit: `{commit_sha}`", ""]
-    lines += ["Candidate outcomes", ""]
+    lines += [
+        "### Candidate outcomes",
+        "",
+        "| Subscription | Status | Reason |",
+        "| --- | --- | --- |",
+    ]
     for candidate in checked["candidates"]:
-        lines.append(
-            f"- {candidate['subscription']}: {candidate['status']}. {candidate['reason']}",
-        )
+        cells = [candidate["subscription"], candidate["status"], candidate["reason"]]
+        lines.append("| " + " | ".join(map(_cell, cells)) + " |")
     for group in checked["groups"]:
         lines += [
             "",
-            f"Group {group['id']}: {group['status']}",
+            f"### Group `{group['id']}`: {group['status']}",
             "",
             group["reason"],
             "",
             group["report"],
             "",
         ]
-        for row in group["rows"]:
+        if group["rows"]:
             lines += [
-                f"- {row['backend']}/{row['service']}, variant `{row['variant'] or '-'}`, runtime `{row['runtime']}`, platform `{row['platform']}`: `{row['old_engine_version']}` to `{row['engine_version']}`; plugin `{row['plugin_version']}`. Evidence: {row['conclusion']}.",
+                "#### Rows",
+                "",
+                "| Subscription | Variant | Runtime | Platform | Old engine | New engine | Plugin | Evidence |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- |",
             ]
+            for row in group["rows"]:
+                cells = [
+                    f"{row['backend']}/{row['service']}",
+                    row["variant"] or "-",
+                    row["runtime"],
+                    row["platform"],
+                    row["old_engine_version"],
+                    row["engine_version"],
+                    row["plugin_version"] or "-",
+                    row["conclusion"],
+                ]
+                lines.append("| " + " | ".join(map(_cell, cells)) + " |")
+            lines.append("")
         # Exact row data retains images, digests, packages, patches, sources,
         # executed checks and deferred work without guessing unknown values.
         rows = {"rows": group["rows"], "validation": group["validation"]}
-        lines += ["", "```json", json.dumps(rows, indent=2, ensure_ascii=True), "```"]
+        lines += [
+            "<details><summary>Exact row data and validation (JSON)</summary>",
+            "",
+            "```json",
+            json.dumps(rows, indent=2, ensure_ascii=True),
+            "```",
+            "",
+            "</details>",
+        ]
     return "\n".join(lines)
 
 
@@ -614,7 +650,7 @@ def _report_revision(github, pr, checked, commit_sha):
     marker = _marker(record)
     body = (
         marker
-        + "\n\nAddressed items and unresolved outcomes\n\n"
+        + "\n\n**Addressed items and unresolved outcomes**\n\n"
         + _render_report(checked, commit_sha)
     )
     # Both PR history and commit metadata are durable, independent of caches.
