@@ -37,6 +37,7 @@ from tools.auto_sync.run import (
     PROMPT_SENTINEL,
     _acquire_candidate,
     _check_group_patches,
+    _check_patch_versions,
     _env,
     _permissions,
     _prompt,
@@ -3797,6 +3798,62 @@ def test_disposition_retained_patch_passes(patched_repo, tmp_path):
     assert check_dispositions(patched_repo, tmp_path, data) is data
 
 
+def versioned_group(versions, *, path=PATCH_FILE, disposition="retain", status="ready"):
+    return {
+        "groups": [
+            {
+                "id": "cuda-vllm",
+                "status": status,
+                "rows": [
+                    {
+                        "engine_version": "0.30.0",
+                        "plugin_version": None,
+                        "patches": [
+                            {
+                                "path": path,
+                                "disposition": disposition,
+                                "versions": versions,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+
+
+def test_patch_versions_covering_the_engine_pass():
+    assert _check_patch_versions(versioned_group(["0.30.0"])) is None
+    # Tag-style spellings normalize to the same PEP 440 version.
+    assert _check_patch_versions(versioned_group(["v0.30.0"])) is None
+
+
+def test_patch_versions_missing_the_engine_fail():
+    with pytest.raises(
+        ProposalError,
+        match=re.escape("do not cover the selected component version 0.30.0"),
+    ):
+        _check_patch_versions(versioned_group(["0.29.0"]))
+
+
+def test_ascend_patch_versions_must_cover_the_plugin():
+    # The run-38070300561 failure: an Ascend patch listed the engine version
+    # where the rule requires the selected plugin version.
+    data = versioned_group(["0.27.1"], path="pack/cann/patches/vllm_ascend/001.patch")
+    data["groups"][0]["rows"][0]["plugin_version"] = "0.27.1rc1"
+    with pytest.raises(ProposalError, match=re.escape("0.27.1rc1")):
+        _check_patch_versions(data)
+    data["groups"][0]["rows"][0]["patches"][0]["versions"] = ["0.27.1rc1"]
+    assert _check_patch_versions(data) is None
+
+
+def test_removed_or_non_ready_patch_versions_are_unchecked():
+    assert (
+        _check_patch_versions(versioned_group(["9.9.9"], disposition="remove")) is None
+    )
+    assert _check_patch_versions(versioned_group(["9.9.9"], status="blocked")) is None
+
+
 def patch_decision(disposition):
     return {
         "path": PATCH_FILE,
@@ -3947,6 +4004,73 @@ def test_proposal_stage_inapplicable_patch_is_repaired_once(
     assert len(calls) == 3
     repair_payload = json.loads(prompt_payload(calls[2]["prompt"]))
     assert "cuda-vllm patch does not apply" in repair_payload["validation_error"]
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    assert (output / "proposal.json").is_file()
+
+
+def test_proposal_stage_miscovered_patch_version_is_repaired_once(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    # The run-38070300561 failure: a retained patch listed a version that does
+    # not cover the selected component, and validation has no repair. The
+    # research-stage coverage check rejects it into a repair session, which
+    # returns the corrected proposal.
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    miscovered = decided_proposal(scenario, context, "retain")
+    miscovered["groups"][0]["rows"][0]["patches"][0]["versions"] = ["0.29.0"]
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(0, agent_stream(miscovered), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(prompt_payload(calls[2]["prompt"]))
+    assert (
+        "do not cover the selected component version"
+        in repair_payload["validation_error"]
+    )
     diagnostic = json.loads((output / "diagnostics.json").read_text())
     assert [phase["name"] for phase in diagnostic["phases"]] == [
         "analysis",

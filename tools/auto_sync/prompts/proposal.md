@@ -8,6 +8,7 @@ Read docs/release-automation.md#proposal-output for every group/row field.
 Name each additional package choice by its canonical key (lmcache, mooncake, lmcache-ascend, vllm-omni, diffusers) behind the recipe's <SERVICE>_<KEY> pin, never the installed distribution name such as mooncake-transfer-engine-rocm.
 A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
 Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
+Engine patch versions list the selected engine version; Ascend patch versions list the selected plugin version exactly, including its prerelease suffix; Omni patch versions state engine applicability.
 Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
 Cite only bare https URLs in every sources list (row, manifest, package and patch); never a local path or a repository-relative path.
 Read the exact upstream trees, Dockerfiles and referenced requirements/installers/patches.
