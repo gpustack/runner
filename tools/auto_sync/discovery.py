@@ -325,6 +325,7 @@ def prerelease_packages(repo: Path) -> list[str]:
         not isinstance(data, dict)
         or set(data) != {"packages"}
         or not isinstance(data["packages"], list)
+        or not all(isinstance(key, str) for key in data["packages"])
     ):
         msg = "malformed prerelease whitelist"
         raise DiscoveryError(msg)

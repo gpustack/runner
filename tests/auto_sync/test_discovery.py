@@ -569,6 +569,8 @@ def test_prerelease_whitelist_is_sorted_and_absent_file_keeps_stable_only(tmp_pa
         "other: [lmcache]\n",
         "packages: [lmcache]\nextra: true\n",
         "packages: [LMCache]\n",
+        "packages: [[lmcache]]\n",
+        "packages: [{key: lmcache}]\n",
         "packages: [",
     ],
 )
