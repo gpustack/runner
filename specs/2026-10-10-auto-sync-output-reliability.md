@@ -1,6 +1,6 @@
 # Spec: Auto-Sync Output Reliability
 
-Status: Building
+Status: Built
 Type: Feature
 
 ## Summary
@@ -111,8 +111,9 @@ prompt and the repair prompt, so that output-ceiling failures stop consuming rep
 - The controller writes the seed data the checker needs (identity, discovery, the full evidence map
   with paths and revisions, prerelease permissions, packages) as read-only files in a single dot-dir at
   the workspace root, once per stage: analysis seed at research start, proposal seed when the proposal
-  workspace is created (`run.py:1499-1504`). The dot-dir keeps `git add -A` from sweeping seed files
-  into a group patch, which the controller rejects as a forbidden patch path (`proposal.py:257-294`).
+  workspace is created (`run.py:1499-1504`). The controller lists the dot-dir in the workspace's
+  `.git/info/exclude`, so `git add -A` never sweeps seed files into a group patch, which the
+  controller rejects as a forbidden patch path (`proposal.py:257-294`).
   The checker fails closed on missing or unreadable seed data.
 - Stage prompts instruct the model to run the checker on its draft and fix every reported error before
   the final reply. All three templates (analysis, proposal, repair) carry the instruction and carve out
@@ -275,7 +276,7 @@ writes checker instructions into the reordered templates.
       - `test_policy_sentences_reach_stage_prompts` asserts against the templates.
       Verify: same as T1
 
-- [ ] **T3 · Draft checker command (F3)**
+- [x] **T3 · Draft checker command (F3)**
       Blocked by: T2
       Gate: review
       Owns: `tools/auto_sync/check_draft.py`, `tools/auto_sync/run.py` (seed writing),

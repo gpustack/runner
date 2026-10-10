@@ -6,6 +6,9 @@ Return raw JSON only, without Markdown or code fences.
 $correction
 Preserve every fact, field and value that the validation error does not reject.
 The rejected final reply is supplied as failed_reply, the exact error as validation_error, and the required schema as schema.$guidance
+Before your final reply, write the corrected JSON to a file inside .autosync/ and run PYTHONPATH=.autosync python -m tools.auto_sync.check_draft --stage $phase < <file> from the workspace root.
+Fix every INVALID line and re-check until the checker prints VALID; .autosync/ is the permitted checker scratch.
+The checker is advisory: if it cannot run or its seed is missing, reply normally without it; the controller validation remains the only gate.
 === STAGE INPUT (JSON) ===
 $payload
 === OUTPUT CONTRACT ===
