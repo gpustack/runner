@@ -7,7 +7,6 @@ import json
 import os
 import shlex
 import shutil
-import string
 import subprocess
 import sys
 import time
@@ -37,6 +36,7 @@ from tools.auto_sync.run import (
     _env,
     _permissions,
     _prompt,
+    _prompt_identifiers,
     _redact,
     _registry,
     _repair_prompt,
@@ -3251,8 +3251,13 @@ def test_prompt_templates_declare_exact_placeholders():
     prompt_dir = Path(run.__file__).parent / "prompts"
     for name, identifiers in expected.items():
         text = (prompt_dir / (name + ".md")).read_text(encoding="utf-8")
-        assert set(string.Template(text).get_identifiers()) == identifiers
+        assert _prompt_identifiers(text) == identifiers
         assert text.count(PROMPT_SENTINEL) == 1
+
+
+def test_prompt_identifiers_cover_named_braced_and_escaped_forms():
+    assert _prompt_identifiers("a $x b ${y} c $$z d") == {"x", "y"}
+    assert _prompt_identifiers("no placeholders") == set()
 
 
 def test_prompt_loader_rejects_placeholder_drift():

@@ -56,19 +56,23 @@ PROMPT_SENTINEL = "=== STAGE INPUT (JSON) ==="
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 
 
+def _prompt_identifiers(text: str) -> set:
+    """Placeholder names declared in one template; Python 3.10 has no get_identifiers."""
+    found = string.Template.pattern.findall(text)
+    return {named or braced for _, named, braced, _ in found if named or braced}
+
+
 def _prompt(name: str, **values: str) -> str:
     """Render one stage prompt template; placeholder sets must match exactly."""
-    template = string.Template(
-        (_PROMPT_DIR / (name + ".md")).read_text(encoding="utf-8"),
-    )
-    identifiers = set(template.get_identifiers())
+    text = (_PROMPT_DIR / (name + ".md")).read_text(encoding="utf-8")
+    identifiers = _prompt_identifiers(text)
     missing = sorted(identifiers - set(values))
     unused = sorted(set(values) - identifiers)
     proposal.require(
         not missing and not unused,
         f"prompt template {name} placeholder drift: missing {missing}, unused {unused}",
     )
-    return template.substitute(values)
+    return string.Template(text).substitute(values)
 
 
 def _env(home: Path) -> dict:
