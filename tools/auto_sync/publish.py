@@ -191,10 +191,15 @@ def _command(github, repository, event):
         _root(repository) + f"/issues/comments/{comment_id}",
     )
     body = comment.get("body", "")
+    # Profile fields such as avatar_url drift between the event snapshot and
+    # the live API; authorship identity is the stable id/login/type triple.
+    user = comment.get("user") or {}
+    event_user = event["comment"].get("user") or {}
     if (
         comment.get("id") != comment_id
         or body != event["comment"].get("body")
-        or comment.get("user") != event["comment"].get("user")
+        or (user.get("id"), user.get("login"), user.get("type"))
+        != (event_user.get("id"), event_user.get("login"), event_user.get("type"))
         or comment.get("issue_url")
         != github.api_url + _root(repository) + f"/issues/{number}"
     ):
