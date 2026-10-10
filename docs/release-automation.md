@@ -33,6 +33,7 @@ The discovery variant universe follows current records: a variant deliberately d
 
 CANN/vLLM uses the stable vLLM engine version for Runner releases and image tags.
 Ascend plugin prereleases are normal candidates, paired with the stable engine documented upstream.
+A post release reissues its line's fixes without changing the engine alignment, so its notes omit the relationship statement; it inherits the documented pair of its release-line base.
 README marks this support as RC. That display marker does not alter the engine or actual plugin version.
 Keep the actual plugin version explicit, including its prerelease suffix.
 Historical `(rc)` text has unknown plugin identity; do not derive a plugin suffix from it.

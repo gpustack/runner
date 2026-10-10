@@ -339,6 +339,61 @@ def test_pairing_never_inferred_from_equal_version_tag(scenario, tmp_path):
     assert len(result["candidates"]) == 6
 
 
+def ascend_release(tag, body=""):
+    return {
+        "tag_name": tag,
+        "draft": False,
+        "prerelease": "rc" in tag,
+        "body": body,
+    }
+
+
+def test_post_release_inherits_the_line_pairing():
+    # A post release reissues its line's fixes; its notes omit the
+    # relationship statement, so the documented pair of the line base applies.
+    records = [
+        ascend_release("v0.23.0", "- **Upstream vLLM**: v0.23.0."),
+        ascend_release("v0.23.0.post1", "Bug fixes on the release branch."),
+    ]
+    pairs = run._pair(records)  # noqa: SLF001 - the pairing rule is exercised directly, without the fixture stack.
+    assert pairs["0.23.0.post1"] == pairs["0.23.0"]
+    assert pairs["0.23.0.post1"]["engine_version"] == "0.23.0"
+
+
+def test_post_release_without_a_line_pair_stays_unpaired():
+    records = [ascend_release("v0.23.0.post1", "Bug fixes on the release branch.")]
+    assert run._pair(records) == {}  # noqa: SLF001 - the pairing rule is exercised directly, without the fixture stack.
+
+
+def test_chase_onto_a_post_release_uses_the_inherited_pair(scenario, tmp_path):
+    # The production stuck state: records hold plugin 0.23.0, the chase lands
+    # on 0.23.0.post1, and only the line base carries the pairing statement.
+    api = scenario[2]
+    api.releases["vllm-project/vllm"].append(api.release("0.23.0"))
+    api.releases["vllm-project/vllm-ascend"].extend(
+        [
+            api.release("0.23.0", "- **Upstream vLLM**: v0.23.0."),
+            api.release("0.23.0.post1", "Bug fixes on the release branch."),
+        ],
+    )
+    repo = scenario[0]
+    records = repo / "docs/support-records.md"
+    records.write_text(
+        records.read_text().replace(
+            "<!-- runner-support-records:end -->",
+            "| cann | 9.1 | vllm | a3 | 0.23.0 | 0.23.0 | linux/amd64 | published |\n"
+            "<!-- runner-support-records:end -->",
+        ),
+    )
+    prepared = prepare((repo, commit(repo), *scenario[2:]), tmp_path)
+    result = json.loads((prepared / "result.json").read_text())
+    cann = next(c for c in result["discovery"] if c["subscription"] == "cann/vllm")
+    assert cann["status"] == "needs_update"
+    assert cann["plugin_version"] == "0.23.0.post1"
+    assert cann["engine_version"] == "0.23.0"
+    assert cann["pair_source"].endswith("/releases/tag/v0.23.0")
+
+
 def test_validation_registry_truth_and_clean_publication(
     scenario,
     tmp_path,
