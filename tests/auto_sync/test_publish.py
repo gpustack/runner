@@ -335,6 +335,22 @@ def test_wrong_trigger_or_ownership_rejected(scenario, change):
     assert result["status"] in {"ignored", "deferred"}
 
 
+def test_command_identity_ignores_mutable_user_profile_fields(scenario):
+    _, service, api, context, _ = scenario
+    initial(scenario)
+    event = service.comment_event("/auto-sync\nUpdate the report.")
+    # The event snapshot carries the avatar at comment creation; a profile
+    # change before the run must not alter the command's authorship identity.
+    event["comment"]["user"]["avatar_url"] = "https://avatars.invalid/stale"
+    service.comments[-1]["user"]["avatar_url"] = "https://avatars.invalid/current"
+    result = prepare_context(api, REPOSITORY, context["identity"]["default_sha"], event)
+    assert result["status"] == "ready"
+    assert result["identity"]["command_id"] == event["comment"]["id"]
+    service.comments[-1]["user"] = {"login": "other", "type": "User"}
+    result = prepare_context(api, REPOSITORY, context["identity"]["default_sha"], event)
+    assert result["status"] == "deferred"
+
+
 def test_changed_comment_and_changed_head_rejected_before_push(scenario):
     repo, service, api, _, _ = scenario
     initial(scenario)
