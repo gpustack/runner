@@ -151,6 +151,9 @@ The top-level fields are:
 Each candidate has `subscription`, `status`, `groups`, and `reason`.
 Its subscription is one of `cuda/vllm`, `cuda/sglang`, `rocm/vllm`, `rocm/sglang`, `cann/vllm`, or `cann/sglang`.
 `groups` contains related group IDs. Keep a concrete reason even when no group is needed.
+A candidate references only groups that contain its subscription's rows, and every group is referenced by the candidate of each row's subscription.
+The candidate status is the strongest status among its groups: `ready` over `failed` over `blocked` over `unchanged`.
+A candidate without groups is never `ready`.
 
 Each group has `id`, `status`, `reason`, `depends_on`, `report`, `patch`, and `rows`.
 Group IDs contain letters, digits, underscores, and hyphens, such as `cuda-vllm`.
