@@ -5,16 +5,6 @@ ARG CANN_ARCHS=910b
 ARG SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.20-cann9.0.0-910b
 ARG SGLANG_VERSION=0.5.20
 ARG SGLANG_TORCH_VERSION=2.10.0
-## Pinned below the CUDA/ROCm 0.5.4: this backend goes through LMCache-Ascend, whose matrix
-## tops out at SGLang 0.5.8 / lmcache 0.4.4, and 0.5.x's renamed extensions would break its
-## patches. `--enable-lmcache` does not work here either way (no multi_process_adapter).
-ARG SGLANG_LMCACHE_VERSION=0.4.2
-## LMCache-Ascend is pinned to a commit rather than a release tag: CANN 9.0.0 support
-## (kvcache-ops update, LMCache/LMCache-Ascend#256) landed on main after the latest tag
-## v0.4.3, so no tagged release builds against the cann9.0.0 base yet. A v0.4.4 tag has since
-## shipped (2026-07-28) and is a clean fast-forward —— bumping to it is a separate change.
-## This commit builds lmcache-ascend 0.4.4.dev against lmcache 0.4.2.
-ARG SGLANG_LMCACHE_ASCEND_COMMIT=dbd6545
 
 FROM ${SGLANG_BASE_IMAGE} AS sglang-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
@@ -150,85 +140,6 @@ ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
 
-## Install LMCache
-
-ARG SGLANG_LMCACHE_VERSION
-ARG SGLANG_LMCACHE_ASCEND_COMMIT
-
-ENV SGLANG_LMCACHE_VERSION=${SGLANG_LMCACHE_VERSION} \
-    SGLANG_LMCACHE_ASCEND_COMMIT=${SGLANG_LMCACHE_ASCEND_COMMIT}
-
-RUN <<EOF
-    # LMCache
-
-    if [[ "${CANN_ARCHS}" == "310p" ]]; then
-        echo "Skipping LMCache installation for ${CANN_ARCHS}..."
-        exit 0
-    fi
-
-    ## NOTE: nnal/atb/set_env.sh uses `result=$(grep ...GLIBCXX_USE_CXX11_ABI...)` then
-    ## `cxx_abi=${result:-1}` as a fallback. But torch 2.7.1+ removed that symbol so
-    ## grep exits 1, and `set -e` kills the script before the fallback assignment ——
-    ## leaving ATB_HOME_PATH / LD_LIBRARY_PATH (lines 50+) un-exported. Temporarily
-    ## relax set -e around the source so the fallback completes.
-    set +e
-    source /usr/local/Ascend/ascend-toolkit/set_env.sh
-    source /usr/local/Ascend/nnal/atb/set_env.sh
-    set -e
-
-    CMAKE_MAX_JOBS="${CMAKE_MAX_JOBS}"
-    if [[ -z "${CMAKE_MAX_JOBS}" ]]; then
-        CMAKE_MAX_JOBS="$(( $(nproc) / 2 ))"
-    fi
-    if (( $(echo "${CMAKE_MAX_JOBS} < 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    ## Cap MAX_JOBS for LMCache-Ascend build —— the C++ template-heavy sources
-    ## (kvcache-ops / hcomm_onesided) make g++ use ~2GB per parallel job and
-    ## trigger "internal compiler error" on >4 parallel jobs.
-    if (( $(echo "${CMAKE_MAX_JOBS} > 4" | bc -l) )); then
-        CMAKE_MAX_JOBS="4"
-    fi
-    export MAX_JOBS="${CMAKE_MAX_JOBS}"
-    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${CANN_HOME}/ascend-toolkit/latest/$(uname -i)-linux/devlib"
-    if [[ "${CANN_ARCHS}" == "a3" ]]; then
-        export SOC_VERSION="Ascend910_9382"
-    elif [[ "${CANN_ARCHS}" == "310p" ]]; then
-        export SOC_VERSION="Ascend310P3"
-    else
-        export SOC_VERSION="Ascend910B3"
-    fi
-    echo "Building LMCache with the following environment variables:"
-    env
-
-    # Install LMCache
-    NO_CUDA_EXT=1 pip install lmcache==${SGLANG_LMCACHE_VERSION}
-
-    # Install LMCache Ascend
-    ## Pinned to a commit (not a tag) —— see SGLANG_LMCACHE_ASCEND_COMMIT note above.
-    git -C /tmp clone --recursive --shallow-submodules \
-        https://github.com/LMCache/LMCache-Ascend.git lmcache-ascend \
-        && pushd /tmp/lmcache-ascend \
-        && git checkout ${SGLANG_LMCACHE_ASCEND_COMMIT} \
-        && git submodule update --init --recursive \
-        && popd
-    uv pip install --no-build-isolation \
-        /tmp/lmcache-ascend
-
-    # Register lmcache_ascend's bundled shared libs on the loader path.
-    ## Its c_ops.so ships a broken RUNPATH —— `$$ORIGIN` (literal, not `$ORIGIN`) plus the
-    ## build dir we delete —— so the dynamic loader can't find the co-located
-    ## libcache_kernels.so and import fails with "libcache_kernels.so: cannot open shared
-    ## object file". Point ldconfig at the install dir so it's found at runtime.
-    LMCACHE_ASCEND_DIR="$(pip show lmcache-ascend | awk '/^Location:/{print $2}')/lmcache_ascend"
-    echo "${LMCACHE_ASCEND_DIR}" > /etc/ld.so.conf.d/lmcache_ascend.conf
-    ldconfig
-
-    # Cleanup
-    rm -rf /var/tmp/* \
-        && rm -rf /tmp/*
-EOF
-
 ## Install Dependencies
 
 RUN <<EOF
@@ -265,9 +176,7 @@ RUN <<EOF
         --package deep-ep \
         --package triton-ascend \
         --package torch \
-        --package torch-npu \
-        --package lmcache \
-        --package lmcache-ascend
+        --package torch-npu
 EOF
 
 ## Entrypoint
