@@ -157,6 +157,7 @@ Each candidate has `subscription`, `status`, `groups`, and `reason`.
 Its subscription is one of `cuda/vllm`, `cuda/sglang`, `rocm/vllm`, `rocm/sglang`, `cann/vllm`, or `cann/sglang`.
 `groups` contains related group IDs. Keep a concrete reason even when no group is needed.
 A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.
+In revise mode old_engine_version is the workspace head's current recipe engine, never the main-relative value from the published PR body.
 
 Each group has `id`, `status`, `reason`, `depends_on`, `report`, `patch`, and `rows`.
 Group IDs contain letters, digits, underscores, and hyphens, such as `cuda-vllm`.

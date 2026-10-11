@@ -111,6 +111,7 @@ The final reply is one model message with a hard output ceiling; a reply that ex
 Return JSON with the supplied frozen identity and an assessment for every subscription.
 Use `ready`, `unchanged`, `blocked`, or `failed`; preserve mixed outcomes and concrete failure reasons.
 A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.
+In revise mode old_engine_version is the workspace head's current recipe engine, never the main-relative value from the published PR body.
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
 A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.

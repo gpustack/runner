@@ -22,6 +22,7 @@ Before changing an existing pin, patch, variant or support row, read docs/suppor
 Do not execute source scripts, Pack, service builds or GitHub writes. Inspect registries with crane.
 For unavailable source or conflicting/ambiguous feedback, preserve blocked/failed assessments and finish.
 The patch is relative to the current workspace head; write each group's patch to a UTF-8 file inside a patches/ directory at your workspace root and set group.patch_file to its path relative to your workspace root instead of an inline group.patch.
+In revise mode the workspace head already carries the previous proposal: a row's old_engine_version is the head's current recipe engine, equal to engine_version when the revision keeps the engine; never repeat the main-relative old value from the published PR body.
 Startup configuration paths (.qwen, .env, .mcp.json, .claude/settings.json) are stripped before every repair session; never store patch files in them.
 The controller inlines patch files before validation, so your final reply stays the small draft JSON.
 Before your final reply, write the draft JSON to a file inside .autosync/ and run PYTHONPATH=.autosync python -m tools.auto_sync.check_draft --stage proposal < <file> from the workspace root; the checker inlines patch_file references exactly as the controller does.
@@ -56,3 +57,4 @@ REQUIRED: Pin a companion package to the exact version its plugin's README or do
 REQUIRED: Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
 REQUIRED: Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 REQUIRED: A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.
+REQUIRED: In revise mode old_engine_version is the workspace head's current recipe engine, never the main-relative value from the published PR body.

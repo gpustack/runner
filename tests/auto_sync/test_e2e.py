@@ -3445,7 +3445,7 @@ def test_contract_keywords_sync_across_surfaces():
             match = re.fullmatch(r"(REQUIRED|NEVER): (.+)", line)
             assert match, line
             sentences.add(match.group(2))
-    assert len(sentences) == 10
+    assert len(sentences) == 11
     for surface in (
         ROOT / ".agents/skills/runner-release-sync/SKILL.md",
         ROOT / "docs/release-automation.md",
