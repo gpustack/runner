@@ -17,7 +17,7 @@ Rows with the same identity and platform set must be unique.
 <!-- runner-support-records:start -->
 | Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| cuda | 13.0 | vllm | - | 0.30.0 | - | linux/amd64, linux/arm64 | prepared |
+| cuda | 13.0 | vllm | - | 0.30.0 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | sglang | - | 0.5.21 | - | linux/amd64, linux/arm64 | prepared |
 | rocm | 7.2 | vllm | - | 0.30.0 | - | linux/amd64 | published |
 | rocm | 7.2 | sglang | - | 0.5.21 | - | linux/amd64 | published |
