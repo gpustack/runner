@@ -1,17 +1,16 @@
 diff --git a/vllm/utils/network_utils.py b/vllm/utils/network_utils.py
 --- a/vllm/utils/network_utils.py
 +++ b/vllm/utils/network_utils.py
-@@ -171,6 +171,9 @@
+@@ -170,5 +170,8 @@
      return range(dp_master_port, dp_master_port + 10)
- 
- 
+
+
 +_next_port: int | None = None
 +
 +
  def get_open_port() -> int:
-     """
-     Get an open port for the vLLM process to listen on.
-@@ -180,10 +183,13 @@
+     """Get an open port for the vLLM process to listen on.
+@@ -178,8 +181,11 @@
      Right now we reserve 10 ports for the data parallel master
      process. Currently it uses 2 ports.
      """
@@ -24,5 +23,3 @@ diff --git a/vllm/utils/network_utils.py b/vllm/utils/network_utils.py
          port = _get_open_port(start_port=reserved_port_range.stop, max_attempts=1000)
 +        _next_port = (port + 1) if port < 65535 else None
      return port
- 
- 

@@ -14,9 +14,9 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.2.3
 ARG ROCM_ARCHS
-ARG VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.30.0
-ARG VLLM_VERSION=0.30.0
-ARG VLLM_TORCH_VERSION=2.12.0
+ARG VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.31.0
+ARG VLLM_VERSION=0.31.0
+ARG VLLM_TORCH_VERSION=2.13.0
 ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ## The ROCm base ships no lmcache of its own, so it is always built from source here.
 ## Keep in sync with the CUDA and SGLang pins —— see pack/cuda/Dockerfile.vllm.
@@ -24,7 +24,7 @@ ARG VLLM_LMCACHE_VERSION=0.5.4
 ## Upstream's own HIP build —— same source and CMake options we used to compile here,
 ## but produced in a clean rocm/dev-ubuntu-22.04 and smoke-tested before release.
 ARG VLLM_MOONCAKE_VERSION=0.3.13.post1
-ARG VLLM_OMNI_COMMIT=a8576ccb725c4e21cd13c3eb5f9a546b21149d2b
+ARG VLLM_OMNI_COMMIT=6dd0d1f9310f7598b773c796b434c8000c2816ec
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
