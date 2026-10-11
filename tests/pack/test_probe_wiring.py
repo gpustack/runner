@@ -471,3 +471,27 @@ def test_workflow_keeps_first_invocation_immutable(pack_workflow):
         '--previous "$RUNNER_TEMP/invocation/context.json"'
         in steps["Freeze Invocation"]["run"]
     )
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    sorted((REPO_ROOT / ".github/workflows").glob("*.yml")),
+    ids=lambda path: path.name,
+)
+def test_generated_pull_requests_sign_off_commits(workflow):
+    """Workflow-generated PRs must carry a DCO sign-off on every commit."""
+    result = subprocess.run(  # noqa: S603
+        ["yq", "-o=json", ".", str(workflow)],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    parsed = json.loads(result.stdout)
+    offenders = [
+        f"{workflow.name}:{name}"
+        for name, job in (parsed.get("jobs") or {}).items()
+        for step in job.get("steps") or []
+        if "create-pull-request" in (step.get("uses") or "")
+        and str((step.get("with") or {}).get("signoff")).lower() != "true"
+    ]
+    assert not offenders, f"generated pull requests must sign off commits: {offenders}"

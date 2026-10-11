@@ -79,6 +79,7 @@ jobs:
             token: ${{ steps.generate-prt.outputs.token }}
             branch: "create-pull-request/discard-runner-${{ github.run_id }}"
             delete-branch: true
+            signoff: true
             commit-message: "chore: discard runner by gha workflow ${{ github.run_id }}"
             title: "chore: discard runner by gha workflow ${{ github.run_id }}"
             reviewers: ${{ github.actor }}
