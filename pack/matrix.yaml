@@ -28,8 +28,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=950"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.23.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0-a5"
+      - "VLLM_VERSION=0.27.1"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1-a5"
       - "VLLM_OMNI_COMMIT="
   ## Ascend CANN 9.1.0, using CANN Kernel for A3.
   ##
@@ -40,8 +40,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=a3"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.23.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0-a3"
+      - "VLLM_VERSION=0.27.1"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1-a3"
   ## Ascend CANN 9.1.0, using CANN Kernel for 910B.
   ##
   - backend: "cann"
@@ -51,8 +51,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=910b"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.23.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0"
+      - "VLLM_VERSION=0.27.1"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1"
   ## Ascend CANN 9.1.0, using CANN Kernel for 310P.
   ##
   - backend: "cann"
@@ -62,9 +62,9 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=310p"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.23.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.23.0-310p"
-  ## Ascend CANN 9.0.0, SGLang 0.5.18 for A3.
+      - "VLLM_VERSION=0.27.1"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1-310p"
+  ## Ascend CANN 9.0.0, SGLang 0.5.20 for A3.
   ## (no sglang upstream image for 310p variant)
   ## (SGLang stays on CANN 9.0.0 -- upstream publishes no cann9.1 sglang image,
   ##  so it trails the vLLM rules above rather than being left behind)
@@ -75,9 +75,9 @@ rules:
     args:
       - "CANN_VERSION=9.0.0"
       - "CANN_ARCHS=a3"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.18-cann9.0.0-a3"
-  ## Ascend CANN 9.0.0, SGLang 0.5.18 for 910B.
+      - "SGLANG_VERSION=0.5.20"
+      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.20-cann9.0.0-a3"
+  ## Ascend CANN 9.0.0, SGLang 0.5.20 for 910B.
   ##
   - backend: "cann"
     services:
@@ -85,8 +85,8 @@ rules:
     args:
       - "CANN_VERSION=9.0.0"
       - "CANN_ARCHS=910b"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.18-cann9.0.0-910b"
+      - "SGLANG_VERSION=0.5.20"
+      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.20-cann9.0.0-910b"
 
   ## MindIE 2.3.0 retains the published CANN 8.5.0 variants.
   - backend: "cann"
@@ -124,9 +124,9 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.29.0"
-  ## AMD ROCm 7.2.1 - SGLang 0.5.18 (rocm720-mi30x)
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.30.0"
+  ## AMD ROCm 7.2.1 - SGLang 0.5.21 (rocm720-mi30x)
   ##
   - backend: "rocm"
     services:
@@ -135,8 +135,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.21"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
@@ -149,17 +149,18 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-ubuntu2404"
-  ## NVIDIA CUDA 13.0.1 - SGLang 0.5.18
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-ubuntu2404"
+  ## NVIDIA CUDA 13.0.3 - SGLang 0.5.21
+  ## (upstream publishes no cu129 image for 0.5.21, so only the cu130 rule remains)
   ##
   - backend: "cuda"
     services:
       - "sglang"
     args:
-      - "CUDA_VERSION=13.0.1"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu130"
+      - "CUDA_VERSION=13.0.3"
+      - "SGLANG_VERSION=0.5.21"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-cu130"
   ## NVIDIA CUDA 12.9.1
   ##
   - backend: "cuda"
@@ -167,18 +168,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.29.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.29.0-cu129-ubuntu2404"
-  ## NVIDIA CUDA 12.9.1 - SGLang 0.5.18
-  ##
-  - backend: "cuda"
-    services:
-      - "sglang"
-    args:
-      - "CUDA_VERSION=12.9.1"
-      - "SGLANG_VERSION=0.5.18"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.18-cu129"
-      - "SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda12"
+      - "VLLM_VERSION=0.30.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-cu129-ubuntu2404"
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
   - backend: "cuda"
