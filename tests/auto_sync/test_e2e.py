@@ -723,6 +723,73 @@ def test_unavailable_selected_release_cannot_borrow_same_repository_source(
     assert group["rows"][1]["patches"][0]["source_revision"] == old
 
 
+def test_borrowed_patch_source_revision_stays_reachable_for_checks(
+    scenario,
+    tmp_path,
+):
+    # Two ready rows pin different releases of one upstream: the second tree
+    # is borrowed into the first, and the source checks clone the shared tree.
+    old, target, patch_text = patch_sources(scenario)
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    raw = proposal(scenario, context)
+    context["identity"].update(
+        mode="revise",
+        pr_number=1,
+        command_id=1,
+        command_digest=hashlib.sha256(b"").hexdigest(),
+    )
+    context["command"] = {"id": 1, "body": ""}
+    raw["identity"] = context["identity"]
+    row = raw["groups"][0]["rows"][0]
+    patch = {
+        "path": "pack/cuda/patches/vllm/fix.patch",
+        "disposition": "add",
+        "reason": "Patch the selected source.",
+        "versions": ["0.30.0"],
+        "platforms": [row["platform"]],
+        "sources": row["sources"],
+        "source_repository": "vllm-project/vllm",
+        "source_revision": target,
+    }
+    row["patches"] = [patch]
+    other = copy.deepcopy(row)
+    other.update(backend="rocm", engine_version="0.29.0")
+    other["patches"][0].update(
+        path="pack/rocm/patches/vllm/fix.patch",
+        versions=["0.29.0"],
+        source_revision=old,
+    )
+    raw["groups"][0]["rows"].append(other)
+    raw["candidates"][2].update(status="ready", groups=["cuda-vllm"])
+    data, sources, _ = _acquire_candidate(raw, context, tmp_path / "acquisition")
+    group = data["groups"][0]
+    assert group["status"] == "ready"
+    work = tmp_path / "patched"
+    for entry, content in (
+        (patch, patch_text),
+        (other["patches"][0], patch_text.replace("selected release", "old release")),
+    ):
+        path = work / entry["path"]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+    outcomes = source_patch_checks(
+        work,
+        group,
+        sources,
+        tmp_path / "checks",
+        _env(tmp_path / "home"),
+    )
+    assert [outcome["status"] for outcome in outcomes] == ["passed", "passed"]
+    assert [outcome["source_revision"] for outcome in outcomes] == [target, old]
+    assert (
+        tmp_path / "checks/source-1/selected.txt"
+    ).read_text() == "patched release\n"
+    assert (
+        tmp_path / "checks/source-2/selected.txt"
+    ).read_text() == "patched release\n"
+
+
 @pytest.mark.parametrize("claim", ["exact", "old"])
 def test_validation_applies_patch_only_to_selected_release(scenario, tmp_path, claim):
     old, target, patch_text = patch_sources(scenario)

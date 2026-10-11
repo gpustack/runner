@@ -673,14 +673,17 @@ def _acquire_candidate(
                         "patch source differs from the selected component revision",
                     )
                     if name in sources and sources[name] != tree:
+                        # A bare-revision fetch writes no ref, and the local
+                        # clones of source checks carry only reachable objects.
                         _git(
                             env,
                             sources[name],
                             "fetch",
                             "--quiet",
+                            "--update-shallow",
                             "--",
                             str(tree),
-                            revision,
+                            f"+{revision}:refs/heads/auto-sync-{revision}",
                         )
                     else:
                         sources[name] = tree
