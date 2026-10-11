@@ -161,13 +161,13 @@ rules:
       - "CUDA_VERSION=13.0.3"
       - "SGLANG_VERSION=0.5.21"
       - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-cu130"
-  ## NVIDIA CUDA 12.9.1 vllm dropped: upstream's v0.30.0-cu129 images ship torch+cu13
-  ## (PyPI's default 2.13.0 wheel) against the 12.9 toolkit, so LMCache/omni cannot
-  ## compile and cu13 binaries need a r580+ driver regardless. Re-add when upstream
-  ## pairs the cu129 image with a cu129 torch —— verify with
-  ## `docker run --rm --entrypoint python3 vllm/vllm-openai:v<ver>-cu129-ubuntu2404 -c "import torch; print(torch.version.cuda)"`
-  ## printing 12.9. No GPU is needed (build-time constant); the --entrypoint override
-  ## is required because the image's entrypoint is `vllm serve`.
+  ## NVIDIA CUDA 12.9.1 vllm dropped: upstream's v0.31.0-cu129 images now pair
+  ## torch 2.13.0+cu129 with the 12.9 toolkit (vllm-project/vllm#60406), but the
+  ## bundled torchcodec 0.17.0 wheel is built against CUDA 13, so `vllm serve`
+  ## fails at import. Re-add when upstream ships a cu129-compatible torchcodec
+  ## (or its CPU build) in the cu129 image. Verify both without a GPU
+  ## (--entrypoint override required: the image's entrypoint is `vllm serve`):
+  ## `docker run --rm --entrypoint python3 vllm/vllm-openai:v<ver>-cu129-ubuntu2404 -c "import torch, torchcodec; print(torch.version.cuda)"`
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
   - backend: "cuda"
