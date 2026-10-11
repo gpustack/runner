@@ -1,3 +1,14 @@
+## Upgrade guide: on a VLLM_VERSION bump, re-check every pin below before
+## merging; the per-ARG comments record why each current pin holds.
+## - VLLM_TORCH_VERSION / VLLM_TORCH_CUDA_VERSION: match the torch the vllm
+##   release pins for this CUDA base.
+## - VLLM_LMCACHE_VERSION: must support the new vllm KV connector, and stay
+##   identical to the ROCm and SGLang pins (no MP wire handshake). If no
+##   lmcache release supports the new vllm, hold the bump or drop lmcache;
+##   never mix pins across backends.
+## - VLLM_OMNI_COMMIT: prefer the omni release aligned with the new vllm;
+##   when none exists, pin a main-branch commit that declares it.
+## - VLLM_ROUTER_VERSION: tracks vllm compatibility; bump alongside.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.1
