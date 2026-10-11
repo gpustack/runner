@@ -1,3 +1,10 @@
+## Upgrade guide: on an SGLANG_VERSION bump, re-check every pin below before
+## merging; the per-ARG comments record why each current pin holds.
+## - SGLANG_TORCH_VERSION / SGLANG_TORCH_ROCM_VERSION: match the torch the
+##   sglang base image ships for this ROCm line.
+## - SGLANG_LMCACHE_VERSION: built from source; must support the new sglang
+##   and stay identical to the CUDA and vLLM pins (no MP wire handshake). If
+##   no lmcache release supports the new sglang, hold the bump or drop lmcache.
 ARG PYTHON_VERSION=3.10
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.2.1

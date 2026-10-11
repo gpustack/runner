@@ -1,3 +1,9 @@
+## Upgrade guide: on an SGLANG_VERSION bump, re-check every pin below before
+## merging; the per-ARG comments record why each current pin holds.
+## - SGLANG_VERSION / SGLANG_BASE_IMAGE: follow the Ascend sglang images; the
+##   base image and SGLANG_TORCH_VERSION bound what the engine can be.
+## - No appendix components today: no LMCache integration is verified for
+##   sglang on Ascend; add such a pin only with a verified upstream integration.
 ARG PYTHON_VERSION=3.11
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=9.0.0
