@@ -9,6 +9,9 @@
 ## - VLLM_OMNI_COMMIT: prefer the omni release aligned with the new vllm;
 ##   when none exists, pin a main-branch commit that declares it.
 ## - VLLM_ROUTER_VERSION: tracks vllm compatibility; bump alongside.
+## - VLLM_TORCHCODEC_VERSION: empty keeps the base's torchcodec; set it only
+##   when the base bundles a torchcodec broken for this CUDA line (see the ARG
+##   note), and clear it once the base ships a working wheel.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.3
