@@ -124,8 +124,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.30.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.30.0"
+      - "VLLM_VERSION=0.31.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.31.0"
   ## AMD ROCm 7.2.1 - SGLang 0.5.21 (rocm720-mi30x)
   ##
   - backend: "rocm"
@@ -148,9 +148,9 @@ rules:
     services:
       - "vllm"
     args:
-      - "CUDA_VERSION=13.0.1"
-      - "VLLM_VERSION=0.30.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.30.0-ubuntu2404"
+      - "CUDA_VERSION=13.0.3"
+      - "VLLM_VERSION=0.31.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.31.0-ubuntu2404"
   ## NVIDIA CUDA 13.0.3 - SGLang 0.5.21
   ## (upstream publishes no cu129 image for 0.5.21, so only the cu130 rule remains)
   ##
