@@ -164,7 +164,9 @@ rules:
   ## NVIDIA CUDA 12.9.1 vllm dropped: upstream's v0.30.0-cu129 images ship torch+cu13
   ## (PyPI's default 2.13.0 wheel) against the 12.9 toolkit, so LMCache/omni cannot
   ## compile and cu13 binaries need a r580+ driver regardless. Re-add when upstream
-  ## pairs the cu129 image with a cu129 torch.
+  ## pairs the cu129 image with a cu129 torch —— verify with
+  ## `docker run --rm vllm/vllm-openai:v<ver>-cu129-ubuntu2404 python -c "import torch; print(torch.version.cuda)"`
+  ## printing 12.9.
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
   - backend: "cuda"
