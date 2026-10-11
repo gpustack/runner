@@ -466,6 +466,7 @@ jobs:
           token: ${{ steps.generate-prt.outputs.token }}
           branch: "create-pull-request/merge-runner-${{ github.run_id }}"
           delete-branch: true
+          signoff: true
           commit-message: "chore: update runner by gha workflow ${{ github.run_id }}"
           title: "chore: update runner by gha workflow ${{ github.run_id }}"
           reviewers: ${{ github.actor }}

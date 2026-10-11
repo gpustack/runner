@@ -80,6 +80,7 @@ jobs:
             token: ${{ steps.generate-prt.outputs.token }}
             branch: "create-pull-request/prune-runner-${{ github.run_id }}"
             delete-branch: true
+            signoff: true
             commit-message: "chore: prune runner by gha workflow ${{ github.run_id }}"
             title: "chore: prune runner by gha workflow ${{ github.run_id }}"
             reviewers: ${{ github.actor }}
