@@ -250,6 +250,9 @@ def test_workflow_collects_final_package_digest_on_native_build_job(pack_workflo
         == "${{ github.run_attempt }}"
     )
     assert "collect-record" in steps["Collect Dependencies"]["run"]
+    # Large backends (ROCm images exceed 20 GB) cannot pull and probe within
+    # the collector's 300s default, so the workflow must raise the budget.
+    assert "--timeout 1800" in steps["Collect Dependencies"]["run"]
     assert (
         steps["Collect Dependencies"]["if"]
         == "${{ github.event.inputs.dry_run == 'false' }}"

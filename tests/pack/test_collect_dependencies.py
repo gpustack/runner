@@ -1156,6 +1156,8 @@ def test_collect_record_cli_uses_the_independent_package_output(
             str(record_path),
             "--output",
             str(output),
+            "--timeout",
+            "1800",
         ],
     )
     assert collector.main() == 0
@@ -1167,6 +1169,7 @@ def test_collect_record_cli_uses_the_independent_package_output(
         "cuda",
         "vllm",
     )
+    assert calls[0][5] == 1800
     assert receipt["distributions"] == {"torch": "2.9.0+local"}
     before = output.read_bytes()
     record["build"]["platform"] = (

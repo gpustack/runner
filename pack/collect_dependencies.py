@@ -718,6 +718,7 @@ def main() -> int:
     record_parser.add_argument("--digest", required=True)
     job_parser = commands.add_parser("collect-record")
     job_parser.add_argument("--build", type=Path, required=True)
+    job_parser.add_argument("--timeout", type=float, default=300)
     publish_parser = commands.add_parser("publish")
     catalog_parser = commands.add_parser("catalog")
     catalog_parser.add_argument("--manifests", type=Path, required=True)
@@ -803,7 +804,7 @@ def publication_command(args) -> dict:
     if args.command == "collect-record":
         expected = validate_context(context, mapping)
         build = validate_record(context, expected, read_json(args.build))
-        return collect(context["invocation"], build, mapping)
+        return collect(context["invocation"], build, mapping, timeout=args.timeout)
     if args.command == "publish":
         return publish_manifests(context, mapping, args.artifacts)
     return catalog_dependencies(
