@@ -324,15 +324,35 @@ def test_merge_workflow_uses_locked_runtime_dependencies(tmp_path, pack_workflow
         shutil.copyfile(REPO_ROOT / name, tmp_path / name)
     script = tmp_path / "pack/merge_runner.sh"
     script.parent.mkdir()
+    (tmp_path / "tools").symlink_to(REPO_ROOT / "tools")
     script.write_text(
+        "set -euo pipefail\n"
         "python3 - <<'PY'\n"
         "import importlib.util, json, sys\n"
         "from packaging.version import Version\n"
         "assert Version('1.0rc1') < Version('1.0')\n"
         "assert importlib.util.find_spec('pytest') is None\n"
+        # The gate below keeps this test honest: if PyYAML ever enters the
+        # locked runtime, the promote invocation no longer proves anything.
+        "assert importlib.util.find_spec('yaml') is None\n"
         "assert importlib.util.find_spec('gpustack_runner') is None\n"
         "print(json.dumps({'prefix': sys.prefix}))\n"
-        "PY\n",
+        "PY\n"
+        # Merge Runner ends by promoting support records through the exact
+        # script line below; it must work in this PyYAML-free environment.
+        "scratch=$(mktemp -d)\n"
+        "{\n"
+        "  echo '<!-- runner-support-records:start -->'\n"
+        "  echo '| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |'\n"
+        "  echo '| --- | --- | --- | --- | --- | --- | --- | --- |'\n"
+        "  echo '<!-- runner-support-records:end -->'\n"
+        '} >"$scratch/support.md"\n'
+        'printf \'%s\' \'{"matrix": {"build_jobs": []}}\' >"$scratch/context.json"\n'
+        "printf '%s' '{}' >\"$scratch/dependencies.json\"\n"
+        'python3 "$(dirname "${BASH_SOURCE[0]}")/../tools/auto_sync/discovery.py" promote \\\n'
+        '  --support "$scratch/support.md" --context "$scratch/context.json" \\\n'
+        '  --dependencies "$scratch/dependencies.json" --output "$scratch/promoted.md"\n'
+        'cmp "$scratch/support.md" "$scratch/promoted.md"\n',
     )
     env = {
         **os.environ,
