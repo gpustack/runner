@@ -213,9 +213,11 @@ FROM sglang-build AS sglang
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ## The v0.5.21 base moved python into a /opt/sglang venv on PATH without setting
-## VIRTUAL_ENV; with UV_SYSTEM_PYTHON=1 uv would otherwise install into /usr,
-## invisible to the runtime venv (and dragging in a stray latest torch).
-ENV VIRTUAL_ENV=/opt/sglang
+## VIRTUAL_ENV; the inherited UV_SYSTEM_PYTHON=1 takes precedence over VIRTUAL_ENV
+## and would make uv install into /usr, invisible to the runtime venv (and dragging
+## in a stray latest torch). Empty UV_SYSTEM_PYTHON is rejected by uv, so use 0.
+ENV VIRTUAL_ENV=/opt/sglang \
+    UV_SYSTEM_PYTHON=0
 
 ARG TARGETPLATFORM
 ARG TARGETOS
