@@ -13,6 +13,12 @@ ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ARG VLLM_LMCACHE_VERSION=0.5.4
 ARG VLLM_ROUTER_VERSION=0.1.15
 ARG VLLM_OMNI_COMMIT=6dd0d1f9310f7598b773c796b434c8000c2816ec
+## Empty means keep the base's torchcodec. The v0.31.0-cu129 base bundles a
+## torchcodec wheel built against CUDA 13, whose libtorchcodec_image.so needs
+## libnvrtc/libcudart .so.13 and crashes `vllm serve` at import
+## (vllm-project/vllm#60406). Setting this replaces it with the CPU build of
+## the same version —— vLLM decodes audio/video on CPU, so nothing is lost.
+ARG VLLM_TORCHCODEC_VERSION
 
 FROM ${VLLM_BASE_IMAGE} AS vllm-build
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
@@ -397,24 +403,26 @@ EOF
 
 RUN <<EOF
     # CuPy
-    # ray[cgraph] pulls cupy-cuda12x while the base already ships cupy-cuda13x; both share
+    # ray[cgraph] pulls cupy-cuda12x while a cu13 base already ships cupy-cuda13x; both share
     # the same cupy/ tree, so uninstalling one breaks the other. Purge both, then reinstall
-    # the CUDA-matching variant at the version vLLM pinned in the base (its cupy-cuda13x),
-    # so cu129 also gets that pinned version instead of ray's unconstrained cupy-cuda12x.
+    # only the CUDA-matching variant at the version vLLM pinned in the base, so cu129 also
+    # ends on that pinned version instead of ray's unconstrained cupy-cuda12x.
     # Our own lmcache is a third source but agrees with this reinstall: its build stage sets
     # LMCACHE_CUDA_MAJOR from the same CUDA major used here.
 
     IFS="." read -r CUDA_MAJOR CUDA_MINOR CUDA_PATCH <<< "${CUDA_VERSION}"
     PLATLIB="$(python -c 'import sysconfig; print(sysconfig.get_paths()["platlib"])')"
     CUPY="cupy-cuda${CUDA_MAJOR}x"
-    CUPY_VER="$(uv pip show cupy-cuda13x 2>/dev/null | awk '/^Version:/{print $2}' || true)"
+    # The base ships the variant matching its own CUDA major (cupy-cuda13x on cu13,
+    # cupy-cuda12x on cu12), so read the pinned version from that same variant.
+    CUPY_VER="$(uv pip show "${CUPY}" 2>/dev/null | awk '/^Version:/{print $2}' || true)"
     uv pip uninstall cupy-cuda12x cupy-cuda13x || true
     rm -rf "${PLATLIB}"/cupy "${PLATLIB}"/cupyx "${PLATLIB}"/cupy_backends
     # cupy-cuda12x and cupy-cuda13x share the same version number, so reuse the base's
     # pinned version and install only the variant matching the CUDA major we build for.
     # Fail loudly if the base no longer ships cupy, rather than installing an unpinned latest.
     if [[ -z "${CUPY_VER}" ]]; then
-        echo "cupy-cuda13x not found in base image; refusing to install unpinned cupy" >&2
+        echo "${CUPY} not found in base image; refusing to install unpinned cupy" >&2
         exit 1
     fi
     uv pip install "${CUPY}==${CUPY_VER}"
@@ -477,6 +485,34 @@ fastokens==0.2.0
 EOT
     uv pip install \
         -r /tmp/requirements.txt
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Override TorchCodec
+
+ARG VLLM_TORCHCODEC_VERSION
+
+RUN <<EOF
+    # TorchCodec
+
+    if [[ -z "${VLLM_TORCHCODEC_VERSION}" ]]; then
+        echo "Keeping the base image's torchcodec..."
+        exit 0
+    fi
+
+    # Replace the base's torchcodec with the CPU build of the same version ——
+    # see the note on VLLM_TORCHCODEC_VERSION. --no-deps keeps uv from pulling
+    # a CPU torch over the base's CUDA build.
+    uv pip install --no-deps \
+        "torchcodec==${VLLM_TORCHCODEC_VERSION}+cpu" \
+        --index-url https://download.pytorch.org/whl/cpu
+
+    # Fail the build on the import path that crashes the stock cu129 image
+    # (vllm-project/vllm#60406); needs no GPU.
+    python -c "import torch, torchcodec.decoders; print('torch', torch.__version__, 'cuda', torch.version.cuda)"
 
     # Cleanup
     rm -rf /var/tmp/* \

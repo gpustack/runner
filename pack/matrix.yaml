@@ -161,13 +161,23 @@ rules:
       - "CUDA_VERSION=13.0.3"
       - "SGLANG_VERSION=0.5.21"
       - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-cu130"
-  ## NVIDIA CUDA 12.9.1 vllm dropped: upstream's v0.31.0-cu129 images now pair
-  ## torch 2.13.0+cu129 with the 12.9 toolkit (vllm-project/vllm#60406), but the
-  ## bundled torchcodec 0.17.0 wheel is built against CUDA 13, so `vllm serve`
-  ## fails at import. Re-add when upstream ships a cu129-compatible torchcodec
-  ## (or its CPU build) in the cu129 image. Verify both without a GPU
-  ## (--entrypoint override required: the image's entrypoint is `vllm serve`):
-  ## `docker run --rm --entrypoint python3 vllm/vllm-openai:v<ver>-cu129-ubuntu2404 -c "import torch, torchcodec; print(torch.version.cuda)"`
+  ## NVIDIA CUDA 12.9.1
+  ## The upstream cu129 image pairs torch 2.13.0+cu129 with the 12.9 toolkit, but
+  ## bundles a CUDA 13-built torchcodec that crashes `vllm serve` at import
+  ## (vllm-project/vllm#60406); VLLM_TORCHCODEC_VERSION replaces it with the CPU
+  ## build —— see pack/cuda/Dockerfile.vllm. LMCache 0.5.x is unaffected by
+  ## upstream's cu12 lmcache==0.4.4 pin (kv_connectors_cu12.txt), which exists
+  ## because the 0.5.x PyPI wheels declare CUDA 13 dependencies; we compile
+  ## LMCache from source against the base's own torch instead.
+  ##
+  - backend: "cuda"
+    services:
+      - "vllm"
+    args:
+      - "CUDA_VERSION=12.9.1"
+      - "VLLM_VERSION=0.31.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.31.0-cu129-ubuntu2404"
+      - "VLLM_TORCHCODEC_VERSION=0.17.0"
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
   - backend: "cuda"
