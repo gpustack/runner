@@ -43,6 +43,12 @@ import uuid
 from pathlib import Path
 
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+
+# Default collection budget in seconds: pull the built image, inspect it, run
+# the probe. Shared by the collect/collect-record CLI defaults and collect()
+# itself so the three cannot drift apart. Registry operations keep their own
+# timeout; pack.yml raises this for large backends via --timeout.
+COLLECTION_TIMEOUT = 300
 PLATFORM_RE = re.compile(r"linux/(amd64|arm64)(/v[1-9][0-9]*)?\Z")
 NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 INVOCATION_FIELDS = {
@@ -320,7 +326,14 @@ def run_image(image_ref, platform, backend, service, mapping, timeout) -> dict:
     return json.loads(stdout)
 
 
-def collect(invocation, build, mapping, *, timeout=300, disabled=False) -> dict:
+def collect(
+    invocation,
+    build,
+    mapping,
+    *,
+    timeout=COLLECTION_TIMEOUT,
+    disabled=False,
+) -> dict:
     validate_invocation(invocation, mapping)
     validate_build(build)
     if (
@@ -699,7 +712,7 @@ def main() -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     collect_parser = commands.add_parser("collect")
     collect_parser.add_argument("--build", type=Path, required=True)
-    collect_parser.add_argument("--timeout", type=float, default=300)
+    collect_parser.add_argument("--timeout", type=float, default=COLLECTION_TIMEOUT)
     collect_parser.add_argument("--disabled", action="store_true")
     validate_parser = commands.add_parser("validate")
     validate_parser.add_argument("--builds", type=Path, required=True)
@@ -718,7 +731,7 @@ def main() -> int:
     record_parser.add_argument("--digest", required=True)
     job_parser = commands.add_parser("collect-record")
     job_parser.add_argument("--build", type=Path, required=True)
-    job_parser.add_argument("--timeout", type=float, default=300)
+    job_parser.add_argument("--timeout", type=float, default=COLLECTION_TIMEOUT)
     publish_parser = commands.add_parser("publish")
     catalog_parser = commands.add_parser("catalog")
     catalog_parser.add_argument("--manifests", type=Path, required=True)
