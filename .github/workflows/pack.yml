@@ -331,9 +331,11 @@ jobs:
         id: collect
         if: ${{ github.event.inputs.dry_run == 'false' }}
         run: |
+          # ROCm images exceed 20 GB; pulling the just-built image back for the
+          # probe needs far more than the 300s default the collector ships.
           python3 pack/collect_dependencies.py collect-record --context "$RUNNER_TEMP/context.json" \
             --mapping pack/dependencies.json --build "$RUNNER_TEMP/build.json" \
-            --output "$RUNNER_TEMP/receipt.json"
+            --timeout 1800 --output "$RUNNER_TEMP/receipt.json"
       # Preserve failures too. Partial reruns leave all other jobs' artifacts intact.
       - name: Upload Dependencies
         if: ${{ always() && github.event.inputs.dry_run == 'false' && steps.collect.outcome != 'skipped' }}
