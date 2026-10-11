@@ -13,7 +13,6 @@ import json
 import re
 from pathlib import Path
 
-import yaml
 from packaging.version import InvalidVersion, Version
 
 SUBSCRIPTIONS = (
@@ -314,6 +313,10 @@ def prerelease_packages(repo: Path) -> list[str]:
         raise DiscoveryError(msg)
     if not path.is_file():
         return []
+    # Lazy import: Pack's merge job runs `promote` in the locked --no-dev
+    # environment, which has no PyYAML; only this whitelist reader needs it.
+    import yaml  # noqa: PLC0415 - keep the promote path PyYAML-free, see above.
+
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
