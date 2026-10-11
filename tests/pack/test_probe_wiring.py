@@ -492,6 +492,6 @@ def test_generated_pull_requests_sign_off_commits(workflow):
         for name, job in (parsed.get("jobs") or {}).items()
         for step in job.get("steps") or []
         if "create-pull-request" in (step.get("uses") or "")
-        and (step.get("with") or {}).get("signoff") is not True
+        and str((step.get("with") or {}).get("signoff")).lower() != "true"
     ]
     assert not offenders, f"generated pull requests must sign off commits: {offenders}"
