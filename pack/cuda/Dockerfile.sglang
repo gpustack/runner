@@ -192,10 +192,13 @@ RUN <<EOF
     ## Note: don't pin cuda-bindings —— cu129 base has 12.9.4, cu130 base has 13.2.0,
     ## both compatible with their respective torch. Hardcoding 12.9.4 on cu130 downgrades
     ## and breaks `torch -> cuda-bindings<14,>=13.0.3` requirement.
+    ## `--skip-dependency-check`: the base venv ships nvidia-nccl-cu13 newer than
+    ## torch's own pin (2.30.7 vs ==2.29.7); the closure check rejects upstream's
+    ## skew, which the CUDA extension build does not depend on.
     pushd /tmp/lmcache \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
         && cat /tmp/lmcache/pyproject.toml \
-        && python -m build --no-isolation --wheel \
+        && python -m build --no-isolation --skip-dependency-check --wheel \
         && tree -hs /tmp/lmcache/dist \
         && mv /tmp/lmcache/dist /workspace
 
