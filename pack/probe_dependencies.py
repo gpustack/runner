@@ -26,7 +26,10 @@ def probe(mapping: dict[str, list[str]]) -> dict:
             message = "installed distribution has missing Name or Version metadata"
             raise ValueError(message)
         name = re.sub(r"[-_.]+", "-", name).lower()
-        if name in installed and installed[name] != version:
+        # A conflict is unrecordable only for a mapped name. Unmapped duplicates
+        # never enter the catalog, so a toolkit-bundled distribution shadowing
+        # another path (CANN images ship these) must not fail collection.
+        if name in wanted and name in installed and installed[name] != version:
             message = f"conflicting installed distribution versions: {name}"
             raise ValueError(message)
         installed[name] = version

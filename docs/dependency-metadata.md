@@ -49,8 +49,10 @@ markers survive unchanged — `2.10.0rc1` stays `2.10.0rc1` and is not rewritten
 Distribution names are normalized for comparison only (`-`, `_` and `.` runs collapse, case is
 lowered), so a map key is stable; the recorded version is preserved verbatim.
 
-Two distributions that normalize to the same name with conflicting versions are an error rather
-than a silent last-one-wins, because that state cannot be recorded truthfully.
+Two distributions that normalize to the same *mapped* name with conflicting versions are an error
+rather than a silent last-one-wins, because that state cannot be recorded truthfully. A conflict on
+a name the mapping never records cannot corrupt the catalog, so it is ignored — vendor base images
+routinely ship such duplicates.
 
 The collector runs the probe inside the final platform image and writes its receipt outside the
 image. Older post-operation Dockerfiles may still copy a
