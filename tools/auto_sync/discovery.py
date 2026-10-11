@@ -535,9 +535,12 @@ def _installed_engine_matches(job, installed):
     measured, expected = version(installed), version(job["service_version"])
     if measured == expected:
         return True
-    # Upstream vLLM setup.py adds accelerator build identifiers to releases.
+    # Upstream vLLM setup.py adds accelerator build identifiers to releases;
+    # vllm-ascend builds with VLLM_TARGET_DEVICE=empty (e.g. 0.27.1+empty).
     # Compare the public release without discarding rc/post/dev components.
-    suffix = {"cuda": r"cu[0-9]+", "rocm": r"rocm[0-9]+"}.get(job["backend"])
+    suffix = {"cuda": r"cu[0-9]+", "rocm": r"rocm[0-9]+", "cann": r"empty"}.get(
+        job["backend"],
+    )
     return bool(
         job["service"] == "vllm"
         and suffix

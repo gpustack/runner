@@ -16,6 +16,7 @@ from tools.auto_sync.discovery import (
     discover,
     parse_support,
     prerelease_packages,
+    promote_support,
     version,
 )
 
@@ -533,6 +534,47 @@ def test_catalog_can_resolve_unknown_historical_plugin(tmp_path, upstream, pairs
     result = selected(repository(tmp_path, catalog=rows), upstream, pairs, "cann/vllm")
     assert result["status"] == "unchanged"
     assert all(v["sources"] == ["catalog"] for v in result["variants"])
+
+
+def cann_promote_job():
+    return {
+        "platform_tag": "cann9.1-910b-vllm0.27.1-linux-amd64",
+        "tag": "gpustack/runner:cann9.1-910b-vllm0.27.1-linux-amd64",
+        "backend": "cann",
+        "backend_version": "9.1",
+        "service": "vllm",
+        "backend_variant": "910b",
+        "service_version": "0.27.1",
+        "platform": "linux/amd64",
+    }
+
+
+@pytest.mark.parametrize(
+    "installed, promoted",
+    [
+        # vllm-ascend builds vllm with VLLM_TARGET_DEVICE=empty.
+        ({"vllm": "0.27.1+empty", "vllm-ascend": "0.27.1rc1"}, True),
+        ({"vllm": "0.27.1", "vllm-ascend": "0.27.1rc1"}, True),
+        ({"vllm": "0.27.2+empty", "vllm-ascend": "0.27.1rc1"}, False),
+        # A CUDA local tag must not satisfy a cann record.
+        ({"vllm": "0.27.1+cu130", "vllm-ascend": "0.27.1rc1"}, False),
+    ],
+)
+def test_cann_vllm_empty_local_version_promotes(installed, promoted):
+    job = cann_promote_job()
+    support = HEADER.format(
+        rows=support_row(
+            backend="cann",
+            runtime="9.1",
+            variant="910b",
+            engine="0.27.1",
+            plugin="0.27.1rc1",
+            platforms="linux/amd64",
+        ),
+    )
+    result = promote_support(support, [job], {job["platform_tag"]: installed})
+    status = "published" if promoted else "prepared"
+    assert f"0.27.1 | 0.27.1rc1 | linux/amd64 | {status}" in result
 
 
 def test_sglang_post_release_is_latest_for_all_backends(tmp_path, upstream, pairs):
