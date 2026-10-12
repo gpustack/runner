@@ -85,7 +85,7 @@ Run `make package` or Pack only when image production is explicitly authorized.
 ## Release automation
 
 Use [runner-release-sync](.agents/skills/runner-release-sync/SKILL.md) for upstream discovery or an authorized `/auto-sync` revision.
-Use [runner-release](.agents/skills/runner-release/SKILL.md) to align README and supported-runners documentation with published support records at release time.
+Use [runner-release](.agents/skills/runner-release/SKILL.md) to cut package releases (tag, notes, promotion) and to align README and supported-runners documentation with published support records.
 The workflow selects and authenticates the model before Qwen starts. Use that configured model.
 NEVER launch another agent to switch providers; the research stage permits exactly two bounded headless stage sessions — analysis, then proposal — plus bounded repair sessions that only correct rejected final output (`AUTO_SYNC_MAX_REPAIR_ROUNDS`, default 2).
 Read-only GitHub MCP supports research. Trusted jobs validate and publish the proposal separately.
