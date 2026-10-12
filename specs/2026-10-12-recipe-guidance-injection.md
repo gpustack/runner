@@ -1,6 +1,6 @@
 # Spec: Recipe Guidance Injection
 
-Status: Building
+Status: Built
 Type: Feature
 
 ## Summary
@@ -164,7 +164,7 @@ the function small and typed.
 
 ### Implementation Plan
 
-- [ ] **T1 · Guidance extraction and payload injection**
+- [x] **T1 · Guidance extraction and payload injection**
       Blocked by: None
       Owns: `tools/auto_sync/run.py`, `tests/auto_sync/test_e2e.py`
       Gate: review

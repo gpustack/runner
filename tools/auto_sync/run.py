@@ -55,6 +55,11 @@ JOB_LOG_LIMIT = 4000
 
 PROMPT_SENTINEL = "=== STAGE INPUT (JSON) ==="
 CONTRACT_SENTINEL = "=== OUTPUT CONTRACT ==="
+GUIDANCE_HEADER = "## Upgrade guide:"
+GUIDANCE_MAX_LINES = 40
+GUIDANCE_MAX_BYTES = 2048
+GUIDANCE_SENTINEL = re.compile(r"=== .*? ===")
+GUIDANCE_CONTRACT_PREFIXES = ("REQUIRED:", "NEVER:")
 _PROMPT_DIR = Path(__file__).parent / "prompts"
 
 
@@ -422,6 +427,57 @@ def _recipe_pins(env, repo, sha, backend, service):
         return checks.recipe_arguments(text, overrides)
     except proposal.ProposalError:
         return {}
+
+
+def _recipe_guidance(env, repo, sha, backend, service) -> str:
+    """Leading upgrade-guide comment block of one recipe at the frozen default."""
+    try:
+        text = _git(env, repo, "show", f"{sha}:pack/{backend}/Dockerfile.{service}")
+    except proposal.ProposalError:
+        return ""
+    lines = text.splitlines()
+    if not lines or not lines[0].startswith(GUIDANCE_HEADER):
+        return ""
+    block = []
+    for line in lines:
+        if not line.startswith("##"):
+            break
+        content = line[2:].lstrip()
+        # Guidance must not smuggle prompt sentinels or contract keywords.
+        if GUIDANCE_SENTINEL.search(line) or content.startswith(
+            GUIDANCE_CONTRACT_PREFIXES,
+        ):
+            continue
+        block.append(line)
+    selected = []
+    total = 0
+    for line in block[:GUIDANCE_MAX_LINES]:
+        size = len(line.encode("utf-8")) + (1 if selected else 0)
+        if total + size > GUIDANCE_MAX_BYTES:
+            break
+        selected.append(line)
+        total += size
+    # A bare marker declares the block; only body text counts as guidance.
+    marker = GUIDANCE_HEADER.lstrip("# ")
+    if not any(line[2:].lstrip().removeprefix(marker).strip() for line in selected):
+        return ""
+    return "\n".join(selected)
+
+
+def _recipe_guidance_map(env, repo, sha, found) -> dict:
+    """Subscription-keyed guidance for discovered candidates, empty omitted."""
+    guidance = {}
+    for candidate in found:
+        text = _recipe_guidance(
+            env,
+            repo,
+            sha,
+            candidate["backend"],
+            candidate["service"],
+        )
+        if text:
+            guidance[f"{candidate['backend']}/{candidate['service']}"] = text
+    return guidance
 
 
 def _component_sources(api, repo, sha, found, root, env):
@@ -1310,6 +1366,12 @@ def _research(args, scratch):
     )
     evidence.update(component_evidence)
     source_errors.update(component_errors)
+    recipe_guidance = _recipe_guidance_map(
+        env,
+        args.repo,
+        identity["default_sha"],
+        found,
+    )
     shared = {
         "context": context,
         "discovery": found,
@@ -1319,6 +1381,7 @@ def _research(args, scratch):
         "authorized_prereleases": sorted(permissions),
         "prerelease_packages": sorted(packages),
         "pack_failure": context.get("pack_failure"),
+        "recipe_guidance": recipe_guidance,
     }
     analysis_schema = {
         "schema_version": 1,
