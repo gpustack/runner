@@ -2,11 +2,12 @@
 ## merging; the per-ARG comments record why each current pin holds.
 ## - VLLM_VERSION / CANN_BASE_IMAGE: follow vllm-ascend releases; the base
 ##   image and VLLM_TORCH_VERSION bound what the engine can be.
-## - VLLM_LMCACHE_VERSION / VLLM_LMCACHE_ASCEND_VERSION: LMCache follows the
-##   LMCACHE_UPSTREAM_TAG constant in lmcache_ascend/__init__.py of the selected
-##   LMCache-Ascend, not a matching version number, and the pair must support the
-##   new vllm KV connector; otherwise keep the old pair or drop lmcache, never
-##   mix lines.
+## - VLLM_LMCACHE_VERSION / VLLM_LMCACHE_ASCEND_VERSION: on this backend a
+##   companion follows its Ascend plugin's declared pairing, never the reverse.
+##   LMCache follows the LMCACHE_UPSTREAM_TAG constant in
+##   lmcache_ascend/__init__.py of the selected LMCache-Ascend, not a matching
+##   version number, and the pair must support the new vllm KV connector;
+##   otherwise keep the old pair or drop lmcache, never mix lines.
 ## - VLLM_MOONCAKE_VERSION: must support the new vllm KV connector; check the
 ##   mooncake-transfer-engine release notes.
 ## - VLLM_OMNI_COMMIT: prefer the omni release aligned with the new vllm;
