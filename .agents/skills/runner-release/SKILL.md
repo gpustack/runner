@@ -38,6 +38,8 @@ The `### Supported runners` table shows the newest supported engine with its run
 `` `<engine>` (<runtime>) `` per cell.
 
 - Recompute each cell from the `published` rows: highest engine version, then its runtime line.
+- The cell carries the same `(rc)` mark as the historical table when the newest published CANN
+  vLLM plugin is a prerelease, e.g. `` `0.27.1`(rc) (9.1) ``; the note below the table defines it.
 - A backend/service with no published record keeps its historical-newest cell; do not blank it.
 - MindIE and VoxBox have no published records; their cells track the historical tables.
 
