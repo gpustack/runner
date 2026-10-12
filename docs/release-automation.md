@@ -39,8 +39,9 @@ Keep the actual plugin version explicit, including its prerelease suffix.
 Historical `(rc)` text has unknown plugin identity; do not derive a plugin suffix from it.
 Other engine prereleases require an explicit maintainer request.
 
-The reviewed `pack/prereleases.yaml` names the additional package keys that may select a prerelease version when no stable release satisfies compatibility.
-Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
+The reviewed `pack/prereleases.yaml` names the additional package keys allowed to select prerelease versions.
+Additional packages use stable releases only; the whitelisted keys in prerelease_packages may select a prerelease when evidence shows it is the active or required line for the selected combination.
+A whitelisted key's active or required prerelease line must not be replaced with an older stable release to avoid the prerelease.
 The controller freezes the list from the frozen default branch; a proposal cannot grant itself prerelease permission, and an unknown key fails preparation.
 Engines remain stable-only in discovery mode regardless of the whitelist.
 
@@ -90,7 +91,7 @@ Conflicting evidence blocks the affected group.
 
 Evaluate Mooncake, LMCache, LMCache-Ascend, Diffusers, and applicable Omni packages with the engine and runtime.
 The newest additional package is not necessarily compatible.
-Pin a companion package to the exact version its plugin's README or documentation compatibility matrix declares; never pair versions the matrix does not declare. On the cann backend a companion follows its Ascend plugin's matrix, never the reverse: LMCache pairs 1:1 with the LMCache version LMCache-Ascend declares, and when no declared line matches the selected engine or plugin, disable the package.
+Pin a companion package to the exact version its plugin's pairing anchor declares: README or documentation compatibility matrix first, then an in-repo version constant or requirements pin; never pair versions the anchor does not declare. On the cann backend a companion follows its Ascend plugin's matrix, never the reverse: LMCache pairs 1:1 with the LMCache version LMCache-Ascend declares. When the README matrix carries no usable pairing, use in-repo anchors before concluding: a pinned upstream-tag constant (for example `LMCACHE_UPSTREAM_TAG` in `lmcache_ascend/__init__.py`), requirements files, and setup.py/pyproject pins. When no anchor declares a line matching the selected engine or plugin, disable the package.
 Preserve existing cross-image LMCache protocol constraints and group dependent changes together.
 Independent ready groups can proceed while blocked groups remain unchanged.
 
