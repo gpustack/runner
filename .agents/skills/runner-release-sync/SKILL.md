@@ -52,7 +52,7 @@ Manifest availability is artifact evidence; it does not prove package or GPU com
 
 Evaluate Python, Torch, runtime, accelerator family, plugin, Mooncake, LMCache, LMCache-Ascend, Diffusers, and applicable Omni packages together.
 Choose additional packages for the selected combination, rather than their newest version alone.
-Pin a companion package to the exact version its plugin's README or documentation compatibility matrix declares; never pair versions the matrix does not declare. On the cann backend a companion follows its Ascend plugin's matrix, never the reverse: LMCache pairs 1:1 with the LMCache version LMCache-Ascend declares, and when no declared line matches the selected engine or plugin, disable the package.
+Pin a companion package to the exact version its plugin's pairing anchor declares: README or documentation compatibility matrix first, then an in-repo version constant or requirements pin; never pair versions the anchor does not declare. On the cann backend a companion follows its Ascend plugin's matrix, never the reverse: LMCache pairs 1:1 with the LMCache version LMCache-Ascend declares. When the README matrix carries no usable pairing, use in-repo anchors before concluding: a pinned upstream-tag constant (for example `LMCACHE_UPSTREAM_TAG` in `lmcache_ascend/__init__.py`), requirements files, and setup.py/pyproject pins. When no anchor declares a line matching the selected engine or plugin, disable the package.
 Select stable additional packages; only the whitelisted keys in `prerelease_packages` may select a prerelease.
 Treat every `ARG *_VERSION` and `*_COMMIT` pin in a selected recipe as proposal-owned: update any of them, including LMCache and vllm-omni pins, when compatibility evidence requires it.
 Preserve shared LMCache protocol constraints. Group dependent changes; keep independent blocked groups unchanged.
@@ -115,7 +115,8 @@ In revise mode old_engine_version is the workspace head's current recipe engine,
 Include compatibility rows, sources, package and patch decisions, executed checks, and deferred Pack/GPU checks.
 Name each package choice by its canonical key (`lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`), never the installed distribution name.
 A package version is a stable release, except a source decision whose version is the pinned hex revision; a disable decision has a null version.
-Additional packages use stable releases only; the whitelisted keys in prerelease_packages may use a prerelease when no stable release satisfies compatibility.
+Additional packages use stable releases only; the whitelisted keys in prerelease_packages may select a prerelease when evidence shows it is the active or required line for the selected combination.
+A whitelisted key's active or required prerelease line must not be replaced with an older stable release to avoid the prerelease.
 Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
 Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 Cite only bare https URLs in every `sources` list (row, manifest, package, and patch); never a local path or a repository-relative path.
