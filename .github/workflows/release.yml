@@ -64,7 +64,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: true
-          prerelease: ${{ contains(github.ref, 'rc') }}
+          # Every tag release starts as a pre-release carrying a generated baseline
+          # note; the runner-release skill curates the notes and promotes finals.
+          prerelease: true
+          generate_release_notes: true
           files: |
             dist/*.gz
             dist/*.whl

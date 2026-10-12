@@ -21,14 +21,14 @@ Each cell shows the newest supported engine version with its runtime line, and e
 
 | Backend | vLLM | SGLang | MindIE | VoxBox |
 | --- | --- | --- | --- | --- |
-| [Ascend CANN](docs/supported-runners.md#ascend-cann) | `0.23.0` (9.1) | `0.5.12.post1` (8.5) | `2.3.0` (8.5) | |
+| [Ascend CANN](docs/supported-runners.md#ascend-cann) | `0.27.1`(rc) (9.1) | `0.5.20` (9.0) | `2.3.0` (8.5) | |
 | [Iluvatar CoreX](docs/supported-runners.md#iluvatar-corex) | `0.8.3` (4.2) | | | |
-| [NVIDIA CUDA](docs/supported-runners.md#nvidia-cuda) | `0.29.0` (13.0) | `0.5.18` (13.0) | | `0.0.21` (12.8) |
+| [NVIDIA CUDA](docs/supported-runners.md#nvidia-cuda) | `0.31.0` (13.0) | `0.5.21` (13.0) | | `0.0.21` (12.8) |
 | [Hygon DTK](docs/supported-runners.md#hygon-dtk) | `0.18.1` (26.04) | `0.5.10` (26.04) | | |
 | [T-Head HGGC](docs/supported-runners.md#t-head-hggc) | `0.23.0` (13.0) | `0.5.12` (13.0) | | |
 | [MetaX MACA](docs/supported-runners.md#metax-maca) | `0.21.0` (3.7) | `0.5.11` (3.7) | | |
 | [MThreads MUSA](docs/supported-runners.md#mthreads-musa) | `0.9.2` (4.1.0) | `0.5.7` (4.3.2) | | |
-| [AMD ROCm](docs/supported-runners.md#amd-rocm) | `0.29.0` (7.2) | `0.5.18` (7.2) | | |
+| [AMD ROCm](docs/supported-runners.md#amd-rocm) | `0.31.0` (7.2) | `0.5.21` (7.2) | | |
 
 CANN/vLLM images use stable vLLM releases. An `(rc)` label identifies a prerelease vLLM-Ascend plugin.
 

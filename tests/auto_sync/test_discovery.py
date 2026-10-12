@@ -407,17 +407,18 @@ def test_support_migration_preserves_every_original_cell():
     legacy = (FIXTURES / "legacy-support.md").read_text()
     support = (ROOT / "docs/supported-runners.md").read_text()
 
-    def tables(text):
-        # Bold annotations were dropped in the split and column padding was
-        # re-flowed; whitespace-insensitive containment still proves that no
-        # original table cell was lost.
-        return " ".join(text.split("### Ascend CANN", 1)[1].replace("**", "").split())
-
     assert "### Ascend CANN" not in (ROOT / "README.md").read_text()
-    assert tables(legacy) in tables(support)
-    records = parse_support(support)
-    assert [r for r in records if r["status"] == "historical"] == parse_support(legacy)
-    assert {r["backend"] for r in records} == {
+
+    # The historical tables stay alive after the split: alignment prepends
+    # newly published versions and re-wraps cells, so verbatim containment
+    # cannot hold. The preserved property is that no original version was lost
+    # or reordered — the legacy records form an ordered subsequence of the
+    # current historical records.
+    original = parse_support(legacy)
+    current = [r for r in parse_support(support) if r["status"] == "historical"]
+    remaining = iter(current)
+    assert all(any(r == c for c in remaining) for r in original)
+    assert {r["backend"] for r in current} == {
         "cann",
         "cuda",
         "rocm",
