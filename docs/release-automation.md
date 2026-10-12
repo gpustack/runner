@@ -362,6 +362,7 @@ Keep unrelated component versions unchanged.
 ```
 
 This is free text, not a separate pin grammar. It can refer to a submitted review or specific inline comments.
+The workflow only starts a revision for a comment on an open PR whose author association is OWNER, MEMBER, or COLLABORATOR; other comments never launch a run.
 Inline comments, ordinary conversation, and bot replies do not independently start revisions.
 The controller checks current permission, PR ownership, open state, and the actual head branch and commit.
 

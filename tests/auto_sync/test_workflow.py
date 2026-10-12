@@ -76,9 +76,11 @@ def test_authorization_precedes_model_secrets():
     model_boundary(workflow)
     guard = workflow["jobs"]["research"]["if"]
     assert "github.event.issue.pull_request" in guard
+    assert "github.event.issue.state == 'open'" in guard
     assert "github.event.comment.body" in guard
     assert "github.event.action == 'created'" in guard
     assert "github.event.comment.user.type != 'Bot'" in guard
+    assert "github.event.comment.author_association" in guard
 
 
 @pytest.mark.parametrize(
