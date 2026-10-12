@@ -189,7 +189,7 @@ the function small and typed.
       REQUIRED/NEVER keyword is added or removed.
       Verify: `AUTO_SYNC_TOOL_BIN=/tmp/runner-pr-284-r3-tools/bin uv run pytest tests/auto_sync -q -k "contract_keywords or policy_sentences or contract_block or unsubstituted"` and `uv run mkdocs build --strict`
 
-- [ ] **T3 · Subscribed-recipe header presence gate**
+- [x] **T3 · Subscribed-recipe header presence gate**
       Blocked by: None
       Owns: `tests/pack/test_dockerfile_guide.py`
       Acceptance: a test asserts every subscribed recipe (the six backend/service subscriptions in
