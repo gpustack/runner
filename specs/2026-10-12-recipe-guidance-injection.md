@@ -177,7 +177,7 @@ the function small and typed.
       trust test and both-stage payload-shape assertions.
       Verify: `AUTO_SYNC_TOOL_BIN=/tmp/runner-pr-284-r3-tools/bin uv run pytest tests/auto_sync -q`
 
-- [ ] **T2 · General prompt rule and case-clause migration**
+- [x] **T2 · General prompt rule and case-clause migration**
       Blocked by: None
       Owns: `tools/auto_sync/prompts/analysis.md`, `tools/auto_sync/prompts/proposal.md`,
       `.agents/skills/runner-release-sync/SKILL.md`, `docs/release-automation.md`,
