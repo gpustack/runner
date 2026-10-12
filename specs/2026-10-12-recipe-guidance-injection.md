@@ -1,6 +1,6 @@
 # Spec: Recipe Guidance Injection
 
-Status: Built
+Status: Shipped
 Type: Feature
 
 ## Summary
