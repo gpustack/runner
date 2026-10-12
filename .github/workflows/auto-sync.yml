@@ -97,7 +97,9 @@ jobs:
     if: >-
       github.event_name != 'issue_comment' ||
       (github.event.action == 'created' && github.event.issue.pull_request &&
-       github.event.comment.user.type != 'Bot' && startsWith(github.event.comment.body, '/auto-sync'))
+       github.event.issue.state == 'open' &&
+       github.event.comment.user.type != 'Bot' && startsWith(github.event.comment.body, '/auto-sync') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     outputs:
