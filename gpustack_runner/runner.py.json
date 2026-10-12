@@ -11,6 +11,8 @@
     "deprecated": false,
     "dependencies": {
       "diffusers": "0.38.0",
+      "lmcache": "0.4.4",
+      "lmcache-ascend": "0.5.6rc4",
       "mooncake-transfer-engine": "0.3.11.post1",
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
@@ -34,6 +36,8 @@
     "deprecated": false,
     "dependencies": {
       "diffusers": "0.38.0",
+      "lmcache": "0.4.4",
+      "lmcache-ascend": "0.5.6rc4",
       "mooncake-transfer-engine": "0.3.11.post1",
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
@@ -624,6 +628,8 @@
     "docker_image": "gpustack/runner:cann9.1-950-vllm0.27.1",
     "deprecated": false,
     "dependencies": {
+      "lmcache": "0.4.4",
+      "lmcache-ascend": "0.5.6rc4",
       "mooncake-transfer-engine": "0.3.11.post1",
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
@@ -645,6 +651,8 @@
     "docker_image": "gpustack/runner:cann9.1-950-vllm0.27.1",
     "deprecated": false,
     "dependencies": {
+      "lmcache": "0.4.4",
+      "lmcache-ascend": "0.5.6rc4",
       "mooncake-transfer-engine": "0.3.11.post1",
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
@@ -707,6 +715,8 @@
     "deprecated": false,
     "dependencies": {
       "diffusers": "0.38.0",
+      "lmcache": "0.4.4",
+      "lmcache-ascend": "0.5.6rc4",
       "mooncake-transfer-engine": "0.3.11.post1",
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
@@ -730,6 +740,8 @@
     "deprecated": false,
     "dependencies": {
       "diffusers": "0.38.0",
+      "lmcache": "0.4.4",
+      "lmcache-ascend": "0.5.6rc4",
       "mooncake-transfer-engine": "0.3.11.post1",
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
