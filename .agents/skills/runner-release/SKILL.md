@@ -48,8 +48,9 @@ The `### Supported runners` table shows the newest supported engine with its run
 The historical tables list every supported version, newest first, one row per runtime line and
 variant.
 
-- Add each newly published version at the head of its backend/runtime cell, keeping the existing
-  comma + `<br/>` wrapping style.
+- Add each newly published version at the head of its backend/runtime cell.
+- Wrap a cell every two versions with `<br/>`, e.g. `` `0.31.0`, `0.30.0`,<br/> `0.29.0`, `0.27.1` ``;
+  an odd tail version closes the cell without a trailing break.
 - Mark a CANN vLLM version whose plugin is a prerelease with `(rc)`, e.g. `` `0.27.1`(rc) ``; the
   exact plugin identity stays in `docs/support-records.md`.
 - When a version loses support, delete it from the cell; never mark it with strikethrough or bold.
