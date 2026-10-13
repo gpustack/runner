@@ -168,6 +168,11 @@ def test_formal_single_pr_stable_identity_and_complete_mixed_report(scenario):
     assert not pr["draft"]
     assert pr["head"]["ref"] == BRANCH
     assert pr["user"]["login"] == BOT
+    assert pr["title"] == "feat: upgrade cuda/vllm from 0.29.0 to 0.30.0"
+    assert (
+        git(repo, "log", "-1", "--format=%s", BRANCH)
+        == "feat: upgrade cuda/vllm from 0.29.0 to 0.30.0"
+    )
     assert git(repo, "rev-parse", BRANCH + "^") == context["identity"]["head_sha"]
     assert git(repo, "show", BRANCH + ":pack/cuda/Dockerfile.vllm").startswith(
         "ARG VLLM_VERSION=0.30.0",
@@ -239,6 +244,83 @@ def test_report_cell_escapes_markup_and_a_rowless_group_skips_the_table():
     assert "a \\| b line &lt;two&gt;" in body
     assert "#### Rows" not in body
     assert "<details><summary>Exact row data and validation (JSON)</summary>" in body
+
+
+def titled(rows, status="ready"):
+    return {
+        "groups": [
+            {
+                "id": "group",
+                "status": status,
+                "rows": [
+                    {
+                        "backend": backend,
+                        "service": service,
+                        "old_engine_version": old,
+                        "engine_version": new,
+                    }
+                    for backend, service, old, new in rows
+                ],
+            },
+        ],
+    }
+
+
+def test_title_names_the_ready_engine_change():
+    title = publication._title(  # noqa: SLF001 - the title format is exercised directly, without the fixture stack.
+        titled([("cann", "vllm", "0.27.1", "0.30.0")]),
+    )
+    assert title == "feat: upgrade cann/vllm from 0.27.1 to 0.30.0"
+    assert len(title) <= 75
+
+
+def test_title_groups_one_change_across_backends():
+    title = publication._title(  # noqa: SLF001
+        titled(
+            [
+                ("cuda", "vllm", "0.30.0", "0.31.0"),
+                ("rocm", "vllm", "0.30.0", "0.31.0"),
+            ],
+        ),
+    )
+    assert title == "feat: upgrade cuda/vllm, rocm/vllm from 0.30.0 to 0.31.0"
+    assert len(title) <= 75
+
+
+def test_title_marks_additions_and_packaging_only_updates():
+    added = publication._title(titled([("cann", "sglang", None, "0.5.21")]))  # noqa: SLF001
+    assert added == "feat: add cann/sglang 0.5.21"
+    kept = publication._title(titled([("cann", "vllm", "0.30.0", "0.30.0")]))  # noqa: SLF001
+    assert kept == "feat: update cann/vllm 0.30.0 packaging"
+
+
+def test_title_ignores_non_ready_rows_and_falls_back_without_any():
+    checked = titled([("cann", "vllm", "0.27.1", "0.30.0")], status="blocked")
+    assert publication._title(checked) == "chore: update runner dependencies"  # noqa: SLF001
+
+
+def test_title_drops_detail_to_fit_the_display_limit():
+    checked = titled(
+        [
+            ("cann", "sglang", "0.5.20", "0.5.21"),
+            ("cuda", "sglang", "0.5.20", "0.5.21"),
+            ("cann", "vllm", "0.27.1", "0.30.0"),
+            ("cuda", "vllm", "0.30.0", "0.31.0"),
+        ],
+    )
+    title = publication._title(checked)  # noqa: SLF001
+    assert title == "feat: upgrade cann/sglang, cann/vllm, cuda/sglang, cuda/vllm"
+    assert len(title) <= 75
+    checked = titled(
+        [
+            (backend, service, "0.1.0", "0.2.0")
+            for backend in ("cann", "cuda", "rocm")
+            for service in ("sglang", "vllm")
+        ],
+    )
+    title = publication._title(checked)  # noqa: SLF001
+    assert title == "feat: upgrade 6 runner subscriptions"
+    assert len(title) <= 75
 
 
 def test_weekly_and_manual_defer_any_older_managed_proposal_without_writes(scenario):

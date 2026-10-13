@@ -431,6 +431,45 @@ def _cell(text):
     return re.sub(r"([\\`*_\[\]|])", r"\\\1", text)
 
 
+def _title(checked, limit=75):
+    """Describe the ready rows as one Conventional Commit subject line."""
+    upgrades = {}
+    for group in checked["groups"]:
+        if group["status"] != "ready":
+            continue
+        for row in group["rows"]:
+            key = (row["service"], row["old_engine_version"], row["engine_version"])
+            upgrades.setdefault(key, set()).add(row["backend"])
+    if not upgrades:
+        return "chore: update runner dependencies"
+    parts = []
+    for service, old, new in sorted(upgrades, key=lambda k: (k[0], k[1] or "", k[2])):
+        combinations = ", ".join(
+            f"{backend}/{service}" for backend in sorted(upgrades[service, old, new])
+        )
+        if old is None:
+            parts.append(f"add {combinations} {new}")
+        elif old == new:
+            parts.append(f"update {combinations} {new} packaging")
+        else:
+            parts.append(f"upgrade {combinations} from {old} to {new}")
+    title = "feat: " + "; ".join(parts)
+    if len(title) <= limit:
+        return title
+    # An overlong title drops the version detail, then the combination list.
+    combinations = sorted(
+        {
+            f"{backend}/{service}"
+            for (service, _, _), backends in upgrades.items()
+            for backend in backends
+        },
+    )
+    title = "feat: upgrade " + ", ".join(combinations)
+    if len(title) <= limit:
+        return title
+    return f"feat: upgrade {len(combinations)} runner subscriptions"
+
+
 def _render_report(checked, commit_sha=None):
     lines = [
         "## Runner upgrade proposal",
@@ -593,7 +632,8 @@ def _upload_commit(github, repo, checked):
         separators=(",", ":"),
     )
     message = (
-        "chore: update runner proposal\n\n"
+        _title(checked)
+        + "\n\n"
         + COMMIT_MARKER
         + record
         + "\n\n"
@@ -866,7 +906,7 @@ def _discover(github, repo, context, checked):
             {
                 "head": branch,
                 "base": context["default_branch"],
-                "title": "chore: update runner dependencies",
+                "title": _title(checked),
                 "body": body,
                 "draft": False,
             },
