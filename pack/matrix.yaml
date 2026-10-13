@@ -28,8 +28,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=950"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.27.1"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1-a5"
+      - "VLLM_VERSION=0.30.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0rc1-a5"
       - "VLLM_OMNI_COMMIT="
   ## Ascend CANN 9.1.0, using CANN Kernel for A3.
   ##
@@ -40,8 +40,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=a3"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.27.1"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1-a3"
+      - "VLLM_VERSION=0.30.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0rc1-a3"
   ## Ascend CANN 9.1.0, using CANN Kernel for 910B.
   ##
   - backend: "cann"
@@ -51,8 +51,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=910b"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.27.1"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1"
+      - "VLLM_VERSION=0.30.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0rc1"
   ## Ascend CANN 9.1.0, using CANN Kernel for 310P.
   ##
   - backend: "cann"
@@ -62,8 +62,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=310p"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.27.1"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.27.1rc1-310p"
+      - "VLLM_VERSION=0.30.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0rc1-310p"
   ## Ascend CANN 9.0.0, SGLang 0.5.20 for A3.
   ## (no sglang upstream image for 310p variant)
   ## (SGLang stays on CANN 9.0.0 -- upstream publishes no cann9.1 sglang image,
