@@ -32,7 +32,7 @@ on:
         description: 'LLM thinking, the provider thinking switch.'
         required: false
         type: choice
-        default: disabled
+        default: enabled
         options:
           - disabled
           - enabled
@@ -58,17 +58,17 @@ on:
         description: 'LLM max tokens, the per-reply output token ceiling.'
         required: false
         type: string
-        default: "32768"
+        default: "65536"
       llm-reasoning-effort:
         description: 'LLM reasoning effort, the reasoning effort level.'
         required: false
         type: choice
         default: low
         options:
-          - minimal
           - low
           - medium
           - high
+          - xhigh
           - max
       # Failure diagnosis.
       pack-run-url:
