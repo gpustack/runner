@@ -179,7 +179,9 @@ The row's `runtime` must match the effective `<BACKEND>_VERSION` build argument,
 Support records use its catalog runtime line, such as `13.0` for a `13.0.1` configuration.
 Keep unknown optional versions as `null`; do not invent them to satisfy a report.
 For a ready row, `manifest` contains `digest`, `platform_digest`, `platform`, `config_platform`, and `sources`.
-Both platform fields must match the row. An unavailable manifest can be `null` only for a non-ready row.
+`digest` is the base-image tag's own digest; when the tag resolves to a manifest list or OCI index, `platform_digest` is the digest of the row platform's child entry in that list, and only a single-platform image manifest has `platform_digest` equal to `digest`.
+`config_platform` is read from the platform digest's configuration; both platform fields must match the row. An unavailable manifest can be `null` only for a non-ready row.
+Record every manifest field from crane output: a tag digest that resolves to a manifest list or OCI index means platform_digest is the row platform's child digest in that list, never the list digest; only a single-platform image manifest keeps platform_digest equal to digest.
 `sources`, `checks`, and `deferred` are lists. Keep deferred Pack and GPU checks explicit.
 Every `sources` entry (row, manifest, package, and patch) is one bare `https://` URL; local paths and repository-relative paths are rejected.
 The report records runtime and other compatibility reasons that have no dedicated schema field.
