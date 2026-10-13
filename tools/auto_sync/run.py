@@ -577,6 +577,24 @@ def _platform(value: dict) -> str:
     }.get(platform, platform)
 
 
+def _require_acquired_manifest(group: dict, row: dict, env: dict) -> None:
+    """A ready row's manifest must equal a fresh trusted registry acquisition."""
+    actual = _registry(row, env)
+    claimed = {key: row["manifest"][key] for key in actual}
+    if actual == claimed:
+        return
+    diff = "; ".join(
+        f"{key}: claimed {claimed.get(key)}, acquired {value}"
+        for key, value in actual.items()
+        if claimed.get(key) != value
+    )
+    msg = (
+        f"group {group['id']} manifest for {row['base_image']} ({row['platform']})"
+        f" differs from trusted registry acquisition: {diff}"
+    )
+    raise proposal.ProposalError(msg)
+
+
 def _statuses(data: dict) -> None:
     groups = {g["id"]: g for g in data["groups"]}
     for candidate in data["candidates"]:
@@ -683,12 +701,7 @@ def _acquire_candidate(
                     discovery.version(row["engine_version"]) in available,
                     "candidate engine is not an acquired upstream release",
                 )
-                actual = _registry(row, env)
-                claimed = {k: row["manifest"][k] for k in actual}
-                proposal.require(
-                    actual == claimed,
-                    "candidate manifest differs from trusted registry acquisition",
-                )
+                _require_acquired_manifest(group, row, env)
                 for patch in row["patches"]:
                     if patch["disposition"] == "remove":
                         continue
@@ -1216,6 +1229,17 @@ def _check_patch_versions(data: dict) -> None:
                 )
 
 
+def _check_manifests(data: dict, env: dict) -> None:
+    # Mirror validation's trusted registry acquisition where a repair session
+    # can still correct the record: the error names the acquired values, so
+    # the correction is transcription, never new investigation.
+    for group in data["groups"]:
+        if group["status"] != "ready":
+            continue
+        for row in group["rows"]:
+            _require_acquired_manifest(group, row, env)
+
+
 def _check_group_patches(
     repo: Path,
     identity: dict,
@@ -1595,6 +1619,7 @@ def _research(args, scratch):
             context,
         )
         _check_patch_versions(bound)
+        _check_manifests(bound, env)
         return _check_group_patches(args.repo, identity, bound, scratch, env)
 
     try:

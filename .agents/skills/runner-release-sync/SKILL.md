@@ -121,6 +121,7 @@ A whitelisted key's active or required prerelease line must not be replaced with
 Patch disposition versions are bare releases such as 0.30.0, never prefixed forms such as vllm-0.30.0.
 Every patch disposition must be expressed in the group diff: remove deletes the file, add creates it, adapt updates and keeps it, retain leaves it untouched, and no .patch file changes without a declared disposition.
 Cite only bare https URLs in every `sources` list (row, manifest, package, and patch); never a local path or a repository-relative path.
+Record every manifest field from crane output: a tag digest that resolves to a manifest list or OCI index means platform_digest is the row platform's child digest in that list, never the list digest; only a single-platform image manifest keeps platform_digest equal to digest.
 For a ready group, include its allowed-path patch and complete report.
 Use the field shape in `tests/auto_sync/fixtures/proposals/ready.json`; supply the frozen identity and actual evidence.
 Write each group's patch to a UTF-8 file inside a `patches/` directory at the session workspace root and set the group's `patch_file` to its workspace-relative path.

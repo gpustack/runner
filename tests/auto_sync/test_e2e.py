@@ -494,6 +494,72 @@ def test_fabricated_manifest_rejected_before_write(scenario, tmp_path, monkeypat
         == "failed"
     )
     assert not scenario[2].prs
+    # The group reason names the mismatched field and both digests, so the
+    # failure is diagnosable without re-running the acquisition by hand.
+    reason = json.loads((checked / "artifact.json").read_text())["groups"][0]["reason"]
+    assert "platform_digest" in reason
+    assert "sha256:" + "f" * 64 in reason
+    assert scenario[3].child_digest in reason
+
+
+def test_research_manifest_mismatch_repair_transcribes_acquired_values(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    wrong = proposal(scenario, context)
+    wrong["groups"][0]["rows"][0]["manifest"]["platform_digest"] = "sha256:" + "f" * 64
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(0, agent_stream(wrong), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    # The mirrored check rejects the fabricated digest during finalization;
+    # its error carries the acquired values so the repair transcribes them
+    # without new investigation.
+    repair = calls[2]["prompt"]
+    assert "platform_digest" in repair
+    assert "sha256:" + "f" * 64 in repair
+    assert scenario[3].child_digest in repair
+    result = json.loads((output / "result.json").read_text())
+    assert result["status"] == "ready"
 
 
 def test_exact_source_acquisition_reads_release_tree(scenario, tmp_path):
@@ -3710,7 +3776,7 @@ def test_contract_keywords_sync_across_surfaces():
             match = re.fullmatch(r"(REQUIRED|NEVER): (.+)", line)
             assert match, line
             sentences.add(match.group(2))
-    assert len(sentences) == 12
+    assert len(sentences) == 13
     for surface in (
         ROOT / ".agents/skills/runner-release-sync/SKILL.md",
         ROOT / "docs/release-automation.md",

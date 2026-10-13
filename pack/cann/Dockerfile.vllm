@@ -1,7 +1,10 @@
 ## Upgrade guide: on a VLLM_VERSION bump, re-check every pin below before
 ## merging; the per-ARG comments record why each current pin holds.
 ## - VLLM_VERSION / CANN_BASE_IMAGE: follow vllm-ascend releases; the base
-##   image and VLLM_TORCH_VERSION bound what the engine can be.
+##   image and VLLM_TORCH_VERSION bound what the engine can be. Ascend base
+##   tags publish multi-platform manifest lists; record each platform row
+##   from that platform's list child, and never narrow matrix platforms
+##   without listing the tag's children as evidence.
 ## - VLLM_LMCACHE_VERSION / VLLM_LMCACHE_ASCEND_VERSION: on this backend a
 ##   companion follows its Ascend plugin's declared pairing, never the reverse.
 ##   LMCache follows the LMCACHE_UPSTREAM_TAG constant in
