@@ -68,6 +68,7 @@ A mapping key may list several candidate distributions in priority order:
   "mooncake-transfer-engine": [
     "mooncake-transfer-engine-npu",
     "mooncake-transfer-engine-rocm",
+    "mooncake-transfer-engine-cuda13",
     "mooncake-transfer-engine"
   ]
 }
