@@ -8,9 +8,10 @@ Type: Feature
 `pack/dependencies.json` maps each catalog key to a closed enumeration of distribution aliases.
 Variant families (`mooncake-transfer-engine-npu`, `-rocm`, `-cuda13`, and eventually `-cuda14`)
 force one manual edit per family member. This spec lets an alias be a prefix pattern (a NAME_RE
-stem plus one trailing `*`), so `mooncake-transfer-engine` folds with two aliases — the bare
-literal and `mooncake-transfer-engine-*` — and any current or future variant records without
-mapping edits.
+stem ending in `-`, plus one trailing `*`), so `mooncake-transfer-engine` folds with two aliases —
+`mooncake-transfer-engine-*` and the bare literal, in that order — and any current or future
+variant records without mapping edits. The established specific-beats-generic priority (a variant
+outranks the bare build when both are installed) is preserved.
 
 The mapping stays a positive selector: it declares what to record, and records it when matched. It
 does not police image contents. What changes is the *claimed meaning* of an unrecorded key. Today
@@ -24,9 +25,10 @@ truthfully say.
 ### Goals
 
 - An alias is a NAME_RE literal or a NAME_RE stem plus one trailing `*` (prefix pattern over
-  PEP 503 normalized names). `mooncake-transfer-engine` becomes
-  `["mooncake-transfer-engine", "mooncake-transfer-engine-*"]`; the bare literal stays because a
-  pattern stem ends with `-` and never matches the bare name itself.
+  PEP 503 normalized names; the stem must end in `-`, so a pattern is component-aligned and never
+  matches the bare name itself). `mooncake-transfer-engine` becomes
+  `["mooncake-transfer-engine-*", "mooncake-transfer-engine"]`; pattern-first keeps the pinned
+  specific-beats-generic priority, and the bare literal stays as the generic fallback.
 - Fold keeps order priority and stays truthful: a pattern with two installed family members is an
   ambiguity error, because the mutual-exclusion premise is broken and recording either would be
   arbitrary.
@@ -46,7 +48,8 @@ truthfully say.
   `validate`/`publish`/`catalog`, no `ignored` list, no schema version bump. An installed
   distribution the mapping does not cover is simply not recorded; that is the selector's purpose,
   not a defect.
-- No regex or multi-glob syntax; a pattern is exactly one NAME_RE stem plus a trailing `*`.
+- No regex or multi-glob syntax; a pattern is exactly one NAME_RE stem ending in `-`, plus one
+  trailing `*`.
 - No version-aware or context-aware matching (the probe does not learn the image's CUDA version).
 - No change to `pack/shared/probe_dependencies.sh`; it serves historical post-operations only.
 - No retroactive re-collection of already-published entries; new receipts use the new matching.
@@ -75,8 +78,11 @@ never read "not installed" from what is only "not recorded".
 ### Core Features & Acceptance Criteria
 
 1. **Pattern aliases in the v1 shape.** The file stays a flat `{key: [aliases]}` object. An alias
-   is a NAME_RE literal or a NAME_RE stem plus one trailing `*`. `validate_mapping` accepts the
-   extended syntax and rejects malformed patterns (`*` mid-name, double `*`, empty stem) and any
+   is a NAME_RE literal or a NAME_RE stem ending in `-`, plus one trailing `*` — a pattern is
+   component-aligned by construction, so `torch-*` can never capture `torchvision`, and stems like
+   `foo` or `torch` are invalid. `validate_mapping` accepts the
+   extended syntax and rejects malformed patterns (a stem not ending in `-`, `*` mid-name, double
+   `*`, empty stem) and any
    cross-key overlap: a literal under one key may not start with another key's pattern stem, and
    two keys' pattern stems may not be prefix-related. Same-key overlaps are allowed and resolved
    by alias order. Acceptance: validation tests cover valid patterns, each malformed form,
@@ -91,11 +97,15 @@ never read "not installed" from what is only "not recorded".
    when exactly one installed distribution starts with its stem; zero matches passes to the next
    candidate; two or more raise an ambiguity error. `validate_distributions` accepts a collected
    name when it equals a literal or starts with a pattern stem. Acceptance: fold tests cover
-   unique pattern match, literal-before-pattern priority, zero-match fall-through, and the
+   unique pattern match, pattern-before-literal priority for the migrated key, zero-match
+   fall-through, and the
    ambiguity error for two installed family members.
 4. **Migration.** `mooncake-transfer-engine` becomes
-   `["mooncake-transfer-engine", "mooncake-transfer-engine-*"]`, replacing the `-npu`, `-rocm`
-   and `-cuda13` literals. Acceptance: `tests/pack/test_dependencies.py` self-consistency tests
+   `["mooncake-transfer-engine-*", "mooncake-transfer-engine"]`, replacing the `-npu`, `-rocm`
+   and `-cuda13` literals. Pattern-first preserves the pinned specific-beats-generic priority in
+   `tests/pack/test_merge_runner.py::test_probe_result_is_folded_onto_dependency_names` (a variant
+   outranks the bare build when both are installed), so that fixture keeps passing unedited.
+   Acceptance: `tests/pack/test_dependencies.py` self-consistency tests
    pass on the migrated file, and fixture receipts carrying `mooncake-transfer-engine-npu`,
    `-rocm` or `-cuda13` fold to the same catalog entries as before.
 5. **Semantic correction.** `docs/dependency-metadata.md` rewrites the unknown-versus-empty table
@@ -117,6 +127,12 @@ never read "not installed" from what is only "not recorded".
   `mooncake-transfer-engine`, false for the `vllm`, `sglang` or `lmcache` prefixes, which mix in
   distinct packages. Patterns change syntax, not policy; the wildcard is a per-key judgment, never
   a default.
+- Alias order is pattern-first for the migrated key: the existing convention is that a variant
+  outranks the generic build when both are installed (pinned end-to-end in
+  `test_merge_runner.py`), and the wildcard preserves it; the bare literal is the generic
+  fallback, not the canonical winner. Co-installation should never occur under the
+  mutual-exclusion premise, so this orders a pathological case by convention rather than by
+  claim.
 - The ambiguity error protects data that *is* recorded; it is not a check on unrecorded packages.
   Nothing in this design inspects, enumerates, or fails on distributions the mapping does not
   cover.
@@ -166,7 +182,7 @@ uv run mkdocs build --strict
 ### Project Structure
 
 - `pack/dependencies.json` — `mooncake-transfer-engine` aliases become
-  `["mooncake-transfer-engine", "mooncake-transfer-engine-*"]`.
+  `["mooncake-transfer-engine-*", "mooncake-transfer-engine"]`.
 - `pack/collect_dependencies.py` — `validate_mapping` (pattern syntax, overlap checks),
   `validate_distributions` (literal-or-pattern membership), `fold_dependencies` (pattern
   semantics, ambiguity error).
