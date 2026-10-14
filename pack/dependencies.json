@@ -4,7 +4,7 @@
   "flashinfer-python": ["flashinfer-python"],
   "lmcache": ["lmcache"],
   "lmcache-ascend": ["lmcache-ascend"],
-  "mooncake-transfer-engine": ["mooncake-transfer-engine-npu", "mooncake-transfer-engine-rocm", "mooncake-transfer-engine-cuda13", "mooncake-transfer-engine"],
+  "mooncake-transfer-engine": ["mooncake-transfer-engine-*", "mooncake-transfer-engine"],
   "ray": ["ray"],
   "runai-model-streamer": ["runai-model-streamer"],
   "sgl-kernel-npu": ["sgl-kernel-npu"],

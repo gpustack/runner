@@ -51,6 +51,9 @@ DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 COLLECTION_TIMEOUT = 300
 PLATFORM_RE = re.compile(r"linux/(amd64|arm64)(/v[1-9][0-9]*)?\Z")
 NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
+# Pattern stems end with '-' so prefix matching stays component-aligned: a
+# stem never matches the bare name and cannot capture dash-breaking lookalikes.
+PATTERN_STEM_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*-\Z")
 INVOCATION_FIELDS = {
     "workflow_run",
     "source_revision",
@@ -110,10 +113,20 @@ def content_digest(value: object) -> str:
     return "sha256:" + hashlib.sha256(serialized.encode()).hexdigest()
 
 
+def _alias_anchor(alias: str) -> str | None:
+    """A literal records its exact name; a pattern records names under its stem."""
+    if alias.endswith("*"):
+        stem = alias[:-1]
+        return stem if PATTERN_STEM_RE.fullmatch(stem) else None
+    return alias if NAME_RE.fullmatch(alias) else None
+
+
 def validate_mapping(mapping: dict) -> None:
+    """Aliases are literals or stems ending in '-' with one trailing star."""
     if not isinstance(mapping, dict) or not mapping:
         message = "dependency mapping must be a nonempty object"
         raise ValueError(message)
+    anchors = []
     seen = set()
     for name, aliases in mapping.items():
         if not isinstance(name, str) or not NAME_RE.fullmatch(name):
@@ -123,16 +136,32 @@ def validate_mapping(mapping: dict) -> None:
             message = "dependency aliases must be nonempty ordered lists"
             raise ValueError(message)
         for alias in aliases:
-            if (
-                not isinstance(alias, str)
-                or not NAME_RE.fullmatch(alias)
-                or alias in seen
-            ):
+            stem = _alias_anchor(alias) if isinstance(alias, str) else None
+            if stem is None or alias in seen:
                 message = (
                     "dependency mapping has invalid or duplicate distribution aliases"
                 )
                 raise ValueError(message)
             seen.add(alias)
+            anchors.append((name, alias, stem, alias.endswith("*")))
+    for name, alias, stem, pattern in anchors:
+        for other_name, other_alias, other_stem, other_pattern in anchors:
+            if other_name == name:
+                continue  # Same-key overlap is resolved by alias order.
+            if pattern and other_pattern:
+                overlap = other_stem.startswith(stem) or stem.startswith(other_stem)
+            elif pattern:
+                overlap = other_stem.startswith(stem)
+            elif other_pattern:
+                overlap = stem.startswith(other_stem)
+            else:
+                continue  # Distinct literals collide only on equality, rejected above.
+            if overlap:
+                message = (
+                    "dependency mapping aliases overlap across keys: "
+                    f"{alias} ({name}) and {other_alias} ({other_name})"
+                )
+                raise ValueError(message)
 
 
 def validate_invocation(invocation: dict, mapping: dict) -> None:
@@ -179,22 +208,39 @@ def validate_build(build: dict) -> None:
 
 
 def validate_distributions(distributions: dict, mapping: dict) -> None:
-    allowed = {alias for aliases in mapping.values() for alias in aliases}
+    aliases = [alias for values in mapping.values() for alias in values]
     if not isinstance(distributions, dict):
         message = "successful collection requires a distributions object"
         raise ValueError(message)  # noqa: TRY004 - Malformed JSON is a validation error.
     for name, version in distributions.items():
-        if name not in allowed or not isinstance(version, str) or not version.strip():
+        recorded = any(
+            name.startswith(alias[:-1]) if alias.endswith("*") else name == alias
+            for alias in aliases
+        )
+        if not recorded or not isinstance(version, str) or not version.strip():
             message = "invalid collected distribution name or version"
             raise ValueError(message)
 
 
 def fold_dependencies(distributions: dict, mapping: dict) -> dict[str, str]:
+    """First matching alias wins; a pattern requires exactly one installed match."""
     validate_mapping(mapping)
     validate_distributions(distributions, mapping)
     folded = {}
     for name, aliases in mapping.items():
         for alias in aliases:
+            if alias.endswith("*"):
+                matched = [key for key in distributions if key.startswith(alias[:-1])]
+                if not matched:
+                    continue
+                if len(matched) > 1:
+                    message = (
+                        f"dependency alias {alias} matches multiple installed "
+                        f"distributions: {', '.join(sorted(matched))}"
+                    )
+                    raise ValueError(message)
+                folded[name] = distributions[matched[0]]
+                break
             if alias in distributions:
                 folded[name] = distributions[alias]
                 break

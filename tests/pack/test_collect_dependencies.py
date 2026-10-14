@@ -112,7 +112,7 @@ def mock_image(monkeypatch, directory, *, virtual_env=None, known_venv=None):
     return calls
 
 
-def test_collect_real_metadata_alias_order_and_raw_versions(
+def test_collect_real_metadata_pattern_priority_and_raw_versions(
     environment,
     monkeypatch,
     invocation,
@@ -123,7 +123,6 @@ def test_collect_real_metadata_alias_order_and_raw_versions(
         [
             ("Torch", "2.8.0rc1+GPU.Custom"),
             ("Mooncake_Transfer_Engine", "0.3.9"),
-            ("mooncake-transfer-engine-rocm", "0.3.8rc2+rocm"),
             ("mooncake-transfer-engine-npu", "0.3.7.post1"),
         ],
     )
@@ -135,7 +134,6 @@ def test_collect_real_metadata_alias_order_and_raw_versions(
     assert receipt["distributions"] == {
         "torch": "2.8.0rc1+GPU.Custom",
         "mooncake-transfer-engine": "0.3.9",
-        "mooncake-transfer-engine-rocm": "0.3.8rc2+rocm",
         "mooncake-transfer-engine-npu": "0.3.7.post1",
     }
     assert collector.fold_dependencies(receipt["distributions"], MAPPING) == {
@@ -146,6 +144,73 @@ def test_collect_real_metadata_alias_order_and_raw_versions(
     assert collector.validate_receipts(invocation, [build], MAPPING, [receipt]) == [
         receipt,
     ]
+
+
+def test_receipt_records_pattern_matched_distribution(invocation, build):
+    receipt = collector.collect(invocation, build, MAPPING, disabled=True)
+    receipt["status"] = "succeeded"
+    receipt["distributions"] = {"mooncake-transfer-engine-npu": "0.3.7.post1"}
+    receipt["interpreter"] = "/opt/venv/bin/python"
+    receipt["prefix"] = "/opt/venv"
+    assert collector.validate_receipts(invocation, [build], MAPPING, [receipt]) == [
+        receipt,
+    ]
+    assert collector.fold_dependencies(receipt["distributions"], MAPPING) == {
+        "mooncake-transfer-engine": "0.3.7.post1",
+    }
+
+
+def test_pattern_mapping_accepted(invocation, build):
+    mapping = {
+        "m": ["m", "m-*"],
+        "t": ["torch-*"],
+        "torchvision": ["torchvision"],
+        "v": ["vllm-*"],
+        "vllm": ["vllm"],
+    }
+    invocation["mapping_digest"] = collector.content_digest(mapping)
+    receipt = collector.collect(invocation, build, mapping, disabled=True)
+    assert receipt["status"] == "unknown"
+    collector.validate_mapping(MAPPING)
+
+
+def test_fold_pattern_semantics():
+    # A pattern records the single installed distribution under its stem.
+    assert collector.fold_dependencies(
+        {"m-npu": "0.3.7.post1"},
+        {"m": ["m-*"]},
+    ) == {"m": "0.3.7.post1"}
+    # Pattern-first: a unique variant outranks a co-installed bare literal.
+    assert collector.fold_dependencies(
+        {"m": "0.3.9", "m-npu": "0.3.7.post1"},
+        {"m": ["m-*", "m"]},
+    ) == {"m": "0.3.7.post1"}
+    # Zero pattern matches fall through to the next alias.
+    assert collector.fold_dependencies(
+        {"m": "0.3.9"},
+        {"m": ["m-*", "m"]},
+    ) == {"m": "0.3.9"}
+    # A key without any matching alias is omitted entirely.
+    assert collector.fold_dependencies(
+        {"n": "1.0"},
+        {"m": ["m-*"], "n": ["n"]},
+    ) == {"n": "1.0"}
+
+
+def test_fold_pattern_ambiguity_rejected():
+    with pytest.raises(
+        ValueError,
+        match=r"matches multiple installed distributions.*m-npu.*m-rocm",
+    ):
+        collector.fold_dependencies(
+            {"m-npu": "0.3.7.post1", "m-rocm": "0.3.8rc2"},
+            {"m": ["m-*"]},
+        )
+
+
+def test_fold_rejects_name_not_covered_by_pattern():
+    with pytest.raises(ValueError, match="invalid collected distribution"):
+        collector.fold_dependencies({"mfoo": "1.0"}, {"m": ["m-*"]})
 
 
 def test_rocm_sglang_venv_without_virtual_env(
@@ -484,7 +549,23 @@ def test_unknown_cannot_carry_failure(invocation, build):
 
 @pytest.mark.parametrize(
     "mapping",
-    [{}, {"torch": []}, {"torch": ["Torch"]}, {"torch": ["torch", "torch"]}],
+    [
+        {},
+        {"torch": []},
+        {"torch": ["Torch"]},
+        {"torch": ["torch", "torch"]},
+        {"torch": ["*"]},
+        {"torch": ["torch**"]},
+        {"torch": ["torch*-npu"]},
+        {"torch": ["*torch"]},
+        {"torch": ["torch*"]},
+        {"torch": ["torch-np*"]},
+        {"steal": ["vllm-*"], "vllm-ascend": ["vllm-ascend"]},
+        {"m": ["vllm-ascend-*"], "vllm-ascend": ["vllm-ascend-plugin"]},
+        {"m1": ["foo-*"], "m2": ["foo-bar-*"]},
+        {"m1": ["foo-bar-*"], "m2": ["foo-*"]},
+        {"m1": ["foo-*"], "m2": ["foo-bar-baz-*"]},
+    ],
 )
 def test_bad_mapping_rejected(invocation, build, mapping):
     invocation["mapping_digest"] = collector.content_digest(mapping)

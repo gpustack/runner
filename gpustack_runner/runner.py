@@ -216,8 +216,9 @@ class Runner:
     time rather than declared in the Dockerfile. Keyed by the dependency names of
     `pack/dependencies.json` and sorted; a name covering several accelerator
     variants is already resolved to the one that applies. An absent key means the
-    package is not installed; the field being ``None`` means the image was never
-    probed.
+    mapping recorded nothing for that name: the package is absent, or installed
+    under a name the mapping does not cover. The field being ``None`` means the
+    image was never probed.
 
     Do not mutate in place: `list_runners` is ``@lru_cache``-decorated and hands
     out the same ``Runner`` instances on every call, so an edit corrupts the

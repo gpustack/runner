@@ -313,7 +313,7 @@ def _matches(
             True,
         ),
         (
-            "empty specifier still misses when not installed",
+            "empty specifier still misses when unrecorded",
             # "No constraint" never degrades to "always true": absence is still
             # absence.
             {},
@@ -383,7 +383,8 @@ def _matches(
             False,
             False,
         ),
-        # A probed entry missing the key means "not installed", a different
+        # A probed entry missing the key means the mapping recorded nothing for
+        # that name (absent, or installed under an unmapped name), a different
         # state from "unprobed" that must not get the lenient default.
         (
             "probed but package absent",

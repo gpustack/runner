@@ -14,10 +14,21 @@ import sys
 
 
 def probe(mapping: dict[str, list[str]]) -> dict:
-    wanted = {name for aliases in mapping.values() for name in aliases}
-    if not wanted:
+    literals = set()
+    stems = []
+    for aliases in mapping.values():
+        for alias in aliases:
+            if alias.endswith("*"):
+                stems.append(alias[:-1])
+            else:
+                literals.add(alias)
+    if not literals and not stems:
         message = "dependency mapping is empty"
         raise ValueError(message)
+
+    def wanted(name: str) -> bool:
+        return name in literals or any(name.startswith(stem) for stem in stems)
+
     installed = {}
     for distribution in importlib.metadata.distributions():
         name = distribution.metadata.get("Name")
@@ -29,7 +40,7 @@ def probe(mapping: dict[str, list[str]]) -> dict:
         # A conflict is unrecordable only for a mapped name. Unmapped duplicates
         # never enter the catalog, so a toolkit-bundled distribution shadowing
         # another path (CANN images ship these) must not fail collection.
-        if name in wanted and name in installed and installed[name] != version:
+        if wanted(name) and name in installed and installed[name] != version:
             message = f"conflicting installed distribution versions: {name}"
             raise ValueError(message)
         installed[name] = version
@@ -41,7 +52,7 @@ def probe(mapping: dict[str, list[str]]) -> dict:
         "interpreter": sys.executable,
         "prefix": sys.prefix,
         "distributions": {
-            name: installed[name] for name in sorted(wanted) if name in installed
+            name: installed[name] for name in sorted(installed) if wanted(name)
         },
     }
 

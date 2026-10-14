@@ -44,7 +44,7 @@ Patch application and available manifests do not prove image execution or GPU co
 The generated catalog records measured final-image dependencies per CPU platform.
 NEVER invent catalog package versions from build arguments; declared and installed versions can differ.
 An absent `dependencies` field means unknown collection. An empty map means successful collection without configured packages.
-A missing map key means that package was absent. Preserve raw installed versions and ordered aliases.
+A missing map key means the mapping recorded nothing: the package is absent, or installed under a name the mapping does not cover. Preserve raw installed versions and ordered aliases.
 Pack owns digest-bound collection and catalog updates. Local image builds do not perform that collection.
 
 ## Development and verification
