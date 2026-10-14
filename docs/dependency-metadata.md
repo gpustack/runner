@@ -30,7 +30,7 @@ leads to wrong conclusions.
 |-------|---------|
 | `dependencies` is absent | Collection is unknown — the image predates probing, or collection was explicitly disabled |
 | `dependencies` is `{}` | Collection succeeded and no configured dependency was present in the environment |
-| `dependencies` is a map without the queried key | Collection succeeded and that package is not installed |
+| `dependencies` is a map without the queried key | Collection succeeded, but the mapping recorded nothing for that name: the package is absent, or installed under a name the mapping does not cover |
 | `dependencies` maps the queried key to a version | The package is installed, at that raw version |
 
 An explicitly disabled collection is recorded with status `unknown` and carries no distributions,
@@ -61,21 +61,29 @@ the receipt and the catalog entry are.
 
 ### One name, several distributions
 
-A mapping key may list several candidate distributions in priority order:
+A mapping key may list several candidate distributions in priority order. An alias is either a
+literal distribution name or a prefix pattern: a name stem ending in `-` plus a single trailing
+`*`. The `mooncake-transfer-engine` entry shows both forms:
 
 ```json
 {
   "mooncake-transfer-engine": [
-    "mooncake-transfer-engine-npu",
-    "mooncake-transfer-engine-rocm",
-    "mooncake-transfer-engine-cuda13",
+    "mooncake-transfer-engine-*",
     "mooncake-transfer-engine"
   ]
 }
 ```
 
-Folding happens only after the complete artifact set is validated; the first candidate that is
-installed wins. Two conditions must both hold before grouping:
+The pattern records the single installed distribution whose name starts with
+`mooncake-transfer-engine-` — any current or future build variant, without a mapping edit. A stem
+ends with `-`, so matching stays component-aligned: the pattern never matches the bare name
+itself and cannot capture lookalikes such as `torchvision` under a `torch-*` stem. Pattern-first
+order keeps the convention that a variant outranks the bare build when both are installed; the
+bare literal is the generic fallback. Folding happens only after the complete artifact set is
+validated. Zero pattern matches pass to the next candidate; two or more installed distributions
+under one stem fail the fold as ambiguous, because recording either would be arbitrary.
+
+Two conditions must both hold before grouping — a pattern changes syntax, not policy:
 
 1. Mutually exclusive — at most one can be installed in a given image. Folding keeps a single
    winner, so grouping distributions that coexist silently discards one of them. `torch` and
@@ -86,7 +94,12 @@ installed wins. Two conditions must both hold before grouping:
    and `sgl-kernel-npu` are mutually exclusive but stay separate, because a specifier meaningful
    for a `0.4.6.post1` version is meaningless against a `2026.6.1` date version.
 
-When in doubt, give each distribution its own name. That records both facts and asserts nothing.
+A stem wildcard additionally asserts that everything under the prefix is a build variant of one
+package — true for `mooncake-transfer-engine`, false for the `vllm`, `sglang` or `lmcache`
+prefixes, which mix distinct packages. Validation rejects a pattern whose stem would claim a
+distribution another key records, so a hypothetical `vllm-*` pattern fails against the
+`vllm-ascend` and similar keys. When in doubt, give each distribution its own name. That records
+both facts and asserts nothing.
 
 ## Querying
 
@@ -101,7 +114,7 @@ list_runners(service="vllm", dependencies=(("lmcache", ">=0.4.6"),))
 # Multiple conditions.
 list_runners(backend="cuda", dependencies=(("lmcache", ">=0.4.6"), ("torch", ">=2.9"),))
 
-# An empty specifier asks only whether the package is installed.
+# An empty specifier asks only whether the name was recorded.
 list_runners(backend="cuda", dependencies=(("vllm-omni", ""),))
 
 # Strict mode: drop images that were never probed.
@@ -122,7 +135,7 @@ list_runners(
    converse is not a bug: `>=0.4.6` does not match `0.4.6rc1`, since PEP 440 orders
    `0.4.6rc1 < 0.4.6`. The same applies to dev versions such as `0.27.0rc2.dev25+g<sha>`. Write
    the bound you actually mean (`>=0.4.6rc1`).
-4. An empty specifier checks only whether the package is installed. It also works when the
+4. An empty specifier checks only whether the mapping recorded the name. It also works when the
    recorded version cannot be parsed as a PEP 440 version.
 5. An unknown name matches no collected row and does not raise. The whitelist is a build-side file
    and is not shipped with the library, so there is nothing to validate a name against. A

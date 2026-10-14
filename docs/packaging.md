@@ -128,7 +128,9 @@ compatibility.
    creating digest-based manifests. It does not emit a manifest for an image whose evidence is
    missing or inconsistent.
 4. Catalog. `catalog` rechecks the published manifests and folds only validated distributions
-   into the catalog entry.
+   into the catalog entry. A mapping alias may be a literal name or a stem pattern ending in
+   `-` with one trailing `*`; a pattern matching more than one installed distribution fails the
+   fold instead of picking one.
 5. Merge. `pack/merge_runner.sh` merges the new entries into `gpustack_runner/runner.py.json` and
    promotes matching rows in the support document. Pack opens a pull request with those changes.
 

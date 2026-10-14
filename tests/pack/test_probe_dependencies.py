@@ -63,3 +63,42 @@ def test_mapped_conflict_still_fails_collection(tmp_path):
     assert (
         "conflicting installed distribution versions: mindstudio-opst" in result.stderr
     )
+
+
+def test_pattern_records_variant_and_excludes_lookalike(tmp_path):
+    # A stem ends with '-', so the lookalike that breaks at the dash boundary
+    # stays unclaimed while the real variant under the stem is recorded.
+    _dist_info(tmp_path, "acme-npu", "0.3.7.post1")
+    _dist_info(tmp_path, "acmex", "1.0")
+    result = _probe(tmp_path, {"acme": ["acme-*"]})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["distributions"] == {
+        "acme-npu": "0.3.7.post1",
+    }
+
+
+def test_literal_still_recorded_alongside_pattern(tmp_path):
+    _dist_info(tmp_path, "acme", "1.0")
+    _dist_info(tmp_path, "acme-npu", "0.3.7.post1")
+    result = _probe(tmp_path, {"acme": ["acme-*", "acme"]})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["distributions"] == {
+        "acme": "1.0",
+        "acme-npu": "0.3.7.post1",
+    }
+
+
+def test_pattern_matched_conflict_fails_collection(tmp_path):
+    _dist_info(tmp_path, "acme-npu", "0.3.7.post1")
+    _dist_info(tmp_path, "Acme.NPU", "0.3.6")
+    result = _probe(tmp_path, {"acme": ["acme-*"]})
+    assert result.returncode == 1
+    assert "conflicting installed distribution versions: acme-npu" in result.stderr
+
+
+def test_unmatched_conflict_ignored_under_pattern_mapping(tmp_path):
+    _dist_info(tmp_path, "unrelated", "1.0")
+    _dist_info(tmp_path, "unrelated", "2.0")
+    result = _probe(tmp_path, {"acme": ["acme-*"]})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["distributions"] == {}
