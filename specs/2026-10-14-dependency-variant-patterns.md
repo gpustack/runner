@@ -205,14 +205,14 @@ raw versions verbatim, and JSON stays sorted on write.
 
 ### Implementation Plan
 
-- [ ] **T1 · Pattern aliases: validation, probe matching, fold semantics**
+- [x] **T1 · Pattern aliases: validation, probe matching, fold semantics**
       Blocked by: None
       Owns: `pack/dependencies.json`, `pack/collect_dependencies.py`,
       `pack/probe_dependencies.py`, `tests/pack/test_dependencies.py`,
       `tests/pack/test_collect_dependencies.py`, `tests/pack/test_probe_dependencies.py`
       Acceptance: criteria 1–4.
       Verify: `uv run pytest tests/pack -q`
-- [ ] **T2 · Semantic correction in docs and AGENTS.md**
+- [x] **T2 · Semantic correction in docs and AGENTS.md**
       Blocked by: None
       Owns: `docs/dependency-metadata.md`, `docs/packaging.md`, `AGENTS.md`
       Acceptance: criterion 5.
