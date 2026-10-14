@@ -1,6 +1,6 @@
 # Spec: Dependency Variant Patterns
 
-Status: Proposed
+Status: Shipped
 Type: Feature
 
 ## Summary
