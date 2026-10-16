@@ -24,7 +24,7 @@ ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## against lmcache's build-time torch pin, which need not match the torch this base ships, and
 ## on a mismatch lmcache silently degrades to its torch baseline (vllm-project/vllm#53424).
 ## Keep in sync with the ROCm and SGLang pins —— the MP wire protocol has no version handshake.
-ARG VLLM_LMCACHE_VERSION=0.5.4
+ARG VLLM_LMCACHE_VERSION=0.5.6
 ARG VLLM_ROUTER_VERSION=0.1.15
 ARG VLLM_OMNI_COMMIT=6dd0d1f9310f7598b773c796b434c8000c2816ec
 ## Empty means keep the base's torchcodec. The v0.31.0-cu129 base bundles a
