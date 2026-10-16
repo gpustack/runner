@@ -55,7 +55,7 @@ Running such an operation:
 The records below describe past operations. This change does not rerun them or
 refresh their existing catalog rows. If selected again, they use central collection.
 
-- [ ] 2026-01-05: Install `vllm-omni` packages for vLLM 0.12.0 of CUDA/ROCm/CANN released images.
+- [x] 2026-01-05: Install `vllm-omni` packages for vLLM 0.12.0 of CUDA/ROCm/CANN released images.
 - [x] 2026-01-29: Apply DP deployment patches to vLLM 0.13.0 for CUDA/ROCm released images.
 - [x] 2026-01-29: Reinstall SGLang Kernel for SGLang 0.5.7 of CANN released images.
 - [x] 2026-02-03: Apply several patches to vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for CUDA 12.9 released images.
@@ -64,11 +64,11 @@ refresh their existing catalog rows. If selected again, they use central collect
 - [x] 2026-02-04: Apply several patches to vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for CUDA 12.8/12.6 released images.
 - [x] 2026-02-05: Reinstall `nvidia-nccl-cu12` package to vLLM 0.15.0/0.14.1 and SGLang 0.5.8 for CUDA 12.9/12.8/12.6 released images.
 - [x] 2026-02-12: Reinstall `triton` package for vLLM 0.15.1 for ROCm released images.
-- [ ] 2026-02-14: Patch SGLang 0.5.8.post1 of CANN/CUDA/ROCm released images to reduce Z-Image loading memory occupation.
+- [x] 2026-02-14: Patch SGLang 0.5.8.post1 of CANN/CUDA/ROCm released images to reduce Z-Image loading memory occupation.
 - [x] 2026-02-28: Reinstall `vllm-omni` packages for vLLM 0.16.0 of CUDA released images.
 - [x] 2026-03-03: Fix malformed ARM64 image for vLLM 0.15.1 of CUDA released images.
 - [x] 2026-09-01: Pin `numpy` to 1.26.4 and remove CUDA-only NIXL EP packages for vLLM 0.18.1 of DTK 26.04 released images.
 - [x] 2026-09-16: Patch vLLM 0.24.0/0.25.1/0.27.1/0.29.0 of CUDA/ROCm released images to fix mooncake prom metrics issue.
-- [ ] 2026-09-20: Install `vllm-router` package for vLLM 0.27.1 of CUDA released images.
-- [ ] 2026-09-24: Patch vLLM 0.29.0 of CUDA/ROCm released images to fix mooncake store pending load assertion.
-- [ ] 2026-10-16: Disable the spec-less `humming` stub vllm-omni registers in `sys.modules` for vLLM 0.27.1/0.29.0/0.30.0/0.31.0 of ROCm/CANN released images.
+- [x] 2026-09-20: Install `vllm-router` package for vLLM 0.27.1 of CUDA released images.
+- [x] 2026-09-24: Patch vLLM 0.29.0 of CUDA/ROCm released images to fix mooncake store pending load assertion.
+- [x] 2026-10-16: Disable the spec-less `humming` stub vllm-omni registers in `sys.modules` for vLLM 0.27.1/0.29.0/0.30.0/0.31.0 of ROCm/CANN released images.
