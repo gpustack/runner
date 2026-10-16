@@ -71,3 +71,4 @@ refresh their existing catalog rows. If selected again, they use central collect
 - [x] 2026-09-16: Patch vLLM 0.24.0/0.25.1/0.27.1/0.29.0 of CUDA/ROCm released images to fix mooncake prom metrics issue.
 - [ ] 2026-09-20: Install `vllm-router` package for vLLM 0.27.1 of CUDA released images.
 - [ ] 2026-09-24: Patch vLLM 0.29.0 of CUDA/ROCm released images to fix mooncake store pending load assertion.
+- [ ] 2026-10-16: Disable the spec-less `humming` stub vllm-omni registers in `sys.modules` for vLLM 0.27.1/0.29.0/0.30.0/0.31.0 of ROCm/CANN released images.
