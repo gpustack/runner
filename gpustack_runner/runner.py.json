@@ -4493,6 +4493,7 @@
       "runai-model-streamer": "0.15.7",
       "torch": "2.12.0+git6bbd260",
       "transformers": "5.14.1",
+      "vllm": "0.29.0+rocm723",
       "vllm-omni": "0.29.0rc1+rocm"
     }
   },
