@@ -1,0 +1,18 @@
+diff --git a/vllm_omni/quantization/factory.py b/vllm_omni/quantization/factory.py
+index 55a50a090..4ec880c65 100644
+--- a/vllm_omni/quantization/factory.py
++++ b/vllm_omni/quantization/factory.py
+@@ -66,7 +66,12 @@ def _register_humming_stubs() -> None:
+         sys.modules[name] = mod
+ 
+ 
+-_register_humming_stubs()
++# Disabled: the stubs are spec-less ModuleType objects in sys.modules, which
++# makes importlib.util.find_spec("humming") raise ValueError in vllm's
++# has_humming() probe, and shadows the real humming-kernels package where it is
++# installed. Unneeded: vllm's lazy facade (vllm.utils.humming) keeps
++# `from .humming import HummingConfig` importable without the wheel.
++# _register_humming_stubs()
+ 
+ from vllm.model_executor.layers.quantization import (  # noqa: E402
+     QUANTIZATION_METHODS,
