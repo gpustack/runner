@@ -6,11 +6,6 @@
 
 name: Pack
 
-# Hold one lock through image publication and catalog preparation.
-concurrency:
-  group: pack-publication-${{ github.repository }}
-  cancel-in-progress: false
-
 permissions:
   actions: write
   contents: write
