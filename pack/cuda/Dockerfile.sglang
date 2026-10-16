@@ -18,7 +18,7 @@ ARG SGLANG_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## Keep >= 0.4.6 and in sync with the ROCm and vLLM pins: SGLang's lmc_radix_cache.py imports
 ## `lmcache.integration.sglang.multi_process_adapter`, added in 0.4.6, and the MP wire protocol
 ## has no version handshake. The SGLang base ships no lmcache, so it is always built from source.
-ARG SGLANG_LMCACHE_VERSION=0.5.4
+ARG SGLANG_LMCACHE_VERSION=0.5.6
 ARG SGLANG_NVIDIA_HPCX_VERSION=2.24.1_cuda13
 ARG SGLANG_AWS_EFA_VERSION=1.46.0
 
