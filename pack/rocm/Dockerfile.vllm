@@ -197,9 +197,13 @@ RUN <<EOF
     git -C /tmp clone --recursive --shallow-submodules \
         --depth 1 --branch v${VLLM_LMCACHE_VERSION} --single-branch \
         https://github.com/LMCache/LMCache.git lmcache
+    ## pip install mirrors LMCache 0.5.6's pinned build requirements (pyproject
+    ## [build-system]): build_py generates the gRPC proto bindings, and a
+    ## --no-isolation build sees only this environment.
     pushd /tmp/lmcache \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
         && cat /tmp/lmcache/pyproject.toml \
+        && pip install grpcio==1.78.0 grpcio-tools==1.78.0 \
         && python -v -m build --no-isolation --wheel \
         && tree -hs /tmp/lmcache/dist \
         && mv /tmp/lmcache/dist /workspace

@@ -284,6 +284,10 @@ RUN <<EOF
     ## Drop the build-time torch pin: we compile against the base's own torch on purpose.
     sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml
     cat /tmp/lmcache/pyproject.toml
+    ## LMCache 0.5.6 generates its gRPC proto bindings during build_py; mirror upstream's
+    ## pinned build requirements (pyproject [build-system]) —— a --no-isolation build sees
+    ## only this environment.
+    pip install grpcio==1.78.0 grpcio-tools==1.78.0
     ## `--skip-dependency-check`: the base does not ship torch's full dependency closure.
     python -m build --no-isolation --skip-dependency-check --wheel
     tree -hs /tmp/lmcache/dist

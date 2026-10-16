@@ -204,9 +204,13 @@ RUN <<EOF
     ## `--skip-dependency-check`: the base venv ships nvidia-nccl-cu13 newer than
     ## torch's own pin (2.30.7 vs ==2.29.7); the closure check rejects upstream's
     ## skew, which the CUDA extension build does not depend on.
+    ## pip install mirrors LMCache 0.5.6's pinned build requirements (pyproject
+    ## [build-system]): build_py generates the gRPC proto bindings, and a
+    ## --no-isolation build sees only this environment.
     pushd /tmp/lmcache \
         && sed -i "s/\"torch==.*\"/\"torch\"/g" /tmp/lmcache/pyproject.toml \
         && cat /tmp/lmcache/pyproject.toml \
+        && pip install grpcio==1.78.0 grpcio-tools==1.78.0 \
         && python -m build --no-isolation --skip-dependency-check --wheel \
         && tree -hs /tmp/lmcache/dist \
         && mv /tmp/lmcache/dist /workspace
