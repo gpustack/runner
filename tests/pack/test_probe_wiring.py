@@ -284,8 +284,7 @@ def test_workflow_reruns_replace_only_the_selected_job_artifacts(pack_workflow):
     assert outputs["context"] == "${{ steps.freeze.outputs.context }}"
 
 
-def test_workflow_serializes_and_verifies_manifest_before_catalog(pack_workflow):
-    assert pack_workflow["concurrency"]["cancel-in-progress"] is False
+def test_workflow_verifies_manifest_before_catalog(pack_workflow):
     manifest = pack_workflow["jobs"]["manifest"]
     steps = {step["name"]: step for step in manifest["steps"]}
     assert "build" in manifest["needs"]

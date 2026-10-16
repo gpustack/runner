@@ -1,0 +1,78 @@
+ARG CANN_VERSION=9.2
+ARG CANN_ARCHS=910b
+ARG VLLM_VERSION=0.30.0
+
+FROM gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-vllm${VLLM_VERSION} AS vllm
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG TARGETPLATFORM
+ARG TARGETOS
+ARG TARGETARCH
+
+## Disable the humming stub vllm-omni registers at import time.
+##
+## vllm_omni/quantization/factory.py calls _register_humming_stubs() on import,
+## filling sys.modules with bare ModuleType objects whose __spec__ is None.
+## vllm's has_humming() probe then raises "ValueError: humming.__spec__ is None"
+## out of importlib.util.find_spec, and on CUDA images the stub also shadows the
+## real humming-kernels package for the whole process. The stub is obsolete:
+## vllm's lazy facade (vllm.utils.humming) keeps `from .humming import
+## HummingConfig` importable without the wheel on every vLLM this operation
+## targets (0.27.1, 0.29.0, 0.30.0, 0.31.0 all verified).
+##
+## The edit comments out the bare call line only, so it applies to every
+## vllm-omni build these images ship (the call site is identical in all of
+## them) and leaves the function itself in place.
+
+RUN <<EOF
+    # Disable the humming stub registration
+
+    SITE_PACKAGES="$(pip show vllm_omni | grep '^Location:' | cut -d' ' -f2)"
+    test -n "${SITE_PACKAGES}"
+    FACTORY="${SITE_PACKAGES}/vllm_omni/quantization/factory.py"
+    test -f "${FACTORY}"
+
+    # Accept exactly three states: no stub at all (nothing to do), the stub
+    # already disabled (idempotent re-run), or the known bare call line to
+    # neutralize. Any other shape means the file drifted; refuse to guess.
+    if ! grep -q 'def _register_humming_stubs' "${FACTORY}"; then
+        echo "[info] vllm-omni carries no humming stub; nothing to do."
+        exit 0
+    fi
+    if ! grep -q '^_register_humming_stubs()$' "${FACTORY}"; then
+        if grep -q '^# _register_humming_stubs()' "${FACTORY}"; then
+            echo "[info] humming stub already disabled; nothing to do."
+            exit 0
+        fi
+        echo "[ERROR] unrecognized _register_humming_stubs call site in ${FACTORY}" >&2
+        exit 1
+    fi
+
+    sed -i 's|^_register_humming_stubs()$|# _register_humming_stubs() -- disabled: spec-less sys.modules stubs break vllm has_humming() (ValueError: humming.__spec__ is None) and shadow the real humming-kernels package|' "${FACTORY}"
+    grep -q '^# _register_humming_stubs()' "${FACTORY}"
+
+    # Prove the behavior, not the text: importing the factory must leave
+    # sys.modules free of any humming entry, and has_humming() must answer
+    # without raising. On CUDA images the answer is True via the real wheel;
+    # elsewhere it is a clean False.
+    python3 - <<'PYEOF'
+import sys
+
+import vllm_omni.quantization.factory  # noqa: F401
+
+assert "humming" not in sys.modules, "humming stub still registered"
+
+from vllm.utils.import_utils import has_humming
+
+print("[info] has_humming() ->", has_humming())
+PYEOF
+
+    # Cleanup
+    rm -rf /var/tmp/* \
+        && rm -rf /tmp/*
+EOF
+
+## Entrypoint
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
