@@ -2157,7 +2157,8 @@
     "dependencies": {
       "diffusers": "0.37.0",
       "flashinfer-python": "0.6.18",
-      "lmcache": "0.5.4",
+      "lmcache": "0.5.6",
+      "mooncake-transfer-engine": "0.3.13",
       "sglang": "0.5.21",
       "sglang-kernel": "0.4.7",
       "sglang-router": "0.3.2",
@@ -2178,7 +2179,8 @@
     "dependencies": {
       "diffusers": "0.37.0",
       "flashinfer-python": "0.6.18",
-      "lmcache": "0.5.4",
+      "lmcache": "0.5.6",
+      "mooncake-transfer-engine": "0.3.13",
       "sglang": "0.5.21",
       "sglang-kernel": "0.4.7",
       "sglang-router": "0.3.2",
