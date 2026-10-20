@@ -18,10 +18,10 @@ Rows with the same identity and platform set must be unique.
 | Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | cuda | 12.9 | vllm | - | 0.31.0 | - | linux/amd64, linux/arm64 | published |
-| cuda | 12.9 | vllm | - | 0.32.0 | - | linux/amd64, linux/arm64 | prepared |
+| cuda | 12.9 | vllm | - | 0.32.0 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | vllm | - | 0.30.0 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | vllm | - | 0.31.0 | - | linux/amd64, linux/arm64 | published |
-| cuda | 13.0 | vllm | - | 0.32.0 | - | linux/amd64, linux/arm64 | prepared |
+| cuda | 13.0 | vllm | - | 0.32.0 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | sglang | - | 0.5.21 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | sglang | - | 0.5.22 | - | linux/amd64, linux/arm64 | prepared |
 | rocm | 7.2 | vllm | - | 0.30.0 | - | linux/amd64 | published |
