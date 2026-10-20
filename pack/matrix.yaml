@@ -124,9 +124,9 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.31.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.31.0"
-  ## AMD ROCm 7.2.1 - SGLang 0.5.21 (rocm720-mi30x)
+      - "VLLM_VERSION=0.32.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.32.0"
+  ## AMD ROCm 7.2.1 - SGLang 0.5.22 (rocm720-mi30x)
   ##
   - backend: "rocm"
     services:
@@ -135,8 +135,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.21"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.22"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.22-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
@@ -149,18 +149,18 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.3"
-      - "VLLM_VERSION=0.31.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.31.0-ubuntu2404"
-  ## NVIDIA CUDA 13.0.3 - SGLang 0.5.21
-  ## (upstream publishes no cu129 image for 0.5.21, so only the cu130 rule remains)
+      - "VLLM_VERSION=0.32.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.32.0-ubuntu2404"
+  ## NVIDIA CUDA 13.0.3 - SGLang 0.5.22
+  ## (upstream publishes no cu129 image for 0.5.22, so only the cu130 rule remains)
   ##
   - backend: "cuda"
     services:
       - "sglang"
     args:
       - "CUDA_VERSION=13.0.3"
-      - "SGLANG_VERSION=0.5.21"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.21-cu130"
+      - "SGLANG_VERSION=0.5.22"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.22-cu130"
   ## NVIDIA CUDA 12.9.1
   ## The upstream cu129 image pairs torch 2.13.0+cu129 with the 12.9 toolkit, but
   ## bundles a CUDA 13-built torchcodec that crashes `vllm serve` at import
@@ -175,8 +175,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.31.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.31.0-cu129-ubuntu2404"
+      - "VLLM_VERSION=0.32.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.32.0-cu129-ubuntu2404"
       - "VLLM_TORCHCODEC_VERSION=0.17.0"
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
