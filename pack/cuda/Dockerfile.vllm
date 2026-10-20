@@ -16,8 +16,8 @@ ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CUDA_VERSION=13.0.3
 ARG CUDA_ARCHS
-ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.31.0-ubuntu2404
-ARG VLLM_VERSION=0.31.0
+ARG VLLM_BASE_IMAGE=vllm/vllm-openai:v0.32.0-ubuntu2404
+ARG VLLM_VERSION=0.32.0
 ARG VLLM_TORCH_VERSION=2.13.0
 ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## Built from source, replacing the base's own lmcache: that one is a PyPI wheel compiled
@@ -25,9 +25,9 @@ ARG VLLM_TORCH_CUDA_VERSION=${CUDA_VERSION}
 ## on a mismatch lmcache silently degrades to its torch baseline (vllm-project/vllm#53424).
 ## Keep in sync with the ROCm and SGLang pins —— the MP wire protocol has no version handshake.
 ARG VLLM_LMCACHE_VERSION=0.5.6
-ARG VLLM_ROUTER_VERSION=0.1.15
-ARG VLLM_OMNI_COMMIT=6dd0d1f9310f7598b773c796b434c8000c2816ec
-## Empty means keep the base's torchcodec. The v0.31.0-cu129 base bundles a
+ARG VLLM_ROUTER_VERSION=0.1.16
+ARG VLLM_OMNI_COMMIT=da572cddb38383deae9caef33b8d490e292ef071
+## Empty means keep the base's torchcodec. The cu129 base bundles a
 ## torchcodec wheel built against CUDA 13, whose libtorchcodec_image.so needs
 ## libnvrtc/libcudart .so.13 and crashes `vllm serve` at import
 ## (vllm-project/vllm#60406). Setting this replaces it with the CPU build of

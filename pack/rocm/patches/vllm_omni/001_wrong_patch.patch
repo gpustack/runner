@@ -1,7 +1,7 @@
 diff --git a/vllm_omni/patch.py b/vllm_omni/patch.py
 --- a/vllm_omni/patch.py
 +++ b/vllm_omni/patch.py
-@@ -297,7 +297,9 @@
+@@ -384,6 +384,8 @@ if not hasattr(RequestStatus, "WAITING_FOR_INPUT"):
  for module_name, module in list(sys.modules.items()):
      # only do patch on module of vllm, pass others
      if "vllm" not in module_name:
@@ -9,6 +9,4 @@ diff --git a/vllm_omni/patch.py b/vllm_omni/patch.py
 +    if "--omni" not in sys.argv:
 +        continue
      if hasattr(module, "EngineCoreOutput") and module.EngineCoreOutput == _OriginalEngineCoreOutput:
-         module.EngineCoreOutput = OmniEngineCoreOutput
-     if hasattr(module, "EngineCoreOutputs") and module.EngineCoreOutputs == _OriginalEngineCoreOutputs:
-         module.EngineCoreOutputs = OmniEngineCoreOutputs
+         setattr(module, "EngineCoreOutput", OmniEngineCoreOutput)
