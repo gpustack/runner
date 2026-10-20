@@ -253,10 +253,33 @@ def test_app_scope_identity_and_clean_validation():
         == "${{ steps.write-token.outputs.app-slug }}[bot]"
     )
     validation = workflow["jobs"]["validation"]
+    token = step(validation, "read-token")
+    assert token["uses"] == "actions/create-github-app-token@v2"
+    assert token["with"]["repositories"] == "${{ github.event.repository.name }}"
+    assert token["with"]["app-id"] == "${{ secrets.CI_PRT_GENERATOR_ID }}"
+    assert token["with"]["private-key"] == "${{ secrets.CI_PRT_GENERATOR_KEY }}"
+    for key, value in token["with"].items():
+        if key.startswith("permission-"):
+            assert value == "read"
     text = yaml.safe_dump(validation)
-    assert "secrets." not in text
-    assert "create-github-app-token" not in text
+    # Validation holds no model or write credentials; its read-only App token
+    # only raises upstream queries above the anonymous API limit.
+    assert set(re.findall(r"secrets\.([A-Z_]+)", text)) == {
+        "CI_PRT_GENERATOR_ID",
+        "CI_PRT_GENERATOR_KEY",
+    }
     assert "AUTO_SYNC_LLM_" not in text
+    assert "AUTO_SYNC_GITHUB_TOKEN" not in text
+    assert "AUTO_SYNC_BOT_LOGIN" not in text
+    for job, token_id in [(research, "read-token"), (publication, "write-token")]:
+        upstream = step(job, "prepare" if job is research else "publish")["env"][
+            "AUTO_SYNC_UPSTREAM_TOKEN"
+        ]
+        assert upstream == "${{ steps." + token_id + ".outputs.token }}"
+    assert (
+        step(validation, "validate")["env"]["AUTO_SYNC_UPSTREAM_TOKEN"]
+        == "${{ steps.read-token.outputs.token }}"  # noqa: S105 - Actions expression, not a secret.
+    )
     assert publication["if"] == "needs.validation.outputs.publishable == 'true'"
 
 

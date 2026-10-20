@@ -167,6 +167,7 @@ jobs:
         env:
           AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
           AUTO_SYNC_GITHUB_TOKEN: ${{ steps.read-token.outputs.token }}
+          AUTO_SYNC_UPSTREAM_TOKEN: ${{ steps.read-token.outputs.token }}
           AUTO_SYNC_BOT_LOGIN: ${{ steps.read-token.outputs.app-slug }}[bot]
           AUTO_SYNC_DEFAULT_SHA: ${{ steps.freeze.outputs.default-sha }}
           PACK_RUN_URL: ${{ inputs.pack-run-url }}
@@ -283,10 +284,20 @@ jobs:
         with:
           name: ${{ needs.research.outputs.artifact-name }}
           path: ${{ runner.temp }}/auto-sync-research
-      - name: Validate without credentials
+      - name: Create repository read token
+        id: read-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.CI_PRT_GENERATOR_ID }}
+          private-key: ${{ secrets.CI_PRT_GENERATOR_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: read
+      - name: Validate without model or write credentials
         id: validate
         env:
           AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
+          AUTO_SYNC_UPSTREAM_TOKEN: ${{ steps.read-token.outputs.token }}
         run: |
           uv run python -m tools.auto_sync.run validate --repo "$GITHUB_WORKSPACE" \
             --bundle "$RUNNER_TEMP/auto-sync-research" --output "$RUNNER_TEMP/auto-sync-validated"
@@ -370,6 +381,7 @@ jobs:
         env:
           AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
           AUTO_SYNC_GITHUB_TOKEN: ${{ steps.write-token.outputs.token }}
+          AUTO_SYNC_UPSTREAM_TOKEN: ${{ steps.write-token.outputs.token }}
           AUTO_SYNC_BOT_LOGIN: ${{ steps.write-token.outputs.app-slug }}[bot]
         run: |
           uv run python -m tools.auto_sync.run publish --repo "$GITHUB_WORKSPACE" \
