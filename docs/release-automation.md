@@ -338,6 +338,12 @@ The workflow separates three jobs:
 2. Validation checks candidate data without model credentials or repository-write credentials.
 3. Publication uses a clean runner, rechecks the artifact, and mints its own App write token.
 
+Each job mints its own repository App token; none receives another job's token.
+Trusted acquisition sends `AUTO_SYNC_UPSTREAM_TOKEN` as a bearer token to
+`GITHUB_API_URL` only — redirects stay disabled and candidate data cannot influence the
+URL. Validation's token is read-only: it raises the upstream release queries above the
+anonymous GitHub API limit, which shared runner egress IPs otherwise exhaust.
+
 Validation performs deterministic static checks. Repository CI runs the test suite after the proposal PR opens.
 
 Publication verifies that its App slug matches the identity frozen before research.
