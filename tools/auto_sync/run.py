@@ -129,7 +129,13 @@ def _read(path: Path):
 
 
 class PublicUpstream:
-    """Anonymous bounded acquisition, also used without secrets in validation."""
+    """
+    Bounded acquisition of public upstream data.
+
+    Anonymous unless AUTO_SYNC_UPSTREAM_TOKEN holds a read-only token. The
+    token travels only to GITHUB_API_URL, which the workflow controls and
+    candidate data cannot influence; redirects stay disabled.
+    """
 
     def __init__(self):
         self.url = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip(
@@ -138,6 +144,9 @@ class PublicUpstream:
         _public_url(self.url)
         self.session = requests.Session()
         self.session.trust_env = False
+        token = os.environ.get("AUTO_SYNC_UPSTREAM_TOKEN")
+        if token:
+            self.session.headers["Authorization"] = f"Bearer {token}"
 
     def get(self, path: str):
         try:
@@ -148,7 +157,7 @@ class PublicUpstream:
             )
             proposal.require(
                 response.status_code == 200,
-                f"upstream query failed ({response.status_code})",
+                _upstream_error(response),
             )
             return proposal.load_json(response.text)
         except requests.RequestException:
@@ -165,6 +174,31 @@ class PublicUpstream:
                 return records
         msg = "upstream release pagination limit exceeded"
         raise proposal.ProposalError(msg)
+
+
+def _upstream_error(response) -> str:
+    status = response.status_code
+    if status not in {403, 429}:
+        return f"upstream query failed ({status})"
+    remaining = response.headers.get("X-RateLimit-Remaining")
+    retry_after = response.headers.get("Retry-After")
+    if remaining == "0":
+        reset = response.headers.get("X-RateLimit-Reset", "")
+        when = ""
+        if reset.isdigit():
+            when = time.strftime(" at %Y-%m-%dT%H:%M:%SZ", time.gmtime(int(reset)))
+        return (
+            f"upstream query rate-limited ({status}):"
+            f" the GitHub API quota of this source is exhausted;"
+            f" resets{when or ' at the top of the next hour'};"
+            " re-run the failed job"
+        )
+    if retry_after:
+        return (
+            f"upstream query rate-limited ({status}):"
+            f" GitHub asks to retry after {retry_after}s; re-run the failed job"
+        )
+    return f"upstream query failed ({status})"
 
 
 def _public_url(url: str) -> None:
