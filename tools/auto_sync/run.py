@@ -186,7 +186,8 @@ def _upstream_error(response) -> str:
         reset = response.headers.get("X-RateLimit-Reset", "")
         when = ""
         if reset.isdigit():
-            when = time.strftime(" at %Y-%m-%dT%H:%M:%SZ", time.gmtime(int(reset)))
+            with contextlib.suppress(OverflowError, ValueError):
+                when = time.strftime(" at %Y-%m-%dT%H:%M:%SZ", time.gmtime(int(reset)))
         return (
             f"upstream query rate-limited ({status}):"
             f" the GitHub API quota of this source is exhausted;"

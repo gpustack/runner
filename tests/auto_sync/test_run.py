@@ -111,6 +111,22 @@ def test_primary_rate_limit_names_reset_and_rerun(upstream_env):
     assert "re-run the failed job" in message
 
 
+def test_malformed_reset_falls_back_to_next_hour(upstream_env):
+    headers = {
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": "9" * 30,
+    }
+    routes = {"/repos/a/b/releases": (403, headers, {"message": "rate limit"})}
+    with Upstream(routes) as api:
+        upstream_env.setenv("GITHUB_API_URL", api.url)
+        with pytest.raises(proposal.ProposalError) as caught:
+            run.PublicUpstream().get("/repos/a/b/releases")
+    message = str(caught.value)
+    assert "rate-limited (403)" in message
+    assert "at the top of the next hour" in message
+    assert "re-run the failed job" in message
+
+
 def test_secondary_rate_limit_names_retry_after(upstream_env):
     routes = {
         "/repos/a/b/releases": (
