@@ -7,6 +7,7 @@ Its measured `vllm` or `sglang` version must match the declared engine version o
 For CANN vLLM, the measured `vllm-ascend` version must also match the declared plugin version.
 Missing collection results, different versions, and partial platform coverage leave the record `prepared`.
 Catalog maintenance does not change support status.
+Retiring a matrix variant does not change or remove its published rows.
 
 Add new support as one row per backend, runtime line, service, accelerator variant, and engine/plugin pair.
 List the intended Linux CPU platforms explicitly. Use `-` for an absent variant or plugin.
