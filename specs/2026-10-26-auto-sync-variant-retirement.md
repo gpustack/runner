@@ -81,12 +81,30 @@ quiet state for a fully retired subscription. The add-back path needs no change:
 in `run.py` already lets a ready group introduce a variant outside the universe, and the
 retirement comment in the matrix carries the re-add condition for future evaluation.
 
-### Validation (`tools/auto_sync/checks.py`)
+### Validation (`tools/auto_sync/checks.py`, `tools/auto_sync/proposal.py`, `tools/auto_sync/run.py`)
 
-No gate semantics change. `_changed_configurations` gains a precise error: name the offending
-combinations and state that a variant which cannot follow a touched shared recipe must be retired
-(matrix rule removal) rather than held without evidence. The retirement shape already passes every
-gate today; the tests below pin that.
+`_changed_configurations` gains a precise error: name the offending combinations and state that a
+variant which cannot follow a touched shared recipe must be retired (matrix rule removal) rather
+than held without evidence.
+
+Post-merge run 40275771936 showed that when the analysis stage still recommended holding `910b` at
+`0.5.20` and the proposal stage emitted a `cann-sglang` group mixing `0.5.22` (`a3`) and `0.5.20`
+(`910b`) rows, `check_draft --stage proposal` (`validate_proposal`) accepted the mixed group as
+`VALID` and `finalize_proposal` caught `_bind_discovery`'s `ProposalError` (`Discovery proposal
+differs from the selected candidate.`) by mutating `group["status"] = "failed"` instead of raising
+into a repair session. Three gates close that path:
+
+1. `validate_proposal` (`tools/auto_sync/proposal.py`, shared by `check_draft --stage proposal` and
+   the controller) rejects any group whose rows for the same `(backend, service)` mix different
+   `(engine_version, plugin_version)` targets, instructing variant retirement via `pack/matrix.yaml`
+   rule removal instead of holding an old version.
+2. `finalize_proposal` (`tools/auto_sync/run.py`) requires every group proposed as `ready` to stay
+   `ready` after `_bind_discovery`, raising `ProposalError` so any discovery-binding mismatch enters
+   `proposal-repair-1` instead of writing a `failed` group into `proposal.json`.
+3. `_check_group_patches` (`tools/auto_sync/run.py`) runs `checks._check_matrix_scope` and
+   `checks._changed_configurations` on each applied `ready` group patch during `research`, so a
+   touched shared recipe that leaves a trailing variant in `pack/matrix.yaml` without a matching row
+   is also rejected into a repair session.
 
 ### Contract surfaces (prompts, skill, guide)
 
@@ -285,6 +303,30 @@ YAML, import `yaml` lazily inside the function, and canonicalize variants with `
       the header line on published rows surviving variant retirement; no `REQUIRED:`/`NEVER:`
       contract keyword or `$` template identifier is added; `mkdocs build --strict` and the prompt
       contract tests pass.
+      Verify: `AUTO_SYNC_TOOL_BIN=/tmp/auto-sync-tools/bin uv run pytest tests/auto_sync -q` and `uv run mkdocs build --strict`
+
+- [x] **T4 · Draft-validator and research-repair enforcement for held variants**
+      Blocked by: T2, T3
+      Owns: `tools/auto_sync/proposal.py`, `tools/auto_sync/run.py`,
+      `tests/auto_sync/test_check_draft.py`, `tests/auto_sync/test_e2e.py`
+      Gate: review
+      Acceptance: `validate_proposal` rejects groups whose rows for the same `(backend, service)` mix
+      `(engine_version, plugin_version)` targets; `finalize_proposal` raises `ProposalError` when
+      a `ready` group fails `_bind_discovery`; `_check_group_patches` enforces `_check_matrix_scope`
+      and `_changed_configurations` during `research`; unit and e2e tests verify both draft-checker
+      rejection and `proposal-repair-1` recovery.
+      Verify: `AUTO_SYNC_TOOL_BIN=/tmp/auto-sync-tools/bin uv run pytest tests/auto_sync -q`
+
+- [x] **T5 · Analysis and proposal prompt tightening against held-version rows**
+      Blocked by: T4
+      Owns: `tools/auto_sync/prompts/analysis.md`, `tools/auto_sync/prompts/proposal.md`,
+      `.agents/skills/runner-release-sync/SKILL.md`, `docs/release-automation.md`
+      Gate: review
+      Acceptance: `analysis.md` explicitly instructs stating that any universe variant lacking an
+      artifact for the selected line must be retired by removing its `pack/matrix.yaml` rules rather
+      than held at its old version; the shared `Rotate variants with evidence:` sentence across
+      `proposal.md`, `SKILL.md`, and `docs/release-automation.md` explicitly forbids holding a
+      trailing variant at its old version in `pack/matrix.yaml` or `group.rows`.
       Verify: `AUTO_SYNC_TOOL_BIN=/tmp/auto-sync-tools/bin uv run pytest tests/auto_sync -q` and `uv run mkdocs build --strict`
 
 ### Test Plan

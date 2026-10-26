@@ -788,8 +788,19 @@ def validate_proposal(
                 "group lacks compatibility rows",
             )
             ready = group["status"] == "ready"
+            targets: dict[tuple[str, str], tuple[object, object]] = {}
             for row in group["rows"]:
                 _row(row, ready, permission, package_permission)
+                target = (
+                    version(row["engine_version"]),
+                    version(row["plugin_version"]) if row["plugin_version"] else None,
+                )
+                pair = (row["backend"], row["service"])
+                require(
+                    targets.setdefault(pair, target) == target,
+                    f"group {group['id']} rows for {pair[0]}/{pair[1]} mix engine or plugin versions; "
+                    "retire a variant that has no artifact for the selected release by removing its matrix rules instead of holding its old version",
+                )
                 manifest = row["manifest"]
                 if manifest is not None:
                     image = row["base_image"]
