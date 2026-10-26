@@ -44,6 +44,6 @@ Rows with the same identity and platform set must be unique.
 | cann | 9.2 | vllm | 310p | 0.30.0 | 0.30.0rc2 | linux/amd64, linux/arm64 | published |
 | cann | 9.0 | sglang | a3 | 0.5.20 | - | linux/amd64, linux/arm64 | published |
 | cann | 9.0 | sglang | 910b | 0.5.20 | - | linux/amd64, linux/arm64 | published |
-| cann | 9.1 | sglang | a3 | 0.5.22 | - | linux/amd64, linux/arm64 | prepared |
-| cann | 9.1 | sglang | 950 | 0.5.22 | - | linux/amd64, linux/arm64 | prepared |
+| cann | 9.1 | sglang | a3 | 0.5.22 | - | linux/amd64, linux/arm64 | published |
+| cann | 9.1 | sglang | 950 | 0.5.22 | - | linux/amd64, linux/arm64 | published |
 <!-- runner-support-records:end -->
