@@ -21,7 +21,7 @@ Each cell shows the newest supported engine version with its runtime line, and e
 
 | Backend | vLLM | SGLang | MindIE | VoxBox |
 | --- | --- | --- | --- | --- |
-| [Ascend CANN](docs/supported-runners.md#ascend-cann) | `0.30.0`(rc) (9.2) | `0.5.20` (9.0) | `2.3.0` (8.5) | |
+| [Ascend CANN](docs/supported-runners.md#ascend-cann) | `0.30.0`(rc) (9.2) | `0.5.22` (9.1) | `2.3.0` (8.5) | |
 | [Iluvatar CoreX](docs/supported-runners.md#iluvatar-corex) | `0.8.3` (4.2) | | | |
 | [NVIDIA CUDA](docs/supported-runners.md#nvidia-cuda) | `0.32.0` (13.0) | `0.5.22` (13.0) | | `0.0.21` (12.8) |
 | [Hygon DTK](docs/supported-runners.md#hygon-dtk) | `0.18.1` (26.04) | `0.5.10` (26.04) | | |
