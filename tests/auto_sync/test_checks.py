@@ -20,6 +20,35 @@ FIXTURE = Path(__file__).parent / "fixtures/proposals/ready.json"
 SUPPORT = "docs/support-records.md"
 SUPPORT_START = "<!-- runner-support-records:start -->\n| Backend | Runtime | Service | Variant | Engine | Plugin | Platforms | Status |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n"
 SUPPORT_END = "<!-- runner-support-records:end -->\n"
+CANN_SGLANG_RECIPE = (
+    "ARG SGLANG_VERSION=0.5.20\n"
+    "ARG CANN_VERSION=9.0.0\n"
+    "ARG CANN_ARCHS=a3\n"
+    "ARG SGLANG_BASE_IMAGE=example.invalid/sglang:v${SGLANG_VERSION}-${CANN_ARCHS}\n"
+    "ARG PYTHON_VERSION=3.12\n"
+    "FROM ${SGLANG_BASE_IMAGE} AS sglang\n"
+)
+CANN_SGLANG_MATRIX = (
+    "rules:\n"
+    "  - backend: cann\n"
+    "    services: [sglang]\n"
+    "    platforms: [linux/amd64]\n"
+    "    args: [CANN_VERSION=9.0.0, CANN_ARCHS=a3, SGLANG_VERSION=0.5.20]\n"
+    "  - backend: cann\n"
+    "    services: [sglang]\n"
+    "    platforms: [linux/amd64]\n"
+    "    args: [CANN_VERSION=9.0.0, CANN_ARCHS=910b, SGLANG_VERSION=0.5.20]\n"
+)
+CANN_SGLANG_SUPPORT = (
+    "| cann | 9.0 | sglang | a3 | 0.5.20 | - | linux/amd64 | published |\n"
+    "| cann | 9.0 | sglang | 910b | 0.5.20 | - | linux/amd64 | published |\n"
+)
+CANN_SGLANG_RETIRED = (
+    "  - backend: cann\n"
+    "    services: [sglang]\n"
+    "    platforms: [linux/amd64]\n"
+    "    args: [CANN_VERSION=9.0.0, CANN_ARCHS=910b, SGLANG_VERSION=0.5.20]\n"
+)
 
 
 def support_row(engine="0.30.0", platforms="linux/amd64"):
@@ -611,6 +640,178 @@ def replace_patch(group, path, old, new):
     )
     if old != new:
         group["patch"] += diff(path, old, new)
+
+
+@pytest.fixture
+def retirement(tmp_path):
+    """Two published CANN SGLang variants sharing one recipe."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    git(repo, "config", "user.name", "Fixture")
+    git(repo, "config", "user.email", "fixture@example.invalid")
+    (repo / "pack/cann").mkdir(parents=True)
+    (repo / "pack/cann/Dockerfile.sglang").write_text(CANN_SGLANG_RECIPE)
+    (repo / "pack/matrix.yaml").write_text(CANN_SGLANG_MATRIX)
+    (repo / "README.md").write_text(
+        "# Runner\n[Supported runners](docs/supported-runners.md)\n",
+    )
+    (repo / "docs").mkdir()
+    (repo / SUPPORT).write_text(SUPPORT_START + CANN_SGLANG_SUPPORT + SUPPORT_END)
+    (repo / "gpustack_runner").mkdir()
+    (repo / "gpustack_runner/runner.py.json").write_text("[]\n")
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "fixture")
+    return repo, git(repo, "rev-parse", "HEAD")
+
+
+def cann_sglang_proposal(sha, patch):
+    """Proposal advancing the a3 variant of the shared CANN SGLang recipe."""
+    row = {
+        "backend": "cann",
+        "service": "sglang",
+        "variant": "a3",
+        "runtime": "9.0.0",
+        "old_engine_version": "0.5.20",
+        "engine_version": "0.5.22",
+        "plugin_version": None,
+        "platform": "linux/amd64",
+        "base_image": "example.invalid/sglang:v0.5.22-a3",
+        "manifest": {
+            "digest": "sha256:" + "b" * 64,
+            "platform_digest": "sha256:" + "c" * 64,
+            "platform": "linux/amd64",
+            "config_platform": "linux/amd64",
+            "sources": [
+                "https://github.com/sgl-project/sglang/releases/tag/v0.5.22",
+            ],
+        },
+        "python": "3.12",
+        "torch": None,
+        "packages": [],
+        "patches": [],
+        "conclusion": "inference",
+        "sources": ["https://github.com/sgl-project/sglang/releases/tag/v0.5.22"],
+        "checks": ["Validate the source diff without executing it."],
+        "deferred": ["Pack image builds", "GPU inference"],
+    }
+    return {
+        "schema_version": 1,
+        "identity": {
+            "repository": "gpustack/runner",
+            "default_sha": sha,
+            "head_sha": sha,
+            "mode": "discover",
+            "pr_number": None,
+            "command_id": None,
+            "command_digest": None,
+        },
+        "candidates": [
+            {
+                "subscription": name,
+                "status": status,
+                "groups": groups,
+                "reason": reason,
+            }
+            for name, status, groups, reason in (
+                ("cuda/vllm", "unchanged", [], "Already represented."),
+                ("cuda/sglang", "unchanged", [], "Already represented."),
+                ("rocm/vllm", "unchanged", [], "Already represented."),
+                ("rocm/sglang", "unchanged", [], "Already represented."),
+                ("cann/vllm", "unchanged", [], "Already represented."),
+                (
+                    "cann/sglang",
+                    "ready",
+                    ["cann-sglang"],
+                    "Advance the surviving variant.",
+                ),
+            )
+        ],
+        "groups": [
+            {
+                "id": "cann-sglang",
+                "status": "ready",
+                "reason": "Advance a3 and retire 910b.",
+                "depends_on": [],
+                "report": "Advance the surviving CANN SGLang variant to 0.5.22.",
+                "patch": patch,
+                "rows": [row],
+            },
+        ],
+    }
+
+
+def retirement_patch(repo, *, retire=True, drop_published=False):
+    """Advance the shared recipe and the a3 pin; optionally retire 910b."""
+    recipe = repo / "pack/cann/Dockerfile.sglang"
+    old_recipe = recipe.read_text()
+    new_recipe = old_recipe.replace(
+        "ARG SGLANG_VERSION=0.5.20",
+        "ARG SGLANG_VERSION=0.5.22",
+    )
+    matrix = repo / "pack/matrix.yaml"
+    old_matrix = matrix.read_text()
+    new_matrix = old_matrix.replace(
+        "CANN_ARCHS=a3, SGLANG_VERSION=0.5.20]",
+        "CANN_ARCHS=a3, SGLANG_VERSION=0.5.22]",
+    )
+    if retire:
+        new_matrix = new_matrix.replace(
+            CANN_SGLANG_RETIRED,
+            "  ## Upstream publishes no 910b SGLang image for 0.5.22.\n",
+        )
+    support = repo / SUPPORT
+    old_support = support.read_text()
+    new_support = old_support.replace(
+        SUPPORT_END,
+        "| cann | 9.0 | sglang | a3 | 0.5.22 | - | linux/amd64 | prepared |\n"
+        + SUPPORT_END,
+    )
+    if drop_published:
+        new_support = new_support.replace(
+            "| cann | 9.0 | sglang | 910b | 0.5.20 | - | linux/amd64 | published |\n",
+            "",
+        )
+    return (
+        diff("pack/cann/Dockerfile.sglang", old_recipe, new_recipe)
+        + diff("pack/matrix.yaml", old_matrix, new_matrix)
+        + diff(SUPPORT, old_support, new_support)
+    )
+
+
+def validate_retirement(repo, proposal):
+    return validate_candidate(repo, proposal, proposal["identity"])
+
+
+def test_variant_retirement_in_advancing_group_validates_as_ready(retirement):
+    repo, sha = retirement
+    proposal = cann_sglang_proposal(sha, retirement_patch(repo))
+    result = validate_retirement(repo, proposal)
+    assert result["groups"][0]["status"] == "ready"
+
+
+def test_holding_variant_on_changed_shared_recipe_fails_naming_combination(retirement):
+    repo, sha = retirement
+    proposal = cann_sglang_proposal(sha, retirement_patch(repo, retire=False))
+    result = validate_retirement(repo, proposal)
+    group = result["groups"][0]
+    assert group["status"] == "failed"
+    assert "910b" in group["validation"]["error"]
+    assert "retire" in group["validation"]["error"]
+
+
+def test_retiring_variant_cannot_remove_published_support_row(retirement):
+    repo, sha = retirement
+    proposal = cann_sglang_proposal(
+        sha,
+        retirement_patch(repo, drop_published=True),
+    )
+    result = validate_retirement(repo, proposal)
+    group = result["groups"][0]
+    assert group["status"] == "failed"
+    assert (
+        "removes previously accepted support metadata" in group["validation"]["error"]
+    )
 
 
 def freeze(candidate):

@@ -53,6 +53,61 @@ from tools.auto_sync.run import (
 
 BOT = "runner-sync[bot]"
 REPOSITORY = "gpustack/runner"
+# The discovery universe is the record-derived variants intersected with the
+# packaging matrix, so the fixture declares every subscribed combination. The
+# cuda/vllm rule stays last: the ready fixture's matrix hunk targets it.
+MATRIX = """\
+rules:
+  - backend: cuda
+    services: [sglang]
+    platforms: [linux/amd64]
+    args: [CUDA_VERSION=13.0.1, SGLANG_VERSION=0.5.20]
+  - backend: rocm
+    services: [vllm]
+    platforms: [linux/amd64]
+    args: [ROCM_VERSION=7.2.1, VLLM_VERSION=0.29.0]
+  - backend: rocm
+    services: [sglang]
+    platforms: [linux/amd64]
+    args: [ROCM_VERSION=7.2.1, SGLANG_VERSION=0.5.20]
+  - backend: cann
+    services: [vllm]
+    platforms: [linux/amd64]
+    args: [CANN_VERSION=9.1.0, CANN_ARCHS=950, VLLM_VERSION=0.29.0]
+  - backend: cann
+    services: [vllm]
+    platforms: [linux/amd64]
+    args: [CANN_VERSION=9.1.0, CANN_ARCHS=a3, VLLM_VERSION=0.29.0]
+  - backend: cann
+    services: [vllm]
+    platforms: [linux/amd64]
+    args: [CANN_VERSION=9.1.0, CANN_ARCHS=910b, VLLM_VERSION=0.29.0]
+  - backend: cann
+    services: [vllm]
+    platforms: [linux/amd64]
+    args: [CANN_VERSION=9.1.0, CANN_ARCHS=310p, VLLM_VERSION=0.29.0]
+  - backend: cann
+    services: [sglang]
+    platforms: [linux/amd64]
+    args: [CANN_VERSION=9.0.0, CANN_ARCHS=a3, SGLANG_VERSION=0.5.20]
+  - backend: cann
+    services: [sglang]
+    platforms: [linux/amd64]
+    args: [CANN_VERSION=9.0.0, CANN_ARCHS=910b, SGLANG_VERSION=0.5.20]
+  - backend: cuda
+    services: [vllm]
+    platforms: [linux/amd64]
+    args: [VLLM_VERSION=0.29.0]
+"""
+# Every declared combination needs its recipe; these stubs carry no upgrade
+# guide, so no candidate inherits guidance from an unselected recipe.
+STUB_RECIPES = (
+    ("cuda", "sglang"),
+    ("rocm", "vllm"),
+    ("rocm", "sglang"),
+    ("cann", "vllm"),
+    ("cann", "sglang"),
+)
 
 
 def git(repo, *args):
@@ -180,9 +235,11 @@ def scenario(tmp_path, monkeypatch):
         "| 4.2                           | `0.8.3` |\n",
     )
     (repo / "pack/cuda").mkdir(parents=True)
-    (repo / "pack/matrix.yaml").write_text(
-        "rules:\n  - backend: cuda\n    services: [vllm]\n    platforms: [linux/amd64]\n    args: [VLLM_VERSION=0.29.0]\n",
-    )
+    for backend, service in STUB_RECIPES:
+        directory = repo / f"pack/{backend}"
+        directory.mkdir(exist_ok=True)
+        (directory / f"Dockerfile.{service}").write_text(f"FROM scratch AS {service}\n")
+    (repo / "pack/matrix.yaml").write_text(MATRIX)
     source = tmp_path / "upstream"
     source.mkdir()
     git(source, "init", "-q", "-b", "main")

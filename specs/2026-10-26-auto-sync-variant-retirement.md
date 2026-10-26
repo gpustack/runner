@@ -1,6 +1,6 @@
 # Spec: Auto-Sync Variant Retirement
 
-Status: Proposed
+Status: Shipped
 Type: Feature
 
 ## Summary
@@ -109,6 +109,11 @@ line, so the proposal stage has the scoping evidence retirement cites.
 `docs/support-records.md` header gains one line: retiring a matrix variant does not change or
 remove its published rows.
 
+`docs/release-automation.md` updates the discovery variant-universe line in
+`Discovery and release policy`, updates the rotation rule in `Compatibility research`, and notes in
+`Proposal output` that retiring a variant removes its matrix rules and drops only its `prepared`
+support rows while keeping `published` support rows and catalog entries untouched.
+
 The rule stays plain prose: no REQUIRED/NEVER contract keyword, so
 `test_contract_keywords_sync_across_surfaces` keeps its count of 13. The phrase
 "Rotate variants with evidence" stays in `proposal.md` for `test_policy_sentences_reach_stage_prompts`.
@@ -178,3 +183,142 @@ and to match what validation enforces, so that no surface instructs an impossibl
   names the exact blocking combinations, and the repair loop gets a concrete pointer.
 - Universe filtering hides a variant whose support returns → add-back stays possible through
   `_bind_discovery`, and the matrix comment carries the re-add condition.
+- Fixture repositories with incomplete `pack/matrix.yaml` stop chasing omitted subscriptions →
+  `test_discovery.py`'s `repository()` helper and `test_e2e.py`'s `scenario` fixture declare the
+  subscribed combinations in `pack/matrix.yaml`.
+
+## Design Details
+
+### Commands
+
+```sh
+uv run pytest tests/auto_sync/test_discovery.py tests/auto_sync/test_checks.py -q
+AUTO_SYNC_TOOL_BIN=/tmp/auto-sync-tools/bin uv run pytest tests/auto_sync -q
+uv run pre-commit run --files <changed-files> --show-diff-on-failure
+uv run mkdocs build --strict
+```
+
+Local environment; no remote build or GPU required. If `/tmp/auto-sync-tools/bin` is absent, run
+`bash tools/auto_sync/bootstrap.sh --prefix /tmp/auto-sync-tools` first. Pack runs are out of scope.
+
+### Project Structure
+
+- `tools/auto_sync/discovery.py` — `_matrix_variants(repo)` parses `pack/matrix.yaml` from the
+  frozen default checkout with a lazy `yaml` import and returns a `(backend, service) -> set[str]`
+  map of canonicalized variants; `discover()` intersects `(current or list(variants))` with the
+  declared set for `(backend, service)`.
+- `tools/auto_sync/checks.py` — `_changed_configurations` names every changed matrix combination
+  that lacks a compatibility row and instructs retiring a variant that cannot follow a touched
+  shared recipe by removing its matrix rules.
+- `tools/auto_sync/prompts/proposal.md`, `.agents/skills/runner-release-sync/SKILL.md`,
+  `docs/release-automation.md` — unified rotation rule text; `proposal.md` keeps the phrase
+  `Rotate variants with evidence` and adds no `REQUIRED:`/`NEVER:` keyword.
+- `tools/auto_sync/prompts/analysis.md` — one bullet instructing the analysis stage to record
+  per-variant registry artifact availability for the selected line in `findings`.
+- `docs/support-records.md` — one header line stating that retiring a matrix variant does not
+  change or remove its published rows.
+- `tests/auto_sync/test_discovery.py` — `repository()` helper writes a default `pack/matrix.yaml`
+  covering `SUBSCRIPTIONS` (overridable via `matrix=`); new tests cover retired-variant exclusion,
+  empty-matrix `unchanged` status, and missing/malformed/escaping `pack/matrix.yaml` failures.
+- `tests/auto_sync/test_checks.py` — positive test for retiring `910b` while advancing `a3` on a
+  shared `cann/sglang` recipe; two negative tests for holding `910b` on the touched shared recipe
+  (asserting the error names the `910b` combination and mentions retirement) and for removing the
+  published `910b` support row.
+- `tests/auto_sync/test_e2e.py` — `scenario` fixture declares all six subscribed combinations in
+  `pack/matrix.yaml` (keeping the `cuda/vllm` rule at the end so `ready.json`'s diff applies) with
+  minimal stub recipes for the five non-`cuda/vllm` subscriptions.
+
+### Code Style
+
+```python
+def _matrix_variants(repo: Path) -> dict[tuple[str, str], set[str]]:
+    """Declared canonical variants per (backend, service) in pack/matrix.yaml."""
+    path = Path(repo) / "pack" / "matrix.yaml"
+    if not path.resolve().is_relative_to(Path(repo).resolve()):
+        msg = "matrix escapes the frozen checkout"
+        raise DiscoveryError(msg)
+```
+
+Follow `prerelease_packages`: check path containment, raise `DiscoveryError` on missing or malformed
+YAML, import `yaml` lazily inside the function, and canonicalize variants with `canonical_variant`.
+
+### Implementation Plan
+
+- [x] **T1 · Matrix-aware discovery universe and unit tests**
+      Blocked by: None
+      Owns: `tools/auto_sync/discovery.py`, `tests/auto_sync/test_discovery.py`,
+      `tests/auto_sync/test_e2e.py`
+      Gate: review
+      Acceptance: `_matrix_variants(repo)` reads `pack/matrix.yaml` from the frozen checkout using
+      lazy `yaml.safe_load`, validates the `rules` structure and arguments, canonicalizes variants
+      (`CANN_ARCHS` for `cann`, `""` otherwise), and raises `DiscoveryError` on missing, escaping,
+      or malformed files. `discover()` filters `(current or list(variants))` by the declared set for
+      `(backend, service)`. `test_discovery.py` covers retired-variant exclusion (`a3` + `910b`
+      published records with an `a3`-only matrix chases only `a3`), empty-matrix `unchanged` status,
+      and missing/malformed/escaping matrix failure cases while keeping all existing discovery and
+      e2e tests green.
+      Verify: `uv run pytest tests/auto_sync/test_discovery.py -q`
+
+- [x] **T2 · Changed-configuration error message and retirement validation tests**
+      Blocked by: None
+      Owns: `tools/auto_sync/checks.py`, `tests/auto_sync/test_checks.py`
+      Gate: review
+      Acceptance: `_changed_configurations` keeps its exact gate condition (`changed <= {_row_key(row) for row in rows}`)
+      and includes the offending `(backend, service, variant, runtime, platform)` combinations and
+      retirement guidance in the `ProposalError` message while retaining the
+      `changed matrix combination lacks compatibility evidence` prefix. `test_checks.py` adds a
+      positive test where retiring `910b` from `pack/matrix.yaml`, keeping published `a3` and `910b`
+      support rows, adding the `prepared` `a3` row, and editing `pack/cann/Dockerfile.sglang`
+      validates as `ready`, plus two negative tests (holding `910b` fails naming `910b` and
+      retirement; deleting the published `910b` support row fails as removed accepted metadata).
+      Verify: `uv run pytest tests/auto_sync/test_checks.py -q`
+
+- [x] **T3 · Prompt, skill, and documentation alignment**
+      Blocked by: T1, T2
+      Owns: `tools/auto_sync/prompts/proposal.md`, `tools/auto_sync/prompts/analysis.md`,
+      `.agents/skills/runner-release-sync/SKILL.md`, `docs/release-automation.md`,
+      `docs/support-records.md`
+      Gate: review
+      Acceptance: `proposal.md`, `SKILL.md`, and `docs/release-automation.md` carry the unified
+      variant-retirement rule; `proposal.md` preserves `Rotate variants with evidence`; `analysis.md`
+      gains the per-variant registry artifact availability bullet; `docs/support-records.md` gains
+      the header line on published rows surviving variant retirement; no `REQUIRED:`/`NEVER:`
+      contract keyword or `$` template identifier is added; `mkdocs build --strict` and the prompt
+      contract tests pass.
+      Verify: `AUTO_SYNC_TOOL_BIN=/tmp/auto-sync-tools/bin uv run pytest tests/auto_sync -q` and `uv run mkdocs build --strict`
+
+### Test Plan
+
+[x] I/we understand the owners of the involved components may require updates to existing tests to make this
+code solid enough prior to committing the changes necessary to implement this enhancement.
+
+#### Prerequisite testing updates
+
+Update `tests/auto_sync/test_discovery.py`'s `repository()` helper and
+`tests/auto_sync/test_e2e.py`'s `scenario` fixture to write `pack/matrix.yaml` rules for the
+subscribed combinations so existing discovery and e2e tests run against a complete matrix.
+
+#### Unit tests
+
+- `tools/auto_sync/discovery.py`: `2026-10-26` - `100%` of `_matrix_variants` and universe-filtering
+  branches (`tests/auto_sync/test_discovery.py`: retired variant excluded from universe, fully
+  retired subscription reports `unchanged`, missing/malformed/symlink-escaping `pack/matrix.yaml`
+  returns `failed` for all subscriptions).
+- `tools/auto_sync/checks.py`: `2026-10-26` - `100%` of `_changed_configurations` error reporting
+  and retirement validation (`tests/auto_sync/test_checks.py`: positive retirement group passes as
+  `ready`; held variant on touched shared recipe fails naming the held combination; removed
+  published support row fails).
+
+#### Integration tests
+
+- `tests/auto_sync/test_e2e.py::test_policy_sentences_reach_stage_prompts` and
+  `tests/auto_sync/test_e2e.py::test_contract_keywords_sync_across_surfaces` verify prompt, skill,
+  and guide synchronization.
+- Full `tests/auto_sync` suite exercises `prepare`, `research`, `validate`, and `publish` against
+  the matrix-aware discovery universe.
+
+#### e2e tests
+
+No live model or GitHub workflow e2e in CI; offline `tests/auto_sync/test_e2e.py` covers the
+end-to-end controller pipeline with local Git, HTTP, registry, and pinned Qwen CLI fixtures, and
+`uv run mkdocs build --strict` verifies documentation rendering.

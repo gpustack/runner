@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.auto_sync.discovery import (
+    SUBSCRIPTIONS,
     DiscoveryError,
     _base,
     _read_sources,
@@ -92,7 +93,28 @@ def pairs():
     }
 
 
-def repository(tmp_path, *, rows="", catalog=None):
+def default_matrix(*, retired=()):
+    """Matrix rules for every subscribed combination, minus retired variants."""
+    rules = []
+    for backend, service, variants in SUBSCRIPTIONS:
+        for variant in variants:
+            if (backend, service, variant) in retired:
+                continue
+            args = [f"{backend.upper()}_VERSION=1.0.0"]
+            if backend == "cann":
+                args.append(f"CANN_ARCHS={variant}")
+            rules.append(
+                {
+                    "backend": backend,
+                    "services": [service],
+                    "platforms": ["linux/amd64"],
+                    "args": args,
+                },
+            )
+    return {"rules": rules}
+
+
+def repository(tmp_path, *, rows="", catalog=None, matrix=None):
     (tmp_path / "gpustack_runner").mkdir()
     (tmp_path / "gpustack_runner/runner.py.json").write_text(json.dumps(catalog or []))
     (tmp_path / "docs").mkdir()
@@ -100,6 +122,10 @@ def repository(tmp_path, *, rows="", catalog=None):
     (tmp_path / "docs/supported-runners.md").write_text(HISTORY)
     (tmp_path / "README.md").write_text(
         "[Supported runners](docs/supported-runners.md)\n",
+    )
+    (tmp_path / "pack").mkdir(exist_ok=True)
+    (tmp_path / "pack/matrix.yaml").write_text(
+        matrix if isinstance(matrix, str) else json.dumps(matrix or default_matrix()),
     )
     return tmp_path
 
@@ -264,6 +290,39 @@ def test_dropped_variant_is_not_chased(tmp_path, upstream, pairs):
     assert result["status"] == "unchanged"
 
 
+def test_retired_variant_is_not_chased(tmp_path, upstream, pairs):
+    # Upstream publishes no 910b SGLang image for the selected line: the
+    # variant retires from the matrix while its published rows stay, so
+    # discovery chases the surviving a3 variant only.
+    rows = "".join(
+        support_row(
+            backend="cann",
+            runtime="9.0",
+            service="sglang",
+            variant=variant,
+            engine="0.5.18",
+            status="published",
+        )
+        for variant in ("a3", "910b")
+    )
+    repo = repository(
+        tmp_path,
+        rows=rows,
+        matrix=default_matrix(retired={("cann", "sglang", "910b")}),
+    )
+    result = selected(repo, upstream, pairs, "cann/sglang")
+    assert [v["variant"] for v in result["variants"]] == ["a3"]
+    assert result["variants"][0]["status"] == "unchanged"
+    assert result["status"] == "unchanged"
+
+
+def test_fully_retired_subscription_reports_unchanged(tmp_path, upstream, pairs):
+    repo = repository(tmp_path, matrix={"rules": []})
+    result = selected(repo, upstream, pairs)
+    assert result["variants"] == []
+    assert result["status"] == "unchanged"
+
+
 def test_latest_ascend_without_pair_blocks_no_older_fallback(tmp_path, upstream, pairs):
     upstream["vllm-project/vllm-ascend"].append(release("v0.29.0rc2", prerelease=True))
     result = selected(repository(tmp_path), upstream, pairs, "cann/vllm")
@@ -368,6 +427,10 @@ def test_raw_mentions_other_engine_backend_do_not_match(tmp_path, upstream, pair
         "records_table",
         "history_missing",
         "history_prose",
+        "matrix_missing",
+        "matrix_yaml",
+        "matrix_shape",
+        "matrix_escape",
     ],
 )
 def test_failed_source_never_reports_unchanged(tmp_path, upstream, pairs, broken):
@@ -375,6 +438,7 @@ def test_failed_source_never_reports_unchanged(tmp_path, upstream, pairs, broken
     catalog = repo / "gpustack_runner/runner.py.json"
     records = repo / "docs/support-records.md"
     history = repo / "docs/supported-runners.md"
+    matrix = repo / "pack/matrix.yaml"
     if broken == "catalog_missing":
         catalog.unlink()
     elif broken == "catalog_json":
@@ -387,6 +451,17 @@ def test_failed_source_never_reports_unchanged(tmp_path, upstream, pairs, broken
         records.write_text(records.read_text().replace("prepared", "perhaps"))
     elif broken == "history_missing":
         history.unlink()
+    elif broken == "matrix_missing":
+        matrix.unlink()
+    elif broken == "matrix_yaml":
+        matrix.write_text("rules: [")
+    elif broken == "matrix_shape":
+        matrix.write_text('{"rules": "bad"}')
+    elif broken == "matrix_escape":
+        outside = tmp_path.parent / "outside-matrix.yaml"
+        outside.write_text(json.dumps(default_matrix()))
+        matrix.unlink()
+        matrix.symlink_to(outside)
     else:
         history.write_text("A prose mention of cuda vllm 0.29.0 without tables.\n")
     assert {r["status"] for r in discover(repo, upstream, pairs)} == {"failed"}

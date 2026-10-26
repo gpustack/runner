@@ -338,6 +338,71 @@ def prerelease_packages(repo: Path) -> list[str]:
     return sorted(set(data["packages"]))
 
 
+def _matrix_variants(repo: Path) -> dict[tuple[str, str], set[str]]:
+    """
+    Declared canonical variants per (backend, service) in pack/matrix.yaml.
+
+    The matrix is the packaging contract: a variant retired from it keeps its
+    published records but leaves the chased universe. A missing, malformed, or
+    escaping matrix is a failed inspection, never an absent variant.
+    """
+    path = Path(repo) / "pack" / "matrix.yaml"
+    if not path.resolve().is_relative_to(Path(repo).resolve()):
+        msg = "matrix escapes the frozen checkout"
+        raise DiscoveryError(msg)
+    if not path.is_file():
+        msg = "missing matrix"
+        raise DiscoveryError(msg)
+    # Lazy import: Pack's merge job runs `promote` in the locked --no-dev
+    # environment, which has no PyYAML; only this matrix reader needs it.
+    import yaml  # noqa: PLC0415 - keep the promote path PyYAML-free, see above.
+
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        msg = f"malformed matrix: {exc}"
+        raise DiscoveryError(msg) from exc
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"rules"}
+        or not isinstance(data["rules"], list)
+    ):
+        msg = "malformed matrix"
+        raise DiscoveryError(msg)
+    declared: dict[tuple[str, str], set[str]] = {}
+    for rule in data["rules"]:
+        if (
+            not isinstance(rule, dict)
+            or not {"backend", "services"} <= rule.keys()
+            or not rule.keys() <= {"backend", "services", "platforms", "args"}
+            or rule["backend"] not in BACKENDS.values()
+        ):
+            msg = "malformed matrix"
+            raise DiscoveryError(msg)
+        services = rule["services"]
+        if (
+            not isinstance(services, list)
+            or not services
+            or not all(s in SERVICES for s in services)
+        ):
+            msg = "malformed matrix"
+            raise DiscoveryError(msg)
+        arguments = rule.get("args", [])
+        if not isinstance(arguments, list) or not all(
+            isinstance(argument, str) and "=" in argument for argument in arguments
+        ):
+            msg = "malformed matrix"
+            raise DiscoveryError(msg)
+        args = dict(argument.split("=", 1) for argument in arguments)
+        for service in services:
+            variant = canonical_variant(
+                rule["backend"],
+                args.get("CANN_ARCHS", "") if rule["backend"] == "cann" else "",
+            )
+            declared.setdefault((rule["backend"], service), set()).add(variant)
+    return declared
+
+
 def _releases(rows, *, plugin=False):
     if not isinstance(rows, list):
         msg = "upstream releases must be a complete list"
@@ -467,6 +532,7 @@ def discover(repo: Path, releases: dict, ascend_pairs: dict) -> list[dict]:
     results = []
     try:
         sources = _read_sources(Path(repo))
+        declared = _matrix_variants(Path(repo))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return [
             {
@@ -496,12 +562,14 @@ def discover(repo: Path, releases: dict, ascend_pairs: dict) -> list[dict]:
                 ),
             )
             if "status" not in result:
-                # The variant universe follows current records, so a variant
-                # deliberately dropped from the matrix is not chased forever.
+                # The variant universe follows current records and the
+                # packaging matrix, so a variant retired from the matrix is
+                # not chased forever even while its published records remain.
                 current = sorted({record["variant"] for record in represented})
                 result["variants"] = [
                     _match(result, variant, sources)
-                    for variant in (current or variants)
+                    for variant in (current or list(variants))
+                    if variant in declared.get((backend, service), set())
                 ]
                 result["status"] = (
                     "needs_update"

@@ -292,9 +292,15 @@ def _changed_configurations(before, after, rows, paths):
         for key, args in after.items()
         if before.get(key) != args or key[:2] in touched
     }
+    missing = sorted(changed - {_row_key(r) for r in rows})
     require(
-        changed <= {_row_key(row) for row in rows},
-        "changed matrix combination lacks compatibility evidence",
+        not missing,
+        "changed matrix combination lacks compatibility evidence: "
+        + ", ".join(
+            f"{backend}/{service} ({variant or '-'} {runtime} {platform})"
+            for backend, service, variant, runtime, platform in missing
+        )
+        + "; retire a variant that cannot follow a changed shared recipe by removing its matrix rules",
     )
     return changed
 

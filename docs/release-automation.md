@@ -29,7 +29,7 @@ The chase base is the highest engine version among the subscription's catalog an
 Select the lowest `(major, minor)` line above the base, then the highest version within that line under PEP 440 ordering.
 Exclude drafts and unrelated release streams. A subscription without any record selects the newest eligible release.
 Do not skip ahead to a newer line, even when the selected candidate is blocked; report the block instead.
-The discovery variant universe follows current records: a variant deliberately dropped from the matrix and support records is not chased again.
+The discovery variant universe intersects current records with pack/matrix.yaml: a variant retired from the matrix is not chased again even while its published support records remain.
 
 CANN/vLLM uses the stable vLLM engine version for Runner releases and image tags.
 Ascend plugin prereleases are normal candidates, paired with the stable engine documented upstream.
@@ -106,7 +106,7 @@ Removal is an explicit file deletion in the group patch, with the reason in the 
 Apply each component's patch sequence against the exact selected source revision when available.
 If source is unavailable, mark application checks unverified. Successful application does not prove runtime behavior.
 
-Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected release no longer supports, citing the upstream scoping, and add a variant back when support returns.
+Rotate variants with evidence: retire a variant the selected release no longer supports inside the advancing group by removing its matrix rules with a comment stating the upstream scoping and the re-add condition, keep its published support rows and catalog entries so published images remain usable, drop only its prepared support rows, never hold a trailing variant on a recipe the group changes because a touched shared recipe requires evidence for every surviving combination, and add a retired variant back when support returns.
 Before changing an existing pin, patch, variant, or support row, read [Support records](support-records.md) and the file's git history; cite the introducing commit when a disposition overrides an earlier decision.
 
 Keep proposed support rows `prepared`, with explicit engine, plugin, runtime, variant, and intended platforms.
@@ -178,6 +178,7 @@ Use canonical matrix variants. `plugin_version` is the actual Ascend version for
 The row's `runtime` must match the effective `<BACKEND>_VERSION` build argument, including its patch version.
 Support records use its catalog runtime line, such as `13.0` for a `13.0.1` configuration.
 Keep unknown optional versions as `null`; do not invent them to satisfy a report.
+Retiring a variant removes its matrix rules with an upstream-scoping and re-add comment and drops only its prepared support rows; published support rows and catalog entries remain untouched, and a touched shared recipe requires compatibility rows for every surviving matrix combination.
 For a ready row, `manifest` contains `digest`, `platform_digest`, `platform`, `config_platform`, and `sources`.
 `digest` is the base-image tag's own digest; when the tag resolves to a manifest list or OCI index, `platform_digest` is the digest of the row platform's child entry in that list, and only a single-platform image manifest has `platform_digest` equal to `digest`.
 `config_platform` is read from the platform digest's configuration; both platform fields must match the row. An unavailable manifest can be `null` only for a non-ready row.

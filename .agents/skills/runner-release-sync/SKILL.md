@@ -68,7 +68,7 @@ Check ordered patch application against the exact selected source revision.
 Use `git apply --check` before editing recipes. A fuzzy application check can miss failures that trusted validation rejects.
 If the source is unavailable, report the check as unverified. Application success is not runtime validation.
 
-Rotate variants with evidence: remove the matrix rules and support rows for a variant the selected release no longer supports, citing the upstream scoping, and add a variant back when support returns.
+Rotate variants with evidence: retire a variant the selected release no longer supports inside the advancing group by removing its matrix rules with a comment stating the upstream scoping and the re-add condition, keep its published support rows and catalog entries so published images remain usable, drop only its prepared support rows, never hold a trailing variant on a recipe the group changes because a touched shared recipe requires evidence for every surviving combination, and add a retired variant back when support returns.
 Before changing an existing pin, patch, variant, or support row, read `docs/support-records.md` and the file's git history (`git log`, `git show`); cite the introducing commit when a disposition overrides an earlier decision.
 
 Edit only selected service recipes, related patches, matrix entries, and allowed support prose.

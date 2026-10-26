@@ -23,6 +23,7 @@ Research completion is not compatibility confirmation: report analyzed, blocked 
 Review every affected patch against the exact selected source revision and record the outcome in patches.
 Adapt every patch that no longer applies; remove a patch only when cited upstream evidence shows the issue is fixed, the patched functionality is gone, or adaptation is impossible with the supplied sources, and record the reason. Never block a group on patch state alone.
 Before changing an existing pin, patch, variant or support row, read docs/support-records.md and run git log and git show on the files to change; cite the introducing commit when a disposition overrides an earlier decision.
+Record the selected line's per-variant artifact availability from registry listings in findings, naming any universe variant with no artifact for the selected line so the proposal stage has the scoping evidence retirement cites.
 Cite only supplied evidence keys, supplied paths, repository-relative paths or bare https URLs in evidence; an entry is one exact reference, so record image tags and digests in findings, never appended to a URL.
 Record unresolved candidates as blocked with the specific missing fact in reason and unknowns.
 Return completed assessments even when other candidates remain blocked.
