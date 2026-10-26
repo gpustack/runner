@@ -4535,6 +4535,75 @@ def test_proposal_stage_miscovered_patch_version_is_repaired_once(
     assert (output / "proposal.json").is_file()
 
 
+def test_proposal_stage_discovery_mismatch_or_held_matrix_variant_is_repaired(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    # The run-40275771936 failure: a group that fails discovery binding or
+    # leaves an un-retired variant in pack/matrix.yaml on a touched shared
+    # recipe must enter proposal-repair-1 instead of passing research with a
+    # failed group status.
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    mismatched = proposal(scenario, context)
+    mismatched["groups"][0]["rows"][0]["engine_version"] = "0.29.0"
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        if len(calls) == 2:
+            return ProcessResult(0, agent_stream(mismatched), "", False, 10)
+        return ProcessResult(
+            0,
+            agent_stream(proposal(scenario, context)),
+            "",
+            False,
+            10,
+        )
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(prompt_payload(calls[2]["prompt"]))
+    assert (
+        "Discovery proposal differs from the selected candidate"
+        in repair_payload["validation_error"]
+    )
+    assert "retire a variant" in repair_payload["validation_error"]
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    saved = json.loads((output / "proposal.json").read_text())
+    assert saved["groups"][0]["status"] == "ready"
+
+
 def test_proposal_repair_rewrites_a_rejected_patch_file(
     scenario,
     tmp_path,

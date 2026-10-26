@@ -640,7 +640,7 @@ def _statuses(data: dict) -> None:
             )
 
 
-def _bind_discovery(data: dict, context: dict) -> dict:
+def _bind_discovery(data: dict, context: dict, *, strict: bool = False) -> dict:
     if context["identity"]["mode"] != "discover":
         return data
     found = {c["subscription"]: c for c in context["discovery"]}
@@ -674,9 +674,14 @@ def _bind_discovery(data: dict, context: dict) -> dict:
                     selected["engine_version"]
                     == str(discovery.version(row["engine_version"]))
                     and selected["plugin_version"] == row["plugin_version"],
-                    "Discovery proposal differs from the selected candidate.",
+                    "Discovery proposal differs from the selected candidate: "
+                    f"{row['backend']}/{row['service']} ({row.get('variant') or '-'} {row.get('platform') or '-'}) "
+                    f"uses {row['engine_version']} instead of {selected['engine_version']}; "
+                    "retire a variant that has no artifact for the selected release by removing its matrix rules.",
                 )
         except proposal.ProposalError as exc:
+            if strict and group["status"] == "ready":
+                raise
             group.update(status="failed", reason=str(exc))
     _statuses(data)
     defaults = {c["subscription"]: c for c in _candidates(context["discovery"])}
@@ -1316,6 +1321,13 @@ def _check_group_patches(
         for identifier in sorted(checkable - applied):
             if not set(groups[identifier]["depends_on"]) <= applied:
                 continue
+            rows = groups[identifier]["rows"]
+            check_matrix = all(
+                "variant" in r and "runtime" in r and "platform" in r for r in rows
+            )
+            if check_matrix:
+                before_matrix = checks._matrix(work, env)  # noqa: SLF001 - research reuses validation matrix gates so uncovered combinations enter repair.
+                before_configs = checks._configurations(work, before_matrix)  # noqa: SLF001
             try:
                 _git(
                     env,
@@ -1333,6 +1345,15 @@ def _check_group_patches(
             applied.add(identifier)
             progressed = True
             _check_dispositions(base, work, groups[identifier])
+            if check_matrix:
+                after_matrix = checks._matrix(work, env)  # noqa: SLF001
+                checks._check_matrix_scope(before_matrix, after_matrix, rows)  # noqa: SLF001
+                checks._changed_configurations(  # noqa: SLF001
+                    before_configs,
+                    checks._configurations(work, after_matrix),  # noqa: SLF001
+                    rows,
+                    proposal.patch_paths(groups[identifier]["patch"], rows),
+                )
         proposal.require(progressed, "group patch order is unresolvable")
     return data
 
@@ -1652,6 +1673,7 @@ def _research(args, scratch):
                 prerelease_packages=packages,
             ),
             context,
+            strict=True,
         )
         _check_patch_versions(bound)
         _check_manifests(bound, env)

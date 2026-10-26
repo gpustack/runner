@@ -106,7 +106,7 @@ Removal is an explicit file deletion in the group patch, with the reason in the 
 Apply each component's patch sequence against the exact selected source revision when available.
 If source is unavailable, mark application checks unverified. Successful application does not prove runtime behavior.
 
-Rotate variants with evidence: retire a variant the selected release no longer supports inside the advancing group by removing its matrix rules with a comment stating the upstream scoping and the re-add condition, keep its published support rows and catalog entries so published images remain usable, drop only its prepared support rows, never hold a trailing variant on a recipe the group changes because a touched shared recipe requires evidence for every surviving combination, and add a retired variant back when support returns.
+Rotate variants with evidence: retire a variant the selected release no longer supports inside the advancing group by removing its matrix rules with a comment stating the upstream scoping and the re-add condition, keep its published support rows and catalog entries so published images remain usable, drop only its prepared support rows, never hold a trailing variant at its old version in pack/matrix.yaml or group rows because every row in a group must target the selected release and a touched shared recipe requires evidence for every surviving combination, and add a retired variant back when support returns.
 Before changing an existing pin, patch, variant, or support row, read [Support records](support-records.md) and the file's git history; cite the introducing commit when a disposition overrides an earlier decision.
 
 Keep proposed support rows `prepared`, with explicit engine, plugin, runtime, variant, and intended platforms.

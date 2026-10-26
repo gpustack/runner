@@ -309,3 +309,25 @@ def test_checker_verdict_matches_the_direct_validator(
             expected = f"INVALID: {exc}"
         assert lines[0] == expected
         assert (expected == "VALID") == valid
+
+
+def test_proposal_draft_mixing_variant_versions_is_rejected(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    make_seed(tmp_path, "proposal")
+    monkeypatch.chdir(tmp_path)
+    draft = proposal_draft(tmp_path)
+    held = json.loads(json.dumps(draft["groups"][0]["rows"][0]))
+    held["platform"] = "linux/arm64"
+    held["engine_version"] = "0.29.0"
+    held["manifest"]["platform"] = "linux/arm64"
+    held["manifest"]["config_platform"] = "linux/arm64"
+    held["manifest"]["platform_digest"] = "sha256:" + "9" * 64
+    draft["groups"][0]["rows"].append(held)
+    code, lines = run_checker(monkeypatch, capsys, "proposal", json.dumps(draft))
+    assert code == 0
+    assert lines[0].startswith("INVALID: ")
+    assert "mix engine or plugin versions" in lines[0]
+    assert "retire a variant" in lines[0]
