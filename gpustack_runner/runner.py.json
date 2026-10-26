@@ -54,6 +54,46 @@
     "backend_version": "9.1",
     "original_backend_version": "9.1.0",
     "backend_variant": "a3",
+    "service": "sglang",
+    "service_version": "0.5.22",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann9.1-a3-sglang0.5.22",
+    "deprecated": false,
+    "dependencies": {
+      "diffusers": "0.37.0",
+      "sgl-kernel-npu": "2026.9.0",
+      "sglang": "0.5.22",
+      "sglang-router": "0.3.2",
+      "torch": "2.10.0+cpu",
+      "torch-npu": "2.10.0.post6",
+      "transformers": "5.19.0"
+    }
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "a3",
+    "service": "sglang",
+    "service_version": "0.5.22",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann9.1-a3-sglang0.5.22",
+    "deprecated": false,
+    "dependencies": {
+      "diffusers": "0.37.0",
+      "sgl-kernel-npu": "2026.9.0",
+      "sglang": "0.5.22",
+      "sglang-router": "0.3.2",
+      "torch": "2.10.0+cpu",
+      "torch-npu": "2.10.0.post6",
+      "transformers": "5.19.0"
+    }
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "a3",
     "service": "vllm",
     "service_version": "0.30.0",
     "platform": "linux/arm64",
@@ -761,6 +801,46 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0rc2",
       "vllm-router": "0.1.15"
+    }
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "950",
+    "service": "sglang",
+    "service_version": "0.5.22",
+    "platform": "linux/arm64",
+    "docker_image": "gpustack/runner:cann9.1-950-sglang0.5.22",
+    "deprecated": false,
+    "dependencies": {
+      "diffusers": "0.37.0",
+      "sgl-kernel-npu": "2026.9.0",
+      "sglang": "0.5.22",
+      "sglang-router": "0.3.2",
+      "torch": "2.10.0+cpu",
+      "torch-npu": "2.10.0.post6",
+      "transformers": "5.19.0"
+    }
+  },
+  {
+    "backend": "cann",
+    "backend_version": "9.1",
+    "original_backend_version": "9.1.0",
+    "backend_variant": "950",
+    "service": "sglang",
+    "service_version": "0.5.22",
+    "platform": "linux/amd64",
+    "docker_image": "gpustack/runner:cann9.1-950-sglang0.5.22",
+    "deprecated": false,
+    "dependencies": {
+      "diffusers": "0.37.0",
+      "sgl-kernel-npu": "2026.9.0",
+      "sglang": "0.5.22",
+      "sglang-router": "0.3.2",
+      "torch": "2.10.0+cpu",
+      "torch-npu": "2.10.0.post6",
+      "transformers": "5.19.0"
     }
   },
   {
