@@ -20,7 +20,7 @@ deps: prepare
 INSTALL_HOOKS ?= true
 install: deps
 	@echo "+++ $@ +++"
-	if [[ "$(INSTALL_HOOKS)" == "true" ]]; then \
+	if [[ "$(INSTALL_HOOKS)" == "true" ]] && uv run python -c 'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec("pre_commit") else 1)'; then \
 		uv run pre-commit install --hook-type pre-commit --hook-type commit-msg --hook-type pre-push; \
 	else \
 		echo "Skipping pre-commit hook installation."; \
@@ -40,7 +40,11 @@ clean:
 LINT_DIRTY ?= false
 lint:
 	@echo "+++ $@ +++"
-	uv run pre-commit run --all-files --show-diff-on-failure
+	if uv run python -c 'import importlib.util, sys; sys.exit(0 if importlib.util.find_spec("pre_commit") else 1)'; then \
+		uv run pre-commit run --all-files --show-diff-on-failure; \
+	else \
+		echo "Skipping pre-commit run."; \
+	fi
 	if [[ "$(LINT_DIRTY)" == "true" ]]; then \
 		if [[ -n $$(git status --porcelain) ]]; then \
 			echo "Code tree is dirty."; \
