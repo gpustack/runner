@@ -35,7 +35,7 @@ gpustack-runner = "gpustack_runner.__main__:main"
 [dependency-groups]
 dev=[
     "pyclean==3.4.0",
-    "pre-commit==4.5.0",
+    "pre-commit==4.5.0; python_version >= '3.11'",
     "pytest==9.0.3",
     "hatchling",
     "hatch-vcs",
