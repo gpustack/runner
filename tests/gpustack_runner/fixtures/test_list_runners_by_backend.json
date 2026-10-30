@@ -8,7 +8,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "a3",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -25,7 +25,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-omni": "0.30.0+cpu",
           "vllm-router": "0.1.15"
         }
@@ -33,7 +33,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "a3",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -50,7 +50,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-omni": "0.30.0+cpu",
           "vllm-router": "0.1.15"
         }
@@ -766,7 +766,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "950",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -782,14 +782,14 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-router": "0.1.15"
         }
       },
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "950",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -805,7 +805,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-router": "0.1.15"
         }
       },
@@ -984,7 +984,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "910b",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -1001,7 +1001,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-omni": "0.30.0+cpu",
           "vllm-router": "0.1.15"
         }
@@ -1009,7 +1009,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "910b",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -1026,7 +1026,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-omni": "0.30.0+cpu",
           "vllm-router": "0.1.15"
         }
@@ -1790,7 +1790,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "310p",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -1804,7 +1804,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-omni": "0.30.0+cpu",
           "vllm-router": "0.1.15"
         }
@@ -1812,7 +1812,7 @@
       {
         "backend": "cann",
         "backend_version": "9.2",
-        "original_backend_version": "9.2.0",
+        "original_backend_version": "9.2.1",
         "backend_variant": "310p",
         "service": "vllm",
         "service_version": "0.30.0",
@@ -1826,7 +1826,7 @@
           "torch-npu": "2.10.0.post7",
           "transformers": "5.14.1",
           "vllm": "0.30.0+empty",
-          "vllm-ascend": "0.30.0rc2",
+          "vllm-ascend": "0.30.0",
           "vllm-omni": "0.30.0+cpu",
           "vllm-router": "0.1.15"
         }
