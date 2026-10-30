@@ -98,7 +98,7 @@
     "service_version": "0.30.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann9.1-a3-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "diffusers": "0.40.0",
       "lmcache": "0.4.4",
@@ -123,7 +123,7 @@
     "service_version": "0.30.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann9.1-a3-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "diffusers": "0.40.0",
       "lmcache": "0.4.4",
@@ -852,7 +852,7 @@
     "service_version": "0.30.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann9.1-950-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "lmcache": "0.4.4",
       "lmcache-ascend": "0.5.6rc4",
@@ -875,7 +875,7 @@
     "service_version": "0.30.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann9.1-950-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "lmcache": "0.4.4",
       "lmcache-ascend": "0.5.6rc4",
@@ -1034,7 +1034,7 @@
     "service_version": "0.30.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann9.1-910b-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "diffusers": "0.40.0",
       "lmcache": "0.4.4",
@@ -1059,7 +1059,7 @@
     "service_version": "0.30.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann9.1-910b-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "diffusers": "0.40.0",
       "lmcache": "0.4.4",
@@ -1834,7 +1834,7 @@
     "service_version": "0.30.0",
     "platform": "linux/arm64",
     "docker_image": "gpustack/runner:cann9.1-310p-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "diffusers": "0.40.0",
       "ray": "2.48.0",
@@ -1856,7 +1856,7 @@
     "service_version": "0.30.0",
     "platform": "linux/amd64",
     "docker_image": "gpustack/runner:cann9.1-310p-vllm0.30.0",
-    "deprecated": false,
+    "deprecated": true,
     "dependencies": {
       "ray": "2.48.0",
       "torch": "2.10.0+cpu",
