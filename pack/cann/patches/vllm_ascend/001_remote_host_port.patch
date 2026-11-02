@@ -1,0 +1,19 @@
+--- a/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py
++++ b/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py
+@@ -3972,6 +3972,16 @@
+         if remote_multi_nodes_meta_mapping is None:
+             return remote_host, remote_engine_id
+
++        # The sender's absolute port identifies its worker across DP groups;
++        # the receiver can have a different KV base port.
++        port_matches = [
++            info for info in remote_multi_nodes_meta_mapping.values()
++            if info.get("handshake_port") == remote_handshake_port
++        ]
++        if len(port_matches) == 1:
++            info = port_matches[0]
++            return info.get("host", remote_host), info.get("engine_id", remote_engine_id)
++
+         kv_port = self.vllm_config.kv_transfer_config.kv_port
+         rank = str(remote_handshake_port - kv_port)
+         info = remote_multi_nodes_meta_mapping.get(rank)

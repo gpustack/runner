@@ -16,6 +16,8 @@
 ## - VLLM_OMNI_COMMIT: prefer the omni release aligned with the new vllm;
 ##   when none exists, pin a main-branch commit that declares it.
 ## - VLLM_ROUTER_VERSION: tracks vllm compatibility; bump alongside.
+## - VLLM_HIXL_COMMIT: align its CANN host-library ABI with CANN_BASE_IMAGE;
+##   re-check channel naming and peer-restart recovery when upgrading.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG CANN_VERSION=9.2.1
@@ -32,6 +34,9 @@ ARG VLLM_LMCACHE_VERSION=0.4.4
 ARG VLLM_LMCACHE_ASCEND_VERSION=0.5.6
 ARG VLLM_MOONCAKE_VERSION=0.3.11.post1
 ARG VLLM_ROUTER_VERSION=0.1.15
+## CANN 9.2.0 HIXL channel ids must survive a PD peer process restart.
+## Keep the host library aligned with the base image's CANN minor version.
+ARG VLLM_HIXL_COMMIT=60dbe9d1d7d9a7eef04bc3dbf84edbad2188230a
 ## vLLM Omni v0.30.0 (tag a8576ccb) is rebased onto vLLM 0.30.0, the aligned
 ## release the upgrade guide prefers over a main-branch commit.
 ARG VLLM_OMNI_COMMIT=a8576ccb725c4e21cd13c3eb5f9a546b21149d2b
@@ -220,12 +225,57 @@ RUN <<EOF
 EOF
 
 
+FROM vllm-build AS vllm-build-hixl
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG CMAKE_MAX_JOBS
+ARG VLLM_HIXL_COMMIT
+
+RUN --mount=type=bind,target=/workspace,rw <<EOF
+    source /usr/local/Ascend/ascend-toolkit/set_env.sh
+
+    # 310P does not install Mooncake and does not need its HIXL patch.
+    mkdir -p /output
+    if [[ "${CANN_ARCHS}" == "310p" ]]; then
+        exit 0
+    fi
+
+    # Only rebuild the host library; keep CANN device kernels and other libraries.
+    mkdir -p /tmp/hixl/third_party/cann-cmake
+    curl -fL --retry 3 --connect-timeout 30 --max-time 180 \
+        "https://codeload.github.com/hicann/hixl/tar.gz/${VLLM_HIXL_COMMIT}" \
+        | tar -xz --strip-components=1 -C /tmp/hixl
+    curl -fL --retry 3 --connect-timeout 30 --max-time 180 \
+        https://codeload.github.com/hicann/cmake/tar.gz/3c4a9da4a0e81faa47dcc1c8e11db63ec7ff6231 \
+        | tar -xz --strip-components=1 -C /tmp/hixl/third_party/cann-cmake
+    cd /tmp/hixl
+    for f in /workspace/patches/hixl/*.patch; do
+        patch --batch --fuzz=0 -p1 < "$f"
+    done
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+        -DHIXL_BUILD_HOST_ONLY=ON \
+        -DCANN_3RD_LIB_PATH=/tmp/hixl/third_party \
+        -DASCEND_INSTALL_PATH="${ASCEND_HOME_PATH}"
+    cmake --build build --target cann_hixl -j "${CMAKE_MAX_JOBS:-8}"
+    cp build/src/hixl/libcann_hixl.so /output/libcann_hixl.so
+EOF
+
 FROM vllm-build AS vllm
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 
 ARG TARGETPLATFORM
 ARG TARGETOS
 ARG TARGETARCH
+
+COPY --from=vllm-build-hixl /output/ /tmp/hixl-host/
+RUN <<EOF
+    source /usr/local/Ascend/ascend-toolkit/set_env.sh
+    if [[ -f /tmp/hixl-host/libcann_hixl.so ]]; then
+        install -m 0644 /tmp/hixl-host/libcann_hixl.so \
+            "$(readlink -f "${ASCEND_HOME_PATH}/lib64/libcann_hixl.so")"
+    fi
+    rm -rf /tmp/hixl-host
+EOF
 
 ## Install vLLM Router
 
@@ -409,6 +459,8 @@ RUN --mount=type=bind,target=/workspace,rw <<EOF
     tree -hs /workspace/patches
     pushd /vllm-workspace/vllm \
         && for f in /workspace/patches/vllm/*.patch; do patch -p1 < "$f" || exit 1; done
+    pushd /vllm-workspace/vllm-ascend \
+        && for f in /workspace/patches/vllm_ascend/*.patch; do patch --batch --fuzz=0 -p1 < "$f" || exit 1; done
     if pip show vllm_omni > /dev/null 2>&1; then \
         pushd $(pip show vllm_omni | grep Location: | cut -d" " -f 2) \
             && for f in /workspace/patches/vllm_omni/*.patch; do patch -p1 < "$f" || exit 1; done; \
