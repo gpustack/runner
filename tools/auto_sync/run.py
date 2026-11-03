@@ -175,6 +175,17 @@ class PublicUpstream:
         msg = "upstream release pagination limit exceeded"
         raise proposal.ProposalError(msg)
 
+    def tags(self, name: str) -> list:
+        records = []
+        for page in range(1, 21):
+            rows = self.get(f"/repos/{name}/tags?per_page=100&page={page}")
+            proposal.require(isinstance(rows, list), "invalid upstream tag array")
+            records.extend(rows)
+            if len(rows) < 100:
+                return records
+        msg = "upstream tag pagination limit exceeded"
+        raise proposal.ProposalError(msg)
+
 
 def _upstream_error(response) -> str:
     status = response.status_code
@@ -224,7 +235,10 @@ def _releases(api: PublicUpstream) -> tuple[dict, dict]:
     releases, errors = {}, {}
     for name in (*discovery.UPSTREAMS.values(), discovery.ASCEND):
         try:
-            releases[name] = api.releases(name)
+            releases[name] = discovery.promote_stable_releases(
+                api.releases(name),
+                api.tags(name),
+            )
         except (ValueError, TypeError) as exc:
             errors[name] = str(exc)
     return releases, errors

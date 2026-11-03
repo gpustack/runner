@@ -28,6 +28,8 @@ Chase upstream one release line at a time per subscription. Stable engines inclu
 The chase base is the highest engine version among the subscription's catalog and explicit support records; CANN/vLLM chases the plugin version and pairs it with the documented stable engine.
 Select the lowest `(major, minor)` line above the base, then the highest version within that line under PEP 440 ordering.
 Exclude drafts and unrelated release streams. A subscription without any record selects the newest eligible release.
+Some upstreams promote a verified release candidate to a stable git tag without creating a new release object, so the published object keeps its rc tag name while carrying final assets. When the object is published, does not carry the prerelease flag, and its own tag shares exactly one stable tag's commit in the same release line, the controller presents it at that stable tag before chasing, preserving the original name in `upstream_tag_name`.
+Ambiguous or missing tag evidence keeps the object unchanged, and the stable-only policy applies.
 Do not skip ahead to a newer line, even when the selected candidate is blocked; report the block instead.
 The discovery variant universe intersects current records with pack/matrix.yaml: a variant retired from the matrix is not chased again even while its published support records remain.
 

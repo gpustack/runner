@@ -33,6 +33,8 @@ class Upstreams(FakeGitHub):
         self.outages = set()
         self.delays = {}
         self.source_revisions = {}
+        # Tag name to commit SHA; empty means no promotion evidence exists.
+        self.tags = {name: {} for name in self.releases}
 
     @staticmethod
     def release(version, body="", prerelease=False):
@@ -54,6 +56,12 @@ class Upstreams(FakeGitHub):
                     return 503, {}
                 if path == prefix + "/releases":
                     return self.page(records, parse_qs(urlsplit(url).query))
+                if path == prefix + "/tags":
+                    rows = [
+                        {"name": tag, "commit": {"sha": sha}}
+                        for tag, sha in self.tags.get(name, {}).items()
+                    ]
+                    return self.page(rows, parse_qs(urlsplit(url).query))
                 if path == prefix:
                     return 200, {"clone_url": self.clone_url}
                 if path.startswith(prefix + "/commits/"):

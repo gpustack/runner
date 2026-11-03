@@ -11,15 +11,25 @@ from tools.auto_sync.discovery import (
     SUBSCRIPTIONS,
     DiscoveryError,
     _base,
+    _chase,
     _read_sources,
+    _releases,
     _represented,
     canonical_variant,
     discover,
     parse_support,
     prerelease_packages,
+    promote_stable_releases,
     promote_support,
     version,
 )
+
+SHA = "4ba787ec9959e566d3b587a796dff07673324da5"
+
+
+def tag_rows(*pairs):
+    return [{"name": name, "commit": {"sha": sha}} for name, sha in pairs]
+
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = Path(__file__).parent / "fixtures" / "discovery"
@@ -707,3 +717,91 @@ def test_malformed_prerelease_whitelist_fails_preparation(tmp_path, text):
     whitelisted(repo, text)
     with pytest.raises(DiscoveryError, match="prerelease whitelist"):
         prerelease_packages(repo)
+
+
+def promoted_row(**changes):
+    """The measured upstream shape: an rc-pinned object carrying final assets."""
+    return release("v0.33.0rc3", name="v0.33.0", **changes)
+
+
+def test_promotion_presents_the_verified_rc_at_the_stable_tag():
+    rows = [promoted_row(), release("v0.32.0")]
+    tags = tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", SHA))
+    presented = promote_stable_releases(rows, tags)
+    assert presented[0]["tag_name"] == "v0.33.0"
+    assert presented[0]["upstream_tag_name"] == "v0.33.0rc3"
+    assert presented[1] == rows[1]
+    # The input rows stay untouched; presentation is a copy, not a mutation.
+    assert rows[0]["tag_name"] == "v0.33.0rc3"
+
+
+def test_promotion_requires_the_same_commit():
+    tags = tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", "b" * 40))
+    assert promote_stable_releases([promoted_row()], tags) == [promoted_row()]
+
+
+def test_promotion_requires_the_final_flag():
+    tags = tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", SHA))
+    row = promoted_row(prerelease=True)
+    assert promote_stable_releases([row], tags) == [row]
+
+
+def test_promotion_requires_a_published_object():
+    tags = tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", SHA))
+    row = promoted_row(draft=True)
+    assert promote_stable_releases([row], tags) == [row]
+
+
+def test_promotion_requires_the_same_release_line():
+    tags = tag_rows(("v0.33.0rc3", SHA), ("v0.34.0", SHA))
+    assert promote_stable_releases([promoted_row()], tags) == [promoted_row()]
+
+
+def test_promotion_never_claims_an_ambiguous_line():
+    tags = tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", SHA), ("v0.33.0.1", SHA))
+    assert promote_stable_releases([promoted_row()], tags) == [promoted_row()]
+
+
+@pytest.mark.parametrize(
+    "tags",
+    [
+        [],
+        tag_rows(("v0.33.0", SHA)),
+        tag_rows(("v0.33.0rc3", SHA)),
+    ],
+)
+def test_promotion_without_tag_evidence_keeps_the_object(tags):
+    assert promote_stable_releases([promoted_row()], tags) == [promoted_row()]
+
+
+def test_promoted_stable_tag_is_eligible_and_chased():
+    rows = promote_stable_releases(
+        [promoted_row(), release("v0.32.0")],
+        tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", SHA)),
+    )
+    eligible = _releases(rows)
+    assert eligible == {version("0.33.0"), version("0.32.0")}
+    assert _chase(version("0.32.0"), eligible) == version("0.33.0")
+
+
+@pytest.mark.parametrize(
+    "tags",
+    [
+        "not-a-list",
+        None,
+        [{"name": "v0.33.0"}],
+        [{"name": "v0.33.0", "commit": {}}],
+        [{"tag_name": "v0.33.0", "commit": {"sha": SHA}}],
+    ],
+)
+def test_malformed_tag_evidence_is_visible(tags):
+    with pytest.raises(DiscoveryError, match="tag"):
+        promote_stable_releases([promoted_row()], tags)
+
+
+def test_malformed_release_rows_stay_visible_under_promotion():
+    with pytest.raises(DiscoveryError, match="release"):
+        promote_stable_releases(
+            [{"tag_name": "v0.33.0rc3"}],
+            tag_rows(("v0.33.0rc3", SHA), ("v0.33.0", SHA)),
+        )

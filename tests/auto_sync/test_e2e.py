@@ -398,6 +398,42 @@ def test_pairing_never_inferred_from_equal_version_tag(scenario, tmp_path):
     assert len(result["candidates"]) == 6
 
 
+def test_stable_tag_promotion_chases_the_verified_release(scenario, tmp_path):
+    # The production stuck state: upstream promotes a verified rc to a stable
+    # git tag but keeps publishing under the rc tag name; final assets ship
+    # while no stable release object exists yet.
+    api = scenario[2]
+    promoted = api.release("0.30.0rc2")
+    promoted["name"] = "v0.30.0"
+    api.releases["vllm-project/vllm"] = [promoted, api.release("0.29.0")]
+    api.tags["vllm-project/vllm"] = {
+        "v0.30.0rc2": api.upstream,
+        "v0.30.0": api.upstream,
+    }
+    prepared = prepare(scenario, tmp_path)
+    result = json.loads((prepared / "result.json").read_text())
+    assert result["ready"]
+    cuda = next(c for c in result["discovery"] if c["subscription"] == "cuda/vllm")
+    assert cuda["status"] == "needs_update"
+    assert cuda["engine_version"] == "0.30.0"
+
+
+def test_stable_tag_promotion_requires_matching_commits(scenario, tmp_path):
+    api = scenario[2]
+    promoted = api.release("0.30.0rc2")
+    promoted["name"] = "v0.30.0"
+    api.releases["vllm-project/vllm"] = [promoted, api.release("0.29.0")]
+    api.tags["vllm-project/vllm"] = {
+        "v0.30.0rc2": api.upstream,
+        "v0.30.0": "f" * 40,
+    }
+    prepared = prepare(scenario, tmp_path)
+    result = json.loads((prepared / "result.json").read_text())
+    cuda = next(c for c in result["discovery"] if c["subscription"] == "cuda/vllm")
+    assert cuda["status"] == "unchanged"
+    assert cuda["engine_version"] == "0.29.0"
+
+
 def ascend_release(tag, body=""):
     return {
         "tag_name": tag,
