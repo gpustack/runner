@@ -25,11 +25,13 @@ Rows with the same identity and platform set must be unique.
 | cuda | 13.0 | vllm | - | 0.32.0 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | sglang | - | 0.5.21 | - | linux/amd64, linux/arm64 | published |
 | cuda | 13.0 | sglang | - | 0.5.22 | - | linux/amd64, linux/arm64 | published |
+| cuda | 13.0 | sglang | - | 0.5.23 | - | linux/amd64, linux/arm64 | prepared |
 | rocm | 7.2 | vllm | - | 0.30.0 | - | linux/amd64 | published |
 | rocm | 7.2 | vllm | - | 0.31.0 | - | linux/amd64 | published |
 | rocm | 7.2 | vllm | - | 0.32.0 | - | linux/amd64 | published |
 | rocm | 7.2 | sglang | - | 0.5.21 | - | linux/amd64 | published |
 | rocm | 7.2 | sglang | - | 0.5.22 | - | linux/amd64 | published |
+| rocm | 7.2 | sglang | - | 0.5.23 | - | linux/amd64 | prepared |
 | cann | 9.1 | vllm | 950 | 0.27.1 | 0.27.1rc1 | linux/amd64, linux/arm64 | published |
 | cann | 9.1 | vllm | a3 | 0.27.1 | 0.27.1rc1 | linux/amd64, linux/arm64 | published |
 | cann | 9.1 | vllm | 910b | 0.27.1 | 0.27.1rc1 | linux/amd64, linux/arm64 | published |
@@ -50,4 +52,6 @@ Rows with the same identity and platform set must be unique.
 | cann | 9.0 | sglang | 910b | 0.5.20 | - | linux/amd64, linux/arm64 | published |
 | cann | 9.1 | sglang | a3 | 0.5.22 | - | linux/amd64, linux/arm64 | published |
 | cann | 9.1 | sglang | 950 | 0.5.22 | - | linux/amd64, linux/arm64 | published |
+| cann | 9.1 | sglang | a3 | 0.5.23 | - | linux/amd64, linux/arm64 | prepared |
+| cann | 9.1 | sglang | 950 | 0.5.23 | - | linux/amd64, linux/arm64 | prepared |
 <!-- runner-support-records:end -->

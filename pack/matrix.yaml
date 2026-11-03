@@ -64,7 +64,7 @@ rules:
       - "PYTHON_VERSION=3.12"
       - "VLLM_VERSION=0.30.0"
       - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0-310p"
-  ## Ascend CANN 9.1.0, SGLang 0.5.22 for A3.
+  ## Ascend CANN 9.1.0, SGLang 0.5.23 for A3.
   ## (no sglang upstream image for 310p variant)
   ## (910b retired: upstream publishes no 0.5.22 910b image, only 950/a3 on
   ##  cann9.1.0; re-add when an upstream 910b image returns)
@@ -76,9 +76,9 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=a3"
       - "PYTHON_VERSION=3.12"
-      - "SGLANG_VERSION=0.5.22"
-      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.22-cann9.1.0-a3"
-  ## Ascend CANN 9.1.0, SGLang 0.5.22 for 950 (A5).
+      - "SGLANG_VERSION=0.5.23"
+      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.23-cann9.1.0-a3"
+  ## Ascend CANN 9.1.0, SGLang 0.5.23 for 950 (A5).
   ## (upstream publishes v0.5.22-cann9.1.0-950 alongside the a3 image)
   ##
   - backend: "cann"
@@ -88,8 +88,8 @@ rules:
       - "CANN_VERSION=9.1.0"
       - "CANN_ARCHS=950"
       - "PYTHON_VERSION=3.12"
-      - "SGLANG_VERSION=0.5.22"
-      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.22-cann9.1.0-950"
+      - "SGLANG_VERSION=0.5.23"
+      - "SGLANG_BASE_IMAGE=quay.io/ascend/sglang:v0.5.23-cann9.1.0-950"
 
   ## MindIE 2.3.0 retains the published CANN 8.5.0 variants.
   - backend: "cann"
@@ -129,7 +129,7 @@ rules:
       - "ROCM_VERSION=7.2.3"
       - "VLLM_VERSION=0.32.0"
       - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.32.0"
-  ## AMD ROCm 7.2.1 - SGLang 0.5.22 (rocm720-mi30x)
+  ## AMD ROCm 7.2.1 - SGLang 0.5.23 (rocm720-mi30x)
   ##
   - backend: "rocm"
     services:
@@ -138,8 +138,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.1"
-      - "SGLANG_VERSION=0.5.22"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.22-rocm720-mi30x"
+      - "SGLANG_VERSION=0.5.23"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.23-rocm720-mi30x"
 
   #
   # NVIDIA CUDA
@@ -162,8 +162,8 @@ rules:
       - "sglang"
     args:
       - "CUDA_VERSION=13.0.3"
-      - "SGLANG_VERSION=0.5.22"
-      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.22-cu130"
+      - "SGLANG_VERSION=0.5.23"
+      - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.23-cu130"
   ## NVIDIA CUDA 12.9.1
   ## The upstream cu129 image pairs torch 2.13.0+cu129 with the 12.9 toolkit, but
   ## bundles a CUDA 13-built torchcodec that crashes `vllm serve` at import
