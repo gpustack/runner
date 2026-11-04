@@ -158,6 +158,33 @@ Define the service's named final target and preserve its runtime ancestry, platf
 Active recipes do not require dependency-probe arguments, shared mounts, embedded metadata, or export stages.
 Pack collects dependencies from the final image through the central collector.
 
+### ROCm vLLM runtime lines
+
+The vLLM matrix retains ROCm 7.2.3 and adds ROCm 10.0.0 on `linux/amd64`.
+The latter selects `vllm/vllm-openai-rocm:v0.33.0-rocm100`; its support stays
+`prepared` until Pack measures and publishes the final image.
+
+ROCm 10 uses the TheRock pip SDK. Preserve the base image's `ROCM_PATH`,
+`HIP_PATH`, compiler path, and library paths; derive `ROCM_HOME` from that SDK
+instead of forcing `/opt/rocm`. Unless `ROCM_ARCHS` overrides it, LMCache and
+Omni use the base image's `PYTORCH_ROCM_ARCH`. The legacy runtime retains its
+existing compiler targets. These choices follow the
+[vLLM 0.33.0 base recipe](https://github.com/vllm-project/vllm/blob/4ba787ec9959e566d3b587a796dff07673324da5/docker/Dockerfile.rocm_base).
+
+LMCache remains at 0.5.6 to preserve the cross-image protocol, and Omni keeps
+the vLLM 0.33.0-aligned source pin. The Mooncake 0.3.13.post1 wheel requires
+`libamdhip64.so.7` and `libhsa-runtime64.so.1`; TheRock 10.0 provides those
+library names. CuPy and ONNX Runtime also reference legacy ROCm library names.
+Matching names do not prove ABI compatibility.
+
+The ROCm 10 final image runs `pack/rocm/check_vllm.py` before publication. It
+rejects a replaced SDK, engine, Torch, LMCache, or Mooncake version, a compiler
+outside the selected SDK, CUDA builds of Torch or CuPy, missing native
+extensions, and unresolved native symbols. It loads the ONNX ROCm provider
+library rather than trusting provider enumeration alone. These checks do not
+run inference, device kernels, or transfers. Pack's dependency collection
+remains separate and does not import these packages.
+
 ## Adding a backend or service
 
 For a new backend, create its directory under `pack/` and one `Dockerfile.<service>` per supported service.

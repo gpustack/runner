@@ -129,6 +129,18 @@ rules:
       - "ROCM_VERSION=7.2.3"
       - "VLLM_VERSION=0.33.0"
       - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm72"
+  ## AMD ROCm 10.0.0 (TheRock SDK); keep 7.2.3 during the upstream transition.
+  ## vllm-project/vllm#58761 publishes both runtime lines for vLLM 0.33.0.
+  ##
+  - backend: "rocm"
+    services:
+      - "vllm"
+    platforms:
+      - "linux/amd64"
+    args:
+      - "ROCM_VERSION=10.0.0"
+      - "VLLM_VERSION=0.33.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm100"
   ## AMD ROCm 7.2.1 - SGLang 0.5.23 (rocm720-mi30x)
   ##
   - backend: "rocm"
