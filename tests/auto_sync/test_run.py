@@ -152,3 +152,87 @@ def test_plain_forbidden_stays_generic(upstream_env):
         with pytest.raises(proposal.ProposalError) as caught:
             run.PublicUpstream().get("/repos/a/b/releases")
     assert str(caught.value) == "upstream query failed (403)"
+
+
+PROMOTED_SHA = "4ba787ec9959e566d3b587a796dff07673324da5"
+
+
+def upstream_routes(**overrides):
+    """Release and tag routes for every acquired upstream repository."""
+    releases = {
+        "vllm-project/vllm": [
+            {
+                "tag_name": "v0.33.0rc3",
+                "name": "v0.33.0",
+                "draft": False,
+                "prerelease": False,
+            },
+            {"tag_name": "v0.32.0", "draft": False, "prerelease": False},
+        ],
+        "sgl-project/sglang": [
+            {"tag_name": "v0.5.23", "draft": False, "prerelease": False},
+        ],
+        "vllm-project/vllm-ascend": [
+            {"tag_name": "v0.30.0rc1", "draft": False, "prerelease": True},
+        ],
+    }
+    tags = {
+        "vllm-project/vllm": [
+            {"name": "v0.33.0rc3", "commit": {"sha": PROMOTED_SHA}},
+            {"name": "v0.33.0", "commit": {"sha": PROMOTED_SHA}},
+        ],
+        "sgl-project/sglang": [],
+        "vllm-project/vllm-ascend": [],
+    }
+    routes = {}
+    for name, rows in releases.items():
+        routes[f"/repos/{name}/releases?per_page=100&page=1"] = (200, {}, rows)
+        routes[f"/repos/{name}/tags?per_page=100&page=1"] = (
+            200,
+            {},
+            overrides.get("tags", tags[name]),
+        )
+    return routes
+
+
+def test_releases_present_the_verified_rc_at_its_stable_tag(upstream_env):
+    routes = upstream_routes()
+    with Upstream(routes) as api:
+        upstream_env.setenv("GITHUB_API_URL", api.url)
+
+        releases, errors = run._releases(  # noqa: SLF001 - the acquisition boundary is exercised directly, without the prepare stack.
+            run.PublicUpstream(),
+        )
+    assert errors == {}
+    vllm = releases["vllm-project/vllm"]
+    assert vllm[0]["tag_name"] == "v0.33.0"
+    assert vllm[0]["upstream_tag_name"] == "v0.33.0rc3"
+    assert run.release_versions(vllm) >= {proposal.version("0.33.0")}
+
+
+def test_releases_without_tag_evidence_keep_the_objects(upstream_env):
+    routes = upstream_routes(
+        tags=[{"name": "v0.33.0rc3", "commit": {"sha": PROMOTED_SHA}}],
+    )
+    with Upstream(routes) as api:
+        upstream_env.setenv("GITHUB_API_URL", api.url)
+
+        releases, errors = run._releases(  # noqa: SLF001 - the acquisition boundary is exercised directly, without the prepare stack.
+            run.PublicUpstream(),
+        )
+    assert errors == {}
+    assert releases["vllm-project/vllm"][0]["tag_name"] == "v0.33.0rc3"
+
+
+def test_failed_tag_acquisition_fails_the_subscription(upstream_env):
+    routes = upstream_routes()
+    del routes["/repos/vllm-project/vllm/tags?per_page=100&page=1"]
+    with Upstream(routes) as api:
+        upstream_env.setenv("GITHUB_API_URL", api.url)
+
+        releases, errors = run._releases(  # noqa: SLF001 - the acquisition boundary is exercised directly, without the prepare stack.
+            run.PublicUpstream(),
+        )
+    assert "vllm-project/vllm" in errors
+    assert "vllm-project/vllm" not in releases
+    assert "sgl-project/sglang" in releases

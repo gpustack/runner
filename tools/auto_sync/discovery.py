@@ -403,19 +403,101 @@ def _matrix_variants(repo: Path) -> dict[tuple[str, str], set[str]]:
     return declared
 
 
+def _release_row(row):
+    if (
+        not isinstance(row, dict)
+        or not isinstance(row.get("tag_name"), str)
+        or any(type(row.get(key)) is not bool for key in ("draft", "prerelease"))
+    ):
+        msg = "malformed upstream release"
+        raise DiscoveryError(msg)
+    return row
+
+
+def _tag_index(rows):
+    """Validated tag name to dereferenced commit SHA mapping."""
+    if not isinstance(rows, list):
+        msg = "upstream tags must be a complete list"
+        raise DiscoveryError(msg)
+    index = {}
+    for row in rows:
+        if (
+            not isinstance(row, dict)
+            or not isinstance(row.get("name"), str)
+            or not isinstance(row.get("commit"), dict)
+            or not isinstance(row["commit"].get("sha"), str)
+        ):
+            msg = "malformed upstream tag"
+            raise DiscoveryError(msg)
+        index[row["name"]] = row["commit"]["sha"]
+    return index
+
+
+def promote_stable_releases(rows, tags):
+    """
+    Present rc-pinned release objects at their same-commit stable tags.
+
+    Upstreams promote a verified prerelease to a stable git tag without
+    creating a new release object, so the published object keeps its rc
+    tag_name while carrying final assets. A published, non-prerelease-flagged
+    object whose own tag shares exactly one stable tag's commit in the same
+    release line is presented at that stable tag, keeping eligibility and
+    source pins consistent. Ambiguous or unverified evidence keeps the
+    original row and the stable-only policy.
+    """
+    if not isinstance(rows, list):
+        msg = "upstream releases must be a complete list"
+        raise DiscoveryError(msg)
+    checked = [_release_row(row) for row in rows]
+    index = _tag_index(tags)
+    stable = {}
+    for name, sha in index.items():
+        if not re.match(r"v?\d", name):
+            continue
+        parsed = version(name)
+        if parsed.is_prerelease or parsed.is_devrelease or parsed.local:
+            continue
+        stable.setdefault((parsed.epoch, parsed.major, parsed.minor), []).append(
+            (parsed, name, sha),
+        )
+    result = []
+    for row in checked:
+        tag = row["tag_name"]
+        presented = row
+        if not row["draft"] and not row["prerelease"] and re.match(r"v?\d", tag):
+            parsed = version(tag)
+            sha = index.get(tag)
+            same = (
+                [
+                    item
+                    for item in stable.get(
+                        (parsed.epoch, parsed.major, parsed.minor),
+                        [],
+                    )
+                    if item[2] == sha
+                ]
+                if sha is not None
+                and parsed.is_prerelease
+                and not parsed.is_devrelease
+                and not parsed.local
+                else []
+            )
+            if len(same) == 1:
+                presented = {
+                    **row,
+                    "tag_name": same[0][1],
+                    "upstream_tag_name": tag,
+                }
+        result.append(presented)
+    return result
+
+
 def _releases(rows, *, plugin=False):
     if not isinstance(rows, list):
         msg = "upstream releases must be a complete list"
         raise DiscoveryError(msg)
     eligible = set()
-    for row in rows:
-        if (
-            not isinstance(row, dict)
-            or not isinstance(row.get("tag_name"), str)
-            or any(type(row.get(key)) is not bool for key in ("draft", "prerelease"))
-        ):
-            msg = "malformed upstream release"
-            raise DiscoveryError(msg)
+    for row in map(_release_row, rows):
         tag = row["tag_name"]
         if row["draft"] or not re.match(r"v?\d", tag):
             continue
