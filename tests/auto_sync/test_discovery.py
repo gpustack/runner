@@ -784,6 +784,16 @@ def test_promoted_stable_tag_is_eligible_and_chased():
     assert _chase(version("0.32.0"), eligible) == version("0.33.0")
 
 
+def test_unparseable_tag_names_are_skipped_without_losing_evidence():
+    tags = tag_rows(
+        ("v0.33.0rc3", SHA),
+        ("v0.33.0", SHA),
+        ("v1-nightly", SHA),
+    )
+    presented = promote_stable_releases([promoted_row()], tags)
+    assert presented[0]["tag_name"] == "v0.33.0"
+
+
 @pytest.mark.parametrize(
     "tags",
     [
