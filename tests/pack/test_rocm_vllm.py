@@ -85,6 +85,12 @@ def _sdk(tmp_path, monkeypatch):
     compiler = root / "bin/hipcc"
     compiler.write_text("#!/bin/sh\nexit 0\n")
     compiler.chmod(0o755)
+    (root.parent / "_rocm_sdk_core").mkdir()
+    monkeypatch.setattr(
+        check.metadata,
+        "distribution",
+        lambda _: SimpleNamespace(locate_file=lambda name: root.parent / name),
+    )
     for name in ["ROCM_PATH", "ROCM_HOME", "HIP_PATH"]:
         monkeypatch.setenv(name, str(root))
     monkeypatch.setenv("PATH", str(compiler.parent) + os.pathsep + os.environ["PATH"])
@@ -93,6 +99,17 @@ def _sdk(tmp_path, monkeypatch):
 
 @pytest.mark.usefixtures("sdk")
 def test_sdk_accepts_inherited_paths():
+    check.check_sdk()
+
+
+def test_sdk_accepts_devel_compiler_symlink_to_core(sdk):
+    compiler = sdk / "bin/hipcc"
+    core = sdk.parent / "_rocm_sdk_core/bin"
+    core.mkdir(parents=True, exist_ok=True)
+    (core / "hipcc").write_text("#!/bin/sh\nexit 0\n")
+    (core / "hipcc").chmod(0o755)
+    compiler.unlink()
+    compiler.symlink_to(core / "hipcc")
     check.check_sdk()
 
 

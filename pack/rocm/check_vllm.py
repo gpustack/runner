@@ -40,8 +40,15 @@ def check_sdk() -> None:
         if Path(os.environ[name]).resolve(strict=True) != root:
             msg = f"{name} differs from the base image's ROCM_PATH"
             raise ValueError(msg)
+    # TheRock ships hipcc in core; devel/bin may link to that executable.
+    core = Path(
+        metadata.distribution("rocm-sdk-core").locate_file("_rocm_sdk_core"),
+    ).resolve(strict=True)
     compiler = shutil.which("hipcc")
-    if not compiler or not Path(compiler).resolve(strict=True).is_relative_to(root):
+    if not compiler or not any(
+        Path(compiler).resolve(strict=True).is_relative_to(path)
+        for path in (root, core)
+    ):
         msg = "hipcc does not belong to the base image's ROCm SDK"
         raise ValueError(msg)
 
