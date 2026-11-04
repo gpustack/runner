@@ -454,7 +454,12 @@ def promote_stable_releases(rows, tags):
     for name, sha in index.items():
         if not re.match(r"v?\d", name):
             continue
-        parsed = version(name)
+        # A tag we cannot parse can never be promotion evidence; skip it
+        # instead of failing the repository's whole acquisition.
+        try:
+            parsed = version(name)
+        except DiscoveryError:
+            continue
         if parsed.is_prerelease or parsed.is_devrelease or parsed.local:
             continue
         stable.setdefault((parsed.epoch, parsed.major, parsed.minor), []).append(
