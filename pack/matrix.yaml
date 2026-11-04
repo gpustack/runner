@@ -127,8 +127,8 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.32.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.32.0"
+      - "VLLM_VERSION=0.33.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm72"
   ## AMD ROCm 7.2.1 - SGLang 0.5.23 (rocm720-mi30x)
   ##
   - backend: "rocm"
@@ -152,8 +152,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.3"
-      - "VLLM_VERSION=0.32.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.32.0-ubuntu2404"
+      - "VLLM_VERSION=0.33.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.33.0"
   ## NVIDIA CUDA 13.0.3 - SGLang 0.5.22
   ## (upstream publishes no cu129 image for 0.5.22, so only the cu130 rule remains)
   ##
@@ -164,23 +164,12 @@ rules:
       - "CUDA_VERSION=13.0.3"
       - "SGLANG_VERSION=0.5.23"
       - "SGLANG_BASE_IMAGE=lmsysorg/sglang:v0.5.23-cu130"
-  ## NVIDIA CUDA 12.9.1
-  ## The upstream cu129 image pairs torch 2.13.0+cu129 with the 12.9 toolkit, but
-  ## bundles a CUDA 13-built torchcodec that crashes `vllm serve` at import
-  ## (vllm-project/vllm#60406); VLLM_TORCHCODEC_VERSION replaces it with the CPU
-  ## build —— see pack/cuda/Dockerfile.vllm. LMCache 0.5.x is unaffected by
-  ## upstream's cu12 lmcache==0.4.4 pin (kv_connectors_cu12.txt), which exists
-  ## because the 0.5.x PyPI wheels declare CUDA 13 dependencies; we compile
-  ## LMCache from source against the base's own torch instead.
+  ## NVIDIA CUDA 12.9.1 (retired at vLLM 0.33.0)
+  ## vLLM 0.33.0 ships CUDA 13.0-only wheels and images; the cu129 wheels and
+  ## the -cu129 / -cu129-ubuntu2404 tags are no longer published
+  ## (vllm-project/vllm#62575). Re-add this rule when upstream ships a cu129
+  ## image for a supported release again.
   ##
-  - backend: "cuda"
-    services:
-      - "vllm"
-    args:
-      - "CUDA_VERSION=12.9.1"
-      - "VLLM_VERSION=0.32.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.32.0-cu129-ubuntu2404"
-      - "VLLM_TORCHCODEC_VERSION=0.17.0"
 
   ## VoxBox 0.0.21 retains CUDA 12.8.1 and Torch 2.7.1's cu128 wheels.
   - backend: "cuda"
