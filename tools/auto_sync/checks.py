@@ -653,18 +653,21 @@ def _lmcache_versions(repo, rules):
     return versions
 
 
-def _check_group(base, work, group, sources, scratch, env, protected, ascend_pairs):
-    previous_tree = _git(env, work, "write-tree").strip()
-    paths = patch_paths(group["patch"], group["rows"])
-    for path in paths:
-        allowed_path(path, group["rows"])
-        _safe_file(work, path)
-    before_matrix = _matrix(work, env)
-    before_configs = _configurations(work, before_matrix)
-    before_support = _safe_file(work, "docs/support-records.md").read_text()
-    before_lmcache = _lmcache_versions(work, before_matrix)
-    _git(env, work, "apply", "--check", "--whitespace=error", "-", text=group["patch"])
-    _git(env, work, "apply", "--whitespace=error", "-", text=group["patch"])
+def check_applied_group(
+    *,
+    base,
+    work,
+    group,
+    paths,
+    previous_tree,
+    before_matrix,
+    before_configs,
+    before_support,
+    before_lmcache,
+    protected,
+    ascend_pairs,
+    env,
+):
     # New files are untracked until staged in this disposable clone.
     _git(env, work, "add", "--", *paths)
     actual = _git(
@@ -715,6 +718,34 @@ def _check_group(base, work, group, sources, scratch, env, protected, ascend_pai
     require(
         after_lmcache == before_lmcache or len(after_lmcache) <= 1,
         "LMCache cross-image protocol pins diverge",
+    )
+
+
+def _check_group(base, work, group, sources, scratch, env, protected, ascend_pairs):
+    previous_tree = _git(env, work, "write-tree").strip()
+    paths = patch_paths(group["patch"], group["rows"])
+    for path in paths:
+        allowed_path(path, group["rows"])
+        _safe_file(work, path)
+    before_matrix = _matrix(work, env)
+    before_configs = _configurations(work, before_matrix)
+    before_support = _safe_file(work, "docs/support-records.md").read_text()
+    before_lmcache = _lmcache_versions(work, before_matrix)
+    _git(env, work, "apply", "--check", "--whitespace=error", "-", text=group["patch"])
+    _git(env, work, "apply", "--whitespace=error", "-", text=group["patch"])
+    check_applied_group(
+        base=base,
+        work=work,
+        group=group,
+        paths=paths,
+        previous_tree=previous_tree,
+        before_matrix=before_matrix,
+        before_configs=before_configs,
+        before_support=before_support,
+        before_lmcache=before_lmcache,
+        protected=protected,
+        ascend_pairs=ascend_pairs,
+        env=env,
     )
     _check_patch_dispositions(base, work, paths, group)
     return {

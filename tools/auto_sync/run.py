@@ -1300,6 +1300,8 @@ def _check_group_patches(
     data: dict,
     scratch: Path,
     env: dict,
+    *,
+    ascend_pairs: dict | None = None,
 ) -> dict:
     """
     Apply every checkable ready group's patch to a fresh frozen-head clone.
@@ -1329,19 +1331,43 @@ def _check_group_patches(
     base = scratch / "patch-check-base"
     shutil.rmtree(base, ignore_errors=True)
     _clone(repo, identity["head_sha"], base, env)
+    protected = []
+    if any(
+        all(
+            "variant" in r and "runtime" in r and "platform" in r
+            for r in groups[i]["rows"]
+        )
+        for i in checkable
+    ):
+        default_sha = identity.get("default_sha", identity["head_sha"])
+        protected = discovery.parse_support(
+            _git(env, repo, "show", f"{default_sha}:docs/support-records.md"),
+            require_explicit=True,
+        )
     applied = set()
     while checkable - applied:
         progressed = False
         for identifier in sorted(checkable - applied):
             if not set(groups[identifier]["depends_on"]) <= applied:
                 continue
-            rows = groups[identifier]["rows"]
+            group = groups[identifier]
+            rows = group["rows"]
             check_matrix = all(
                 "variant" in r and "runtime" in r and "platform" in r for r in rows
             )
             if check_matrix:
+                previous_tree = _git(env, work, "write-tree").strip()
+                paths = proposal.patch_paths(group["patch"], rows)
+                for path in paths:
+                    proposal.allowed_path(path, rows)
+                    checks._safe_file(work, path)  # noqa: SLF001
                 before_matrix = checks._matrix(work, env)  # noqa: SLF001 - research reuses validation matrix gates so uncovered combinations enter repair.
                 before_configs = checks._configurations(work, before_matrix)  # noqa: SLF001
+                before_support = checks._safe_file(  # noqa: SLF001
+                    work,
+                    "docs/support-records.md",
+                ).read_text()
+                before_lmcache = checks._lmcache_versions(work, before_matrix)  # noqa: SLF001
             try:
                 _git(
                     env,
@@ -1349,7 +1375,7 @@ def _check_group_patches(
                     "apply",
                     "--whitespace=error",
                     "-",
-                    text=groups[identifier]["patch"],
+                    text=group["patch"],
                 )
             except proposal.ProposalError as exc:
                 msg = (
@@ -1358,16 +1384,26 @@ def _check_group_patches(
                 raise proposal.ProposalError(msg) from None
             applied.add(identifier)
             progressed = True
-            _check_dispositions(base, work, groups[identifier])
+            _check_dispositions(base, work, group)
             if check_matrix:
-                after_matrix = checks._matrix(work, env)  # noqa: SLF001
-                checks._check_matrix_scope(before_matrix, after_matrix, rows)  # noqa: SLF001
-                checks._changed_configurations(  # noqa: SLF001
-                    before_configs,
-                    checks._configurations(work, after_matrix),  # noqa: SLF001
-                    rows,
-                    proposal.patch_paths(groups[identifier]["patch"], rows),
-                )
+                try:
+                    checks.check_applied_group(
+                        base=base,
+                        work=work,
+                        group=group,
+                        paths=paths,
+                        previous_tree=previous_tree,
+                        before_matrix=before_matrix,
+                        before_configs=before_configs,
+                        before_support=before_support,
+                        before_lmcache=before_lmcache,
+                        protected=protected,
+                        ascend_pairs=ascend_pairs or {},
+                        env=env,
+                    )
+                except proposal.ProposalError as exc:
+                    msg = f"group {identifier}: {exc}"
+                    raise proposal.ProposalError(msg) from None
         proposal.require(progressed, "group patch order is unresolvable")
     return data
 
@@ -1691,7 +1727,14 @@ def _research(args, scratch):
         )
         _check_patch_versions(bound)
         _check_manifests(bound, env)
-        return _check_group_patches(args.repo, identity, bound, scratch, env)
+        return _check_group_patches(
+            args.repo,
+            identity,
+            bound,
+            scratch,
+            env,
+            ascend_pairs=_pair(releases.get(discovery.ASCEND, [])),
+        )
 
     try:
         analysis_workspace = _agent_workspace(
