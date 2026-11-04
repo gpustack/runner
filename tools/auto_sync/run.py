@@ -1388,18 +1388,18 @@ def _check_group_patches(
             if check_matrix:
                 try:
                     checks.check_applied_group(
-                        base,
-                        work,
-                        group,
-                        paths,
-                        previous_tree,
-                        before_matrix,
-                        before_configs,
-                        before_support,
-                        before_lmcache,
-                        protected,
-                        ascend_pairs or {},
-                        env,
+                        base=base,
+                        work=work,
+                        group=group,
+                        paths=paths,
+                        previous_tree=previous_tree,
+                        before_matrix=before_matrix,
+                        before_configs=before_configs,
+                        before_support=before_support,
+                        before_lmcache=before_lmcache,
+                        protected=protected,
+                        ascend_pairs=ascend_pairs or {},
+                        env=env,
                     )
                 except proposal.ProposalError as exc:
                     msg = f"group {identifier}: {exc}"

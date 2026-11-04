@@ -654,6 +654,7 @@ def _lmcache_versions(repo, rules):
 
 
 def check_applied_group(
+    *,
     base,
     work,
     group,
@@ -733,18 +734,18 @@ def _check_group(base, work, group, sources, scratch, env, protected, ascend_pai
     _git(env, work, "apply", "--check", "--whitespace=error", "-", text=group["patch"])
     _git(env, work, "apply", "--whitespace=error", "-", text=group["patch"])
     check_applied_group(
-        base,
-        work,
-        group,
-        paths,
-        previous_tree,
-        before_matrix,
-        before_configs,
-        before_support,
-        before_lmcache,
-        protected,
-        ascend_pairs,
-        env,
+        base=base,
+        work=work,
+        group=group,
+        paths=paths,
+        previous_tree=previous_tree,
+        before_matrix=before_matrix,
+        before_configs=before_configs,
+        before_support=before_support,
+        before_lmcache=before_lmcache,
+        protected=protected,
+        ascend_pairs=ascend_pairs,
+        env=env,
     )
     _check_patch_dispositions(base, work, paths, group)
     return {
