@@ -34,7 +34,7 @@ The checker is advisory: if it cannot run or its seed is missing, reply normally
 Use tests/auto_sync/fixtures/proposals/ready.json for field shape only; supply your own identity and evidence.
 Group IDs contain only letters, digits, underscores and hyphens.
 Do not hand-escape diffs or create commits and rebases to split groups.
-Groups whose patches touch the same file are not independent: declare depends_on for the later group and generate its patch against the tree with the dependency's patch already applied.
+Groups whose patches touch the same file are not independent: declare depends_on for the later group and generate its patch against the tree with the dependency's patch already applied, with each group's patch carrying its own pack/matrix.yaml and docs/support-records.md changes.
 Check ordered component patches with git apply --check before editing recipes; fuzzy patch checks are insufficient.
 Assess all six subscriptions and retain independent outcomes.
 A candidate references only groups that contain its subscription's rows, every group is referenced by the candidate of each row's subscription, and the candidate status is its strongest group status in the order ready, failed, blocked, unchanged; a candidate without groups is never ready.

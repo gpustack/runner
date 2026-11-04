@@ -4709,6 +4709,74 @@ def test_proposal_repair_rewrites_a_rejected_patch_file(
     assert "patch_file" not in saved["groups"][0]
 
 
+def test_proposal_stage_missing_support_record_in_group_patch_is_repaired(
+    scenario,
+    tmp_path,
+    monkeypatch,
+):
+    # The run-41802824017 failure: when splitting patches across groups, a
+    # group patch that omits its docs/support-records.md prepared record must
+    # fail in research and enter proposal-repair-1 instead of reaching the
+    # downstream validation job where no repair exists.
+    prepared = prepare(scenario, tmp_path)
+    context = json.loads((prepared / "context.json").read_text())
+    monkeypatch.setenv("AUTO_SYNC_LLM_URL", "http://127.0.0.1:1/v1")
+    monkeypatch.setenv("AUTO_SYNC_LLM_MODEL", "fixture-model")
+    monkeypatch.setenv("AUTO_SYNC_LLM_AUTH_TOKEN", "fake-token")
+    draft = proposal(scenario, context)
+    patch = draft["groups"][0].pop("patch")
+    draft["groups"][0]["patch_file"] = "patches/cuda-vllm.patch"
+    without_support = patch.split("diff --git a/docs/support-records.md", 1)[0]
+    calls = []
+
+    def phase(_config, **kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            return ProcessResult(
+                0,
+                agent_stream(analysis(scenario, context)),
+                "",
+                False,
+                10,
+            )
+        target = Path(kwargs["workspace"]) / draft["groups"][0]["patch_file"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if len(calls) == 2:
+            target.write_text(without_support)
+        else:
+            target.write_text(patch)
+        return ProcessResult(0, agent_stream(draft), "", False, 10)
+
+    monkeypatch.setattr(run.agent, "run_agent", phase)
+    output = tmp_path / "research"
+    assert (
+        invoke(
+            "research",
+            "--repo",
+            scenario[0],
+            "--bundle",
+            prepared,
+            "--output",
+            output,
+        )
+        == 0
+    )
+    assert len(calls) == 3
+    repair_payload = json.loads(prompt_payload(calls[2]["prompt"]))
+    assert (
+        "group cuda-vllm: changed configuration lacks a matching prepared support record"
+        in repair_payload["validation_error"]
+    )
+    diagnostic = json.loads((output / "diagnostics.json").read_text())
+    assert [phase["name"] for phase in diagnostic["phases"]] == [
+        "analysis",
+        "proposal",
+        "proposal-repair-1",
+    ]
+    saved = json.loads((output / "proposal.json").read_text())
+    assert saved["groups"][0]["patch"] == patch
+
+
 @pytest.mark.parametrize("breaker", [broken_patch, whitespace_patch])
 def test_inapplicable_patch_fails_research_without_repair_rounds(
     scenario,
