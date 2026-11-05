@@ -45,7 +45,7 @@ def test_rocm_ray_resolution_preserves_hip_cupy(tmp_path, add_cuda_extra):
     _wheel(tmp_path, "grpcio", "1.78.0")
     _wheel(tmp_path, "colorful", "0.6.0")
 
-    recipe = (ROOT / "pack/rocm/Dockerfile.vllm").read_text()
+    recipe = (ROOT / "pack/rocm/Dockerfile.vllm").read_text(encoding="utf-8")
     block = recipe.split("## Install Ray\n", 1)[1].split("## Install LMCache\n", 1)[0]
     version = re.search(r"RAY_VERSION=([^\s]+)", block).group(1)
     requirements = block.split("cat <<EOT >/tmp/requirements.txt\n", 1)[1].split(
