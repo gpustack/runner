@@ -7,11 +7,11 @@
 
 ## Historical support tables
 
-The tables below retain previously documented support information.
-They do not specify CPU platforms or exact accelerator plugin versions.
-In particular, an engine followed by `(rc)` has an unknown plugin identity.
-It cannot establish support for a specific Ascend prerelease plugin.
-The generated catalog can provide the measured plugin version when its dependency metadata is present.
+The tables below list published engine versions alongside historical support information.
+CPU platforms and exact accelerator plugin versions belong in the
+[support records](support-records.md) and measured catalog.
+For CANN vLLM, an `(rc)` label identifies a prerelease vLLM-Ascend plugin.
+Historical entries without matching records do not establish an exact plugin identity.
 
 When a version loses support, remove it from these tables rather than marking it with strikethrough or bold.
 
@@ -52,7 +52,7 @@ The following table lists the supported accelerated backends and their correspon
 
 | CUDA Version <br/> (Variant) | vLLM                                                                                                                                                                                                              | SGLang                                                                                                            | VoxBox   |
 |------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|----------|
-| 13.0                         | `0.32.0`, `0.31.0`,<br/> `0.30.0`, `0.29.0`,<br/> `0.27.1`, `0.25.1`,<br/> `0.24.0`, `0.22.1`,<br/> `0.21.0`, `0.20.2`,<br/> `0.19.1`, `0.18.1`                                                                                                      | `0.5.23`, `0.5.22`, <br/>`0.5.21`, `0.5.18`, <br/>`0.5.15.post1`, `0.5.14`, <br/>`0.5.12.post1`                                                           |          |
+| 13.0                         | `0.33.0`, `0.32.0`,<br/> `0.31.0`, `0.30.0`,<br/> `0.29.0`, `0.27.1`,<br/> `0.25.1`, `0.24.0`,<br/> `0.22.1`, `0.21.0`,<br/> `0.20.2`, `0.19.1`,<br/> `0.18.1`                                                    | `0.5.23`, `0.5.22`, <br/>`0.5.21`, `0.5.18`, <br/>`0.5.15.post1`, `0.5.14`, <br/>`0.5.12.post1`                   |          |
 | 12.9                         | `0.32.0`, `0.31.0`,<br/> `0.29.0`, `0.27.1`,<br/> `0.25.1`, `0.24.0`,<br/> `0.22.1`, `0.21.0`,<br/> `0.20.2`, `0.19.1`,<br/> `0.18.1`, `0.17.1`,<br/> `0.16.0`, `0.15.1`,<br/> `0.14.1`, `0.13.0`,<br/> `0.12.0`, `0.11.2`                 | `0.5.18`, `0.5.15.post1`,<br/> `0.5.14`, `0.5.12.post1`, <br/>`0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2` |          |
 | 12.8                         | `0.17.1`, `0.16.0`, <br/>`0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`                                                                                                                     | `0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2`, <br/>`0.5.5.post3`                                           | `0.0.21` |
 | 12.6                         | `0.15.1`, `0.14.1`, <br/>`0.13.0`, `0.12.0`, <br/>`0.11.2`, `0.10.2`                                                                                                                                              |                                                                                                                   | `0.0.21` |
@@ -92,7 +92,8 @@ The following table lists the supported accelerated backends and their correspon
 
 | ROCm Version <br/> (Variant) | vLLM                                                                                                          | SGLang                                                    |
 |------------------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| 7.2                          | `0.32.0`, `0.31.0`,<br/> `0.30.0`, `0.29.0`,<br/> `0.27.1`, `0.25.1`,<br/> `0.24.0`, `0.22.1`,<br/> `0.21.0`, `0.20.2`,<br/> `0.19.1`                 | `0.5.23`, `0.5.22`, <br/>`0.5.21`, `0.5.18`, <br/>`0.5.15.post1`, `0.5.14`, <br/>`0.5.12.post1`   |
+| 10.0                         | `0.33.0`                                                                                                      |                                                           |
+| 7.2                          | `0.33.0`, `0.32.0`,<br/> `0.31.0`, `0.30.0`,<br/> `0.29.0`, `0.27.1`,<br/> `0.25.1`, `0.24.0`,<br/> `0.22.1`, `0.21.0`,<br/> `0.20.2`, `0.19.1` | `0.5.23`, `0.5.22`, <br/>`0.5.21`, `0.5.18`, <br/>`0.5.15.post1`, `0.5.14`, <br/>`0.5.12.post1` |
 | 7.1                          | `0.17.1`                                                                                                      |                                                           |
 | 7.0                          | `0.18.1`, `0.16.0`,<br/> `0.15.1`, `0.14.1`,<br/> `0.13.0`, `0.12.0`,<br/> `0.11.2`                           | `0.5.9`, `0.5.8.post1`, <br/>`0.5.7`, `0.5.6.post2`       |
 | 6.4                          | `0.16.0`, `0.15.1`,<br/> `0.14.1`, `0.13.0`,<br/> `0.12.0`, `0.11.2`,<br/> `0.10.2`                           | `0.5.8.post1`, `0.5.7`, <br/>`0.5.6.post2`, `0.5.5.post3` |
