@@ -58,6 +58,7 @@ def test_stack_accepts_local_rocm_versions_without_equating_hip_and_sdk():
         ("rocm-sdk-core", "10.1.0"),
         ("torch", "2.14.0+rocm10.0.0"),
         ("torch", "2.13.0+rocm7.2"),
+        ("torch", "2.13.0+rocm10.0"),
         ("vllm", "0.32.0+rocm100"),
         ("lmcache", "0.5.7"),
         ("mooncake-transfer-engine-rocm", "0.3.13"),
@@ -111,6 +112,43 @@ def test_sdk_accepts_devel_compiler_symlink_to_core(sdk):
     compiler.unlink()
     compiler.symlink_to(core / "hipcc")
     check.check_sdk()
+
+
+@pytest.mark.parametrize("name", ["ROCM_PATH", "ROCM_HOME", "HIP_PATH"])
+@pytest.mark.parametrize("value", [None, ""])
+@pytest.mark.usefixtures("sdk")
+def test_sdk_rejects_missing_or_empty_environment(monkeypatch, name, value):
+    if value is None:
+        monkeypatch.delenv(name)
+    else:
+        monkeypatch.setenv(name, value)
+    with pytest.raises(ValueError, match=f"{name} is not set"):
+        check.check_sdk()
+
+
+@pytest.mark.usefixtures("sdk")
+def test_empty_sdk_paths_cannot_adopt_current_directory(tmp_path, monkeypatch):
+    compiler = tmp_path / "unrelated/hipcc"
+    compiler.parent.mkdir()
+    compiler.touch()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(check.shutil, "which", lambda _: str(compiler))
+    for name in ("ROCM_PATH", "ROCM_HOME", "HIP_PATH"):
+        monkeypatch.setenv(name, "")
+    with pytest.raises(ValueError, match="ROCM_PATH is not set"):
+        check.check_sdk()
+
+
+def test_sdk_environment_must_reference_directories(sdk, tmp_path, monkeypatch):
+    compiler = sdk.parent / "_rocm_sdk_core/hipcc"
+    compiler.touch()
+    not_directory = tmp_path / "not-a-directory"
+    not_directory.touch()
+    monkeypatch.setattr(check.shutil, "which", lambda _: str(compiler))
+    for name in ("ROCM_PATH", "ROCM_HOME", "HIP_PATH"):
+        monkeypatch.setenv(name, str(not_directory))
+    with pytest.raises(ValueError, match="ROCM_PATH is not a directory"):
+        check.check_sdk()
 
 
 @pytest.mark.parametrize("name", ["ROCM_HOME", "HIP_PATH"])

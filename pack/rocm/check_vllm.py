@@ -34,10 +34,22 @@ def check_versions(expected: dict[str, str], runtime: str) -> None:
         raise ValueError(msg)
 
 
+def sdk_directory(name: str) -> Path:
+    value = os.environ.get(name)
+    if not value:
+        msg = f"{name} is not set"
+        raise ValueError(msg)
+    path = Path(value).resolve(strict=True)
+    if not path.is_dir():
+        msg = f"{name} is not a directory: {value}"
+        raise ValueError(msg)
+    return path
+
+
 def check_sdk() -> None:
-    root = Path(os.environ["ROCM_PATH"]).resolve(strict=True)
+    root = sdk_directory("ROCM_PATH")
     for name in ("ROCM_HOME", "HIP_PATH"):
-        if Path(os.environ[name]).resolve(strict=True) != root:
+        if sdk_directory(name) != root:
             msg = f"{name} differs from the base image's ROCM_PATH"
             raise ValueError(msg)
     # TheRock ships hipcc in core; devel/bin may link to that executable.
