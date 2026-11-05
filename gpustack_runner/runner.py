@@ -483,6 +483,14 @@ class ServicePlatformedRunner:
     The Docker image name.
     """
 
+    dependencies: dict[str, str] | None = field(
+        default=None,
+        metadata={"dataclasses_json": {"exclude": lambda v: v is None}},
+    )
+    """
+    The measured package versions for this platform's image, or None if unknown.
+    """
+
 
 @dataclass_json
 @dataclass
@@ -771,6 +779,7 @@ def build_backend_runners(
         platformed_runner = ServicePlatformedRunner(
             platform=runner.platform,
             docker_image=runner.docker_image,
+            dependencies=runner.dependencies,
         )
         service_version_entry.platforms.append(platformed_runner)
 
@@ -949,6 +958,7 @@ def build_service_runners(
         platformed_runner = ServicePlatformedRunner(
             platform=runner.platform,
             docker_image=runner.docker_image,
+            dependencies=runner.dependencies,
         )
         variant_entry.platforms.append(platformed_runner)
 

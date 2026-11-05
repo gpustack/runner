@@ -11,8 +11,11 @@ from gpustack_runner import (
 )
 from gpustack_runner.runner import (
     Runner,
+    ServicePlatformedRunner,
     _match_dependencies,
     _resolve_dependency_conditions,
+    build_backend_runners,
+    build_service_runners,
     version_sort_key,
 )
 
@@ -698,3 +701,55 @@ def test_docker_image(name, image, expected):
     assert str(actual) == image, (
         f"case {name} expected {image}, but got {actual!s} for image: {image}"
     )
+
+
+def test_platformed_runner_defaults_to_unknown_dependencies():
+    runner = ServicePlatformedRunner(platform="linux/arm64", docker_image="image")
+    assert runner.dependencies is None
+    assert "dependencies" not in runner.to_dict()
+
+
+@pytest.mark.parametrize("builder", [build_backend_runners, build_service_runners])
+@pytest.mark.parametrize("dependencies", [None, {}, {"sglang-router": "0.3.2"}])
+def test_build_runners_preserves_platform_dependencies(builder, dependencies):
+    runners = [
+        Runner(
+            backend="cann",
+            backend_version="9.0",
+            original_backend_version="9.0.0",
+            backend_variant="910b",
+            service="sglang",
+            service_version="0.5.20",
+            platform=platform,
+            docker_image=f"image-{platform}",
+            dependencies=metadata,
+        )
+        for platform, metadata in [
+            ("linux/arm64", dependencies),
+            ("linux/amd64", {"sglang-router": "other-platform"}),
+        ]
+    ]
+
+    def platforms(grouped):
+        version = grouped[0].versions[0]
+        if builder is build_backend_runners:
+            return version.variants[0].services[0].versions[0].platforms
+        return version.backends[0].versions[0].variants[0].platforms
+
+    selected = {row.platform: row for row in platforms(builder(runners))}
+    assert selected["linux/arm64"].dependencies == dependencies
+    assert selected["linux/amd64"].dependencies == {"sglang-router": "other-platform"}
+    serialized = builder(runners, todict=True)
+    if builder is build_backend_runners:
+        rows = serialized[0]["versions"][0]["variants"][0]["services"][0]["versions"][
+            0
+        ]["platforms"]
+    else:
+        rows = serialized[0]["versions"][0]["backends"][0]["versions"][0]["variants"][
+            0
+        ]["platforms"]
+    actual = next(row for row in rows if row["platform"] == "linux/arm64")
+    if dependencies is None:
+        assert "dependencies" not in actual
+    else:
+        assert actual["dependencies"] == dependencies

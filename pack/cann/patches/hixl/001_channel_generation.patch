@@ -1,0 +1,13 @@
+--- a/src/hixl/cs/hixl_cs_server.cc
++++ b/src/hixl/cs/hixl_cs_server.cc
+@@ -12,2 +12,3 @@
+ #include <atomic>
++#include <chrono>
+ #include <cinttypes>
+@@ -41,2 +42,5 @@
+-std::atomic<uint64_t> g_next_server_channel_index{0UL};
++// Keep channel names distinct when a peer process restarts while clients survive.
++std::atomic<uint64_t> g_next_server_channel_index{
++    static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
++        std::chrono::system_clock::now().time_since_epoch()).count())};
+ 

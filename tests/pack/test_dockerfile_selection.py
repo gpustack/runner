@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -389,3 +391,197 @@ def test_build_entry_point_selection(tmp_path, entry_point, operation, recipe):
         assert result.returncode != 0
         assert "Dockerfile not found" in result.stderr
         assert "docker_file=" not in exported
+
+
+@pytest.fixture
+def ascend_mooncake_lookup(tmp_path):
+    if shutil.which("patch") is None:
+        pytest.skip("patch utility is required for this test")
+    # Freeze the upstream port lookup so the packaging patch runs without NPU imports.
+    # vllm-ascend 8fde6d4e335fe300e2b949aab0e31659cce0811d.
+    source = """class MooncakeConnectorWorker:
+    def _get_remote_host_info_by_port(
+        self,
+        base_port: int,
+        remote_handshake_port: int,
+        remote_host: str,
+        remote_engine_id: str,
+        remote_multi_nodes_meta_mapping: dict,
+    ):
+        if remote_multi_nodes_meta_mapping is None:
+            return remote_host, remote_engine_id
+
+        kv_port = self.vllm_config.kv_transfer_config.kv_port
+        rank = str(remote_handshake_port - kv_port)
+        info = remote_multi_nodes_meta_mapping.get(rank)
+        if info is None:
+            rank = str(remote_handshake_port - base_port)
+            info = remote_multi_nodes_meta_mapping.get(rank)
+        if info is None:
+            return remote_host, remote_engine_id
+        return info.get("host", remote_host), info.get("engine_id", remote_engine_id)
+"""
+    path = tmp_path / "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py"
+    path.parent.mkdir(parents=True)
+    path.write_text(source)
+    patch = PACK_DIR / "cann/patches/vllm_ascend/001_remote_host_port.patch"
+    result = subprocess.run(  # noqa: S603
+        ["patch", "--batch", "--fuzz=0", "-p1", "-i", str(patch)],  # noqa: S607
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    namespace = {}
+    exec(compile(ast.parse(path.read_text()), str(path), "exec"), namespace)  # noqa: S102
+    worker = namespace["MooncakeConnectorWorker"]()
+    worker.vllm_config = SimpleNamespace(
+        kv_transfer_config=SimpleNamespace(kv_port=44000),
+    )
+    return worker._get_remote_host_info_by_port  # noqa: SLF001
+
+
+@pytest.mark.parametrize("dp_rank", [0, 1])
+@pytest.mark.parametrize("tp_rank", range(4))
+def test_ascend_mooncake_resolves_remote_worker_by_absolute_port(
+    ascend_mooncake_lookup,
+    dp_rank,
+    tp_rank,
+):
+    # The sender's offsets include DP, while the receiver owns a different port band.
+    offset = dp_rank * 4
+    mapping = {
+        str(offset + tp): {
+            "host": "head" if tp < 2 else "headless",
+            "engine_id": f"p{dp_rank}",
+            "handshake_port": 43000 + offset + tp,
+        }
+        for tp in range(4)
+    }
+    assert ascend_mooncake_lookup(
+        43000 + offset,
+        43000 + offset + tp_rank,
+        "head",
+        "fallback",
+        mapping,
+    ) == ("head" if tp_rank < 2 else "headless", f"p{dp_rank}")
+
+
+@pytest.mark.parametrize(
+    "mapping,base,port,expected",
+    [
+        (None, 43000, 43002, ("head", "fallback")),
+        ({}, 43000, 43002, ("head", "fallback")),
+        ({"2": {"host": "legacy", "engine_id": "p0"}}, 43000, 43002, ("legacy", "p0")),
+        (
+            {"2": {"host": "legacy-local", "engine_id": "p1"}},
+            43000,
+            44002,
+            ("legacy-local", "p1"),
+        ),
+        (
+            {
+                "6": {"handshake_port": 43006, "host": "explicit", "engine_id": "p1"},
+                "2": {"host": "wrong", "engine_id": "wrong"},
+            },
+            43004,
+            43006,
+            ("explicit", "p1"),
+        ),
+        ({"6": {"handshake_port": 43006}}, 43004, 43006, ("head", "fallback")),
+        (
+            {
+                "6": {"handshake_port": 43006, "host": "ambiguous"},
+                "7": {"handshake_port": 43006, "host": "ambiguous2"},
+            },
+            43004,
+            43006,
+            ("head", "fallback"),
+        ),
+    ],
+)
+def test_ascend_mooncake_preserves_legacy_port_lookup(
+    ascend_mooncake_lookup,
+    mapping,
+    base,
+    port,
+    expected,
+):
+    assert ascend_mooncake_lookup(base, port, "head", "fallback", mapping) == expected
+
+
+def test_ascend_hixl_channel_ids_survive_server_restart(tmp_path):
+    compiler = shutil.which("c++")
+    if compiler is None or shutil.which("patch") is None:
+        pytest.skip("C++ compiler and patch utility are required for this test")
+    # HIXL v9.2.0, 60dbe9d1d7d9a7eef04bc3dbf84edbad2188230a.
+    source = tmp_path / "src/hixl/cs/hixl_cs_server.cc"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "\n" * 11
+        + "#include <atomic>\n#include <cinttypes>\n#include <iostream>\n"
+        + "\n" * 26
+        + "std::atomic<uint64_t> g_next_server_channel_index{0UL};\n\n"
+        "int main() {\n"
+        '  std::cout << g_next_server_channel_index.fetch_add(1U) << " "\n'
+        "            << g_next_server_channel_index.fetch_add(1U);\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    executable = tmp_path / "channels"
+
+    def run_processes():
+        subprocess.run(  # noqa: S603
+            [compiler, "-std=c++17", str(source), "-o", str(executable)],
+            check=True,
+            capture_output=True,
+        )
+        return [
+            tuple(
+                map(
+                    int,
+                    subprocess.check_output([str(executable)], text=True).split(),  # noqa: S603
+                ),
+            )
+            for _ in range(2)
+        ]
+
+    assert run_processes() == [(0, 1), (0, 1)]
+    patch = PACK_DIR / "cann/patches/hixl/001_channel_generation.patch"
+    subprocess.run(  # noqa: S603
+        ["patch", "--batch", "--fuzz=0", "-p1", "-i", str(patch)],  # noqa: S607
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    generations = run_processes()
+    assert all(first > 0 and second == first + 1 for first, second in generations)
+    assert len({value for pair in generations for value in pair}) == 4
+
+
+@pytest.mark.parametrize("architecture,skipped", [("310p", True), ("910b", False)])
+def test_hixl_host_build_skips_architecture_without_mooncake(
+    tmp_path,
+    architecture,
+    skipped,
+):
+    dockerfile = (PACK_DIR / "cann/Dockerfile.vllm").read_text()
+    stage = dockerfile.split("FROM vllm-build AS vllm-build-hixl\n", 1)[1]
+    script = stage.split("<<EOF\n", 1)[1].split("\nEOF", 1)[0]
+    output = tmp_path / "output"
+    script = script.replace("/output", str(output)).replace(
+        "/tmp/hixl",  # noqa: S108 -- replace the Docker build path for isolation
+        str(tmp_path / "hixl"),
+    )
+    # No source download or CANN installation is allowed in this recipe check.
+    script = "source() { :; }; curl() { return 87; };\n" + script
+    result = subprocess.run(  # noqa: S603
+        ["bash", "-eo", "pipefail", "-c", script],  # noqa: S607
+        env={**os.environ, "CANN_ARCHS": architecture},
+        capture_output=True,
+        check=False,
+    )
+    assert (result.returncode == 0) is skipped
+    assert output.is_dir()
+    assert not list(output.iterdir())
