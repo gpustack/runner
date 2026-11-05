@@ -290,6 +290,26 @@ def test_repository_matrix_expands_every_supported_pair(tmp_path, service):
     } == expected
 
 
+def test_rocm_vllm_keeps_legacy_and_therock_runtime_lines(tmp_path):
+    result, output = _expand(PACK_DIR, tmp_path, backend="rocm", service="vllm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    jobs = {job["original_backend_version"]: job for job in output["build_jobs"]}
+    assert set(jobs) == {"7.2.3", "10.0.0"}
+    for runtime, suffix in [("7.2.3", "rocm72"), ("10.0.0", "rocm100")]:
+        job = jobs[runtime]
+        assert job["platform"] == "linux/amd64"
+        assert job["backend_variant"] == ""
+        assert (
+            job["tag"] == f"rocm{job['backend_version']}-vllm{job['service_version']}"
+        )
+        args = dict(arg.split("=", 1) for arg in job["args"])
+        assert args["VLLM_BASE_IMAGE"] == (
+            f"vllm/vllm-openai-rocm:v{job['service_version']}-{suffix}"
+        )
+        assert output["manifest_jobs"][job["tag"]] == [job["platform_tag"]]
+
+
 @pytest.mark.parametrize(
     "path",
     ["Makefile", "pack/expand_matrix.sh", ".github/workflows/pack.yml"],

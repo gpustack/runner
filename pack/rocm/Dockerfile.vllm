@@ -10,6 +10,11 @@
 ##   mooncake-transfer-engine release notes.
 ## - VLLM_OMNI_COMMIT: prefer the omni release aligned with the new vllm;
 ##   when none exists, pin a main-branch commit that declares it.
+## - Re-check both ROCm runtime lines in the matrix. ROCm 10 uses TheRock's SDK
+##   environment and base-image GPU targets; do not replace them with /opt/rocm
+##   or the legacy compiler targets. Preserve its final-image loading checks.
+## - CuPy and ONNX Runtime carry legacy ROCm wheel names. Check their native
+##   libraries against the selected SDK; do not infer ABI support from names.
 ARG PYTHON_VERSION=3.12
 ARG CMAKE_MAX_JOBS
 ARG ROCM_VERSION=7.2.3
@@ -21,8 +26,8 @@ ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ## The ROCm base ships no lmcache of its own, so it is always built from source here.
 ## Keep in sync with the CUDA and SGLang pins —— see pack/cuda/Dockerfile.vllm.
 ARG VLLM_LMCACHE_VERSION=0.5.6
-## Upstream's own HIP build —— same source and CMake options we used to compile here,
-## but produced in a clean rocm/dev-ubuntu-22.04 and smoke-tested before release.
+## Upstream's HIP wheel uses libamdhip64.so.7 and libhsa-runtime64.so.1, also
+## present in TheRock 10.0. Check loading in the final image before publication.
 ARG VLLM_MOONCAKE_VERSION=0.3.13.post1
 ARG VLLM_OMNI_COMMIT=4b63581cf6527dc5c964558650e996c0a36e027a
 
@@ -132,7 +137,8 @@ EOF
 ARG ROCM_VERSION
 ARG ROCM_ARCHS
 
-ENV ROCM_HOME="/opt/rocm" \
+## ROCm 10 provides a pip SDK in ROCM_PATH; the legacy base sets /opt/rocm.
+ENV ROCM_HOME=${ROCM_PATH:-/opt/rocm} \
     ROCM_VERSION=${ROCM_VERSION} \
     ROCM_ARCHS=${ROCM_ARCHS}
 
@@ -182,11 +188,18 @@ RUN <<EOF
         CMAKE_MAX_JOBS="4"
     fi
     LC_ROCM_ARCHS="${ROCM_ARCHS}"
+    if [[ -z "${LC_ROCM_ARCHS}" && "${ROCM_VERSION}" == 10.* ]]; then
+        LC_ROCM_ARCHS="${PYTORCH_ROCM_ARCH:?TheRock base must declare GPU targets}"
+    fi
     if [[ -z "${LC_ROCM_ARCHS}" ]]; then
         LC_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
     fi
     export MAX_JOBS="${CMAKE_MAX_JOBS}"
     export PYTORCH_ROCM_ARCH="${LC_ROCM_ARCHS}"
+    if [[ "${ROCM_VERSION}" == 10.* ]]; then
+        ## LMCache's C++ sources also pass through hipcc; set its targets directly.
+        export HIPCC_COMPILE_FLAGS_APPEND="${HIPCC_COMPILE_FLAGS_APPEND:-} --offload-arch=${LC_ROCM_ARCHS//;/ --offload-arch=}"
+    fi
     export TORCH_DONT_CHECK_COMPILER_ABI=1
     export CXX=hipcc
     export BUILD_WITH_HIP=1
@@ -250,6 +263,9 @@ RUN <<EOF
         CMAKE_MAX_JOBS="4"
     fi
     VL_ROCM_ARCHS="${ROCM_ARCHS}"
+    if [[ -z "${VL_ROCM_ARCHS}" && "${ROCM_VERSION}" == 10.* ]]; then
+        VL_ROCM_ARCHS="${PYTORCH_ROCM_ARCH:?TheRock base must declare GPU targets}"
+    fi
     if [[ -z "${VL_ROCM_ARCHS}" ]]; then
         VL_ROCM_ARCHS="gfx908;gfx90a;gfx942;gfx950;gfx1030;gfx1100;gfx1101;gfx1200;gfx1201;gfx1150;gfx1151"
     fi
@@ -437,6 +453,19 @@ EOT
 EOF
 
 ## Entrypoint
+
+## Keep the 7.2 build path intact; the new SDK must pass native loading checks.
+ARG VLLM_LMCACHE_VERSION
+RUN --mount=type=bind,source=check_vllm.py,target=/tmp/check_vllm.py <<EOF
+    if [[ "${ROCM_VERSION}" == 10.* ]]; then
+        python /tmp/check_vllm.py \
+            --runtime "${ROCM_VERSION}" \
+            --vllm "${VLLM_VERSION}" \
+            --torch "${VLLM_TORCH_VERSION}" \
+            --lmcache "${VLLM_LMCACHE_VERSION}" \
+            --mooncake "${VLLM_MOONCAKE_VERSION}"
+    fi
+EOF
 
 ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
     RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES=1 \
