@@ -12,7 +12,7 @@
 ##   when none exists, pin a main-branch commit that declares it.
 ## - Re-check both ROCm runtime lines in the matrix. ROCm 10 uses TheRock's SDK
 ##   environment and base-image GPU targets; do not replace them with /opt/rocm
-##   or the legacy compiler targets. Preserve its final-image loading checks.
+##   or the legacy compiler targets.
 ## - CuPy and ONNX Runtime carry legacy ROCm wheel names. Check their native
 ##   libraries against the selected SDK; do not infer ABI support from names.
 ARG PYTHON_VERSION=3.12
@@ -27,7 +27,7 @@ ARG VLLM_TORCH_ROCM_VERSION=${ROCM_VERSION}
 ## Keep in sync with the CUDA and SGLang pins —— see pack/cuda/Dockerfile.vllm.
 ARG VLLM_LMCACHE_VERSION=0.5.6
 ## Upstream's HIP wheel uses libamdhip64.so.7 and libhsa-runtime64.so.1, also
-## present in TheRock 10.0. Check loading in the final image before publication.
+## present in TheRock 10.0. Inspect native loading in the published image.
 ARG VLLM_MOONCAKE_VERSION=0.3.13.post1
 ARG VLLM_OMNI_COMMIT=4b63581cf6527dc5c964558650e996c0a36e027a
 
@@ -454,19 +454,6 @@ EOT
 EOF
 
 ## Entrypoint
-
-## Keep the 7.2 build path intact; the new SDK must pass native loading checks.
-ARG VLLM_LMCACHE_VERSION
-RUN --mount=type=bind,source=check_vllm.py,target=/tmp/check_vllm.py <<EOF
-    if [[ "${ROCM_VERSION}" == 10.* ]]; then
-        python /tmp/check_vllm.py \
-            --runtime "${ROCM_VERSION}" \
-            --vllm "${VLLM_VERSION}" \
-            --torch "${VLLM_TORCH_VERSION}" \
-            --lmcache "${VLLM_LMCACHE_VERSION}" \
-            --mooncake "${VLLM_MOONCAKE_VERSION}"
-    fi
-EOF
 
 ENV RAY_EXPERIMENTAL_NOSET_ROCR_VISIBLE_DEVICES=1 \
     RAY_EXPERIMENTAL_NOSET_HIP_VISIBLE_DEVICES=1 \

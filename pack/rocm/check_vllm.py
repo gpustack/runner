@@ -1,5 +1,5 @@
 """
-Reject a mixed ROCm stack before publishing a TheRock-based vLLM image.
+Inspect a published TheRock-based vLLM image for a mixed ROCm stack.
 
 These checks need no GPU. They verify package identity and native library
 loading; inference and transfers still need the target hardware.
@@ -92,11 +92,12 @@ def check_native() -> None:
         raise ValueError(msg)
     load_extensions("lmcache", extensions)
     # Provider enumeration alone does not load the provider's shared library.
+    # Import first so ORT initializes its shared provider host before dlopen.
+    onnxruntime = importlib.import_module("onnxruntime")
     load_extensions(
         "onnxruntime-rocm",
         ["onnxruntime/capi/libonnxruntime_providers_rocm.so"],
     )
-    onnxruntime = importlib.import_module("onnxruntime")
     if "ROCMExecutionProvider" not in onnxruntime.get_available_providers():
         msg = "ONNX Runtime lacks ROCMExecutionProvider"
         raise ValueError(msg)

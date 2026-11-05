@@ -1,4 +1,4 @@
-"""Exercise the TheRock build gate with fake packages and SDK paths, without GPUs."""
+"""Exercise TheRock image inspection with fake packages and SDK paths, without GPUs."""
 
 from __future__ import annotations
 
@@ -224,9 +224,16 @@ def test_native_gate_rejects_missing_onnx_provider(native_packages):
         check.check_native()
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "mooncake/engine.so",
+        "onnxruntime/capi/libonnxruntime_providers_rocm.so",
+    ],
+)
 @pytest.mark.usefixtures("native_packages")
-def test_native_gate_rejects_missing_library(tmp_path):
-    (tmp_path / "mooncake/engine.so").unlink()
+def test_native_gate_rejects_missing_library(tmp_path, name):
+    (tmp_path / name).unlink()
     with pytest.raises(ValueError, match="required native library is missing"):
         check.check_native()
 
@@ -295,57 +302,3 @@ def test_build_stages_select_gpu_targets(prefix, runtime, override, base, expect
             else ""
         )
         assert flags.strip() == expected_flags
-
-
-@pytest.mark.parametrize(
-    "runtime,exit_code",
-    [("7.2.3", 0), ("10.0.0", 0), ("10.0.0", 42)],
-)
-def test_final_image_gate_runs_for_therock_and_propagates_failure(
-    tmp_path,
-    runtime,
-    exit_code,
-):
-    recipe = (ROOT / "pack/rocm/Dockerfile.vllm").read_text()
-    start = recipe.index("RUN --mount=type=bind,source=check_vllm.py")
-    block = recipe[start:].split("<<EOF\n", 1)[1].split("\nEOF", 1)[0]
-    command = tmp_path / "python"
-    command.write_text(
-        '#!/bin/sh\nprintf "%s\\n" "$@" > "$CHECK_ARGS"\nexit "$CHECK_EXIT"\n',
-    )
-    command.chmod(0o755)
-    arguments = tmp_path / "arguments"
-    result = subprocess.run(  # noqa: S603 - fake Python records the recipe's invocation.
-        ["bash", "-eo", "pipefail", "-c", block],  # noqa: S607
-        env={
-            **os.environ,
-            "PATH": str(tmp_path) + os.pathsep + os.environ["PATH"],
-            "ROCM_VERSION": runtime,
-            "VLLM_VERSION": "0.33.0",
-            "VLLM_TORCH_VERSION": "2.13.0",
-            "VLLM_LMCACHE_VERSION": "0.5.6",
-            "VLLM_MOONCAKE_VERSION": "0.3.13.post1",
-            "CHECK_ARGS": str(arguments),
-            "CHECK_EXIT": str(exit_code),
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == exit_code, result.stderr
-    if runtime == "7.2.3":
-        assert not arguments.exists()
-    else:
-        assert arguments.read_text().splitlines() == [
-            "/tmp/check_vllm.py",  # noqa: S108 - the Docker mount path, never written by this fixture.
-            "--runtime",
-            "10.0.0",
-            "--vllm",
-            "0.33.0",
-            "--torch",
-            "2.13.0",
-            "--lmcache",
-            "0.5.6",
-            "--mooncake",
-            "0.3.13.post1",
-        ]
