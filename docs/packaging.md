@@ -177,13 +177,11 @@ the vLLM 0.33.0-aligned source pin. The Mooncake 0.3.13.post1 wheel requires
 library names. CuPy and ONNX Runtime also reference legacy ROCm library names.
 Matching names do not prove ABI compatibility.
 
-The ROCm 10 final image runs `pack/rocm/check_vllm.py` before publication. It
-rejects a replaced SDK, engine, Torch, LMCache, or Mooncake version, a compiler
-outside the selected SDK, CUDA builds of Torch or CuPy, missing native
-extensions, and unresolved native symbols. It loads the ONNX ROCm provider
-library rather than trusting provider enumeration alone. These checks do not
-run inference, device kernels, or transfers. Pack's dependency collection
-remains separate and does not import these packages.
+After Pack publishes a ROCm 10 image, inspect that digest on a Linux amd64
+Docker host. Verify actual dependency versions and native library loading
+before testing inference or transfers on the target hardware. Pack's
+dependency collection records installed package metadata; it does not
+establish GPU runtime compatibility.
 
 ## Adding a backend or service
 
