@@ -308,9 +308,10 @@ RUN <<EOF
     # Install Ray Client and Default.
     # Pinned to 2.54.0: ray 2.55 (ray-project/ray#61029) breaks distributed
     # ray.init when the driver has no co-located raylet (gpustack split containers).
+    # cgraph only adds CUDA CuPy, which overwrites the base image's HIP CuPy.
+    # Ray's graph code is included without the extra; preserve the base's CuPy.
     RAY_VERSION=2.54.0
     cat <<EOT >/tmp/requirements.txt
-ray[cgraph]==${RAY_VERSION}
 ray[client]==${RAY_VERSION}
 ray[default]==${RAY_VERSION}
 EOT
