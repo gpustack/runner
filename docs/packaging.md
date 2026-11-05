@@ -160,9 +160,8 @@ Pack collects dependencies from the final image through the central collector.
 
 ### ROCm vLLM runtime lines
 
-The vLLM matrix retains ROCm 7.2.3 and adds ROCm 10.0.0 on `linux/amd64`.
-The latter selects `vllm/vllm-openai-rocm:v0.33.0-rocm100`; its support stays
-`prepared` until Pack measures and publishes the final image.
+The vLLM matrix includes ROCm 7.2.3 and ROCm 10.0.0 on `linux/amd64`.
+The latter selects `vllm/vllm-openai-rocm:v0.33.0-rocm100`.
 
 ROCm 10 uses the TheRock pip SDK. Preserve the base image's `ROCM_PATH`,
 `HIP_PATH`, compiler path, and library paths; derive `ROCM_HOME` from that SDK
@@ -177,11 +176,13 @@ the vLLM 0.33.0-aligned source pin. The Mooncake 0.3.13.post1 wheel requires
 library names. CuPy and ONNX Runtime also reference legacy ROCm library names.
 Matching names do not prove ABI compatibility.
 
-After Pack publishes a ROCm 10 image, inspect that digest on a Linux amd64
-Docker host. Verify actual dependency versions and native library loading
-before testing inference or transfers on the target hardware. Pack's
-dependency collection records installed package metadata; it does not
-establish GPU runtime compatibility.
+Inspect the published ROCm 10 image by digest on a Linux amd64 Docker host.
+Verify actual dependency versions and native library loading before testing
+inference or transfers on the target hardware. ONNX Runtime's ROCm provider
+initialization and Omni's platform detection require a visible AMD GPU;
+a container without GPU access cannot validate those paths. Pack's dependency
+collection records installed package metadata; it does not establish GPU
+runtime compatibility.
 
 ## Adding a backend or service
 
