@@ -133,3 +133,8 @@ Write valid UTF-8 JSON with no duplicate keys to `.autosync/proposal.json` (and 
   - `packages`: list of `{ "name": "<canonical-key>", "version": "<pep440-or-hex-or-null>", "decision": "retain" | "update" | "disable" | "source", "reason": "...", "sources": ["https://..."] }`
   - `patches`: list of `{ "path": "pack/...", "disposition": "retain" | "adapt" | "remove" | "add", "reason": "...", "versions": ["0.33.0"], "platforms": ["linux/amd64"], "sources": ["https://..."] }`
   - `sources`: list of bare `https://` URLs (non-empty when `status == "ready"`).
+
+## 9. Final Turn Submission (`submission.v1`)
+
+After writing `.autosync/proposal.json` and verifying the candidate workspace, your final assistant reply MUST be ONLY one raw UTF-8 JSON object (no surrounding prose, no Markdown summary, and no bare code fences):
+`{"version":1,"status":"completed","checks":[],"reason":"<single-line printable summary>"}` (or `"status":"no_change"` / `"blocked"` / `"failed"` as appropriate, with `"checks":[]` and no newlines or tabs in `"reason"`).

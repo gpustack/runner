@@ -88,7 +88,7 @@ spec:
     totalTokens: 20000000
     maxOutputTokens: 65536
     maxModelCalls: 256
-    maxAttempts: 3
+    maxAttempts: 5
     toolTimeoutSeconds: 300
     commandTimeoutSeconds: 600
   publication:

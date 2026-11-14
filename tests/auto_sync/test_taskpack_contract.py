@@ -237,7 +237,7 @@ def test_taskpack_manifest_structure_and_scopes() -> None:
         "totalTokens": 20000000,
         "maxOutputTokens": 65536,
         "maxModelCalls": 256,
-        "maxAttempts": 3,
+        "maxAttempts": 5,
         "toolTimeoutSeconds": 300,
         "commandTimeoutSeconds": 600,
     }
