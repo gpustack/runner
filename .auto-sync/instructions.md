@@ -52,8 +52,9 @@ Protected or out-of-scope paths (NEVER edit):
 ## 3. Research Constraints and Per-Subscription Recipe Upgrade Rules
 
 Use Loopwright's discovered upstream versions in the prompt context together with local repository files (`gpustack_runner/runner.py.json`, `docs/support-records.md`, `docs/supported-runners.md`, `pack/matrix.yaml`, `pack/*/Dockerfile.*`, `git log`).
-When outbound HTTPS is available in `bash` (such as on GitHub Actions runners), inspect upstream release tags, Dockerfiles, requirements, and container manifests at the exact selected release tag or commit (never a moving branch) via `curl -fsSL` or shallow `git`.
-When running in an offline sandbox without network access and required upstream compatibility facts cannot be verified from the workspace or prompt context, NEVER fabricate URLs or evidence — set that subscription's `status` to `"blocked"` with the specific missing fact in `reason`.
+Prefer the configured read-only MCP tools when available: `mcp__github__*` (`github-mcp-server` for upstream release notes, exact tag/commit files, issues, and PRs) and `mcp__deepwiki__*` (`https://mcp.deepwiki.com/mcp` for upstream documentation).
+When outbound HTTPS and `crane` are available in `bash` (such as on GitHub Actions runners), inspect container image manifests (`crane manifest <image>`), upstream release tags, Dockerfiles, and requirements at the exact selected release tag or commit (never a moving branch) via `crane`, `curl -fsSL`, or shallow `git`.
+When running in an offline sandbox without MCP or network access and required upstream compatibility facts cannot be verified from the workspace or prompt context, NEVER fabricate URLs or evidence — set that subscription's `status` to `"blocked"` with the specific missing fact in `reason`.
 Read `docs/support-records.md` and `git log`/`git show` on files before changing existing pins, patches, variants, or support rows.
 
 ### `cuda/vllm` (`pack/cuda/Dockerfile.vllm`)

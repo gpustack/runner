@@ -21,6 +21,17 @@ on:
         required: false
         type: boolean
         default: false
+      # Execution budgets.
+      max-session-tokens:
+        description: 'Max session tokens, optional cumulative token budget override across all model calls.'
+        required: false
+        type: string
+        default: ""
+      wall-time-seconds:
+        description: 'Wall time seconds, optional total run wall-time limit override in seconds.'
+        required: false
+        type: string
+        default: ""
       # Model behavior.
       llm-thinking:
         description: 'LLM thinking, the provider thinking switch.'
@@ -106,6 +117,54 @@ jobs:
         run: |
           make prepare
           uv sync --locked --all-packages
+      - name: Cache pinned research tools
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/auto-sync-tools
+          key: auto-sync-tools-v1-${{ runner.os }}-${{ runner.arch }}-ghmcp-2.0.1-crane-0.21.9
+      - name: Install pinned research tools
+        run: |
+          set -euo pipefail
+          tool_dir="$RUNNER_TEMP/auto-sync-tools"
+          mkdir -p "$tool_dir"
+          arch="$(uname -m)"
+          case "$arch" in
+            x86_64)
+              ghmcp_url="https://github.com/github/github-mcp-server/releases/download/v2.0.1/github-mcp-server_Linux_x86_64.tar.gz"
+              ghmcp_sha="f39c3cf56e9b2883b64e30215a48a120d911e4ed0cd6a83dddae1260279b02e6"
+              crane_url="https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_x86_64.tar.gz"
+              crane_sha="5c16d8ddb971cb1d5e6ed8b1e743da8224414eeba2c2762d8f1a61b2f095699e"
+              ;;
+            aarch64|arm64)
+              ghmcp_url="https://github.com/github/github-mcp-server/releases/download/v2.0.1/github-mcp-server_Linux_arm64.tar.gz"
+              ghmcp_sha="f7efcb41853153e2bf45df92a0a18b585b0bc21fcbf9c00bf667f48ff9743c87"
+              crane_url="https://github.com/google/go-containerregistry/releases/download/v0.21.9/go-containerregistry_Linux_arm64.tar.gz"
+              crane_sha="1f4c647b7bb260ab5435661df5b526cf59950ebf95201790db7183ac189cbcbd"
+              ;;
+            *)
+              echo "Unsupported runner architecture: $arch" >&2
+              exit 1
+              ;;
+          esac
+          if [[ ! -x "$tool_dir/github-mcp-server" ]]; then
+            tmp_ghmcp="$(mktemp -d)"
+            curl -fsSL --retry 3 "$ghmcp_url" -o "$tmp_ghmcp/ghmcp.tar.gz"
+            echo "${ghmcp_sha}  $tmp_ghmcp/ghmcp.tar.gz" | sha256sum -c -
+            tar -xzf "$tmp_ghmcp/ghmcp.tar.gz" -C "$tmp_ghmcp" github-mcp-server
+            install -m 0755 "$tmp_ghmcp/github-mcp-server" "$tool_dir/github-mcp-server"
+            rm -rf "$tmp_ghmcp"
+          fi
+          if [[ ! -x "$tool_dir/crane" ]]; then
+            tmp_crane="$(mktemp -d)"
+            curl -fsSL --retry 3 "$crane_url" -o "$tmp_crane/crane.tar.gz"
+            echo "${crane_sha}  $tmp_crane/crane.tar.gz" | sha256sum -c -
+            tar -xzf "$tmp_crane/crane.tar.gz" -C "$tmp_crane" crane
+            install -m 0755 "$tmp_crane/crane" "$tool_dir/crane"
+            rm -rf "$tmp_crane"
+          fi
+          sudo install -m 0755 "$tool_dir/github-mcp-server" "$tool_dir/crane" /usr/local/bin/
+          github-mcp-server --version
+          crane version
       - name: Create repository App token
         id: app-token
         uses: actions/create-github-app-token@v2
@@ -153,11 +212,20 @@ jobs:
           allow-custom-base-url: 'true'
           provider-token-env: CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN
           github-token: ${{ steps.app-token.outputs.token }}
+          total-tokens: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS }}
+          wall-time-seconds: ${{ inputs.wall-time-seconds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_WALL_TIME_SECONDS }}
+          max-output-tokens: ${{ inputs.llm-max-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS }}
           output: json,github-step-summary
           dry-run: ${{ inputs.dry-run && 'true' || 'false' }}
           publication-endpoint-url: ${{ inputs.dry-run && 'http://127.0.0.1:65535/loopwright-dry-run-publication' || '' }}
         env:
           CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOOPWRIGHT_MAX_MODEL_CALLS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_MODEL_CALLS }}
+          LOOPWRIGHT_MAX_ATTEMPTS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_ATTEMPTS }}
+          LOOPWRIGHT_TOOL_TIMEOUT_SECONDS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_TOOL_TIMEOUT_SECONDS }}
+          LOOPWRIGHT_COMMAND_TIMEOUT_SECONDS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_COMMAND_TIMEOUT_SECONDS }}
+          LOOPWRIGHT_MCP_SERVERS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MCP_SERVERS }}
           PACK_RUN_URL: ${{ inputs.pack-run-url }}
           PYTHON_BIN: ${{ github.workspace }}/.venv/bin/python
       - name: Upload Loopwright run diagnostics
