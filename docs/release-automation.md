@@ -92,8 +92,8 @@ Follow the complete field rules in `.auto-sync/instructions.md` and `.auto-sync/
 
 ## Model configuration and workflow execution
 
-The taskpack's default model uses `glm-5.3` from `zai-coding-cn` with the `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN` secret.
-Set both `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL` to generate a custom Pi `models.json` with `.auto-sync/checks/write_models_json.py`.
+The taskpack's default model uses `glm-5.3` from `zai-coding-cn` (`thinking: low`, `temperature: 0.4`, `top_p: 0.9`) with the `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN` secret.
+Set both `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL` to generate a custom Pi `models.json` with `.auto-sync/checks/write_models_json.py` (`glm-5*` models default to a `1,000,000` context window when `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE` is unset).
 Setting only one is an error. Optional gateway variables are:
 
 - `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC`.

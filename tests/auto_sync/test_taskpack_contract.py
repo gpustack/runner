@@ -250,7 +250,11 @@ def test_taskpack_manifest_structure_and_scopes() -> None:
         {
             "provider": "zai-coding-cn",
             "id": "glm-5.3",
-            "thinking": "high",
+            "thinking": "low",
+            "samplingParams": {
+                "temperature": 0.4,
+                "top_p": 0.9,
+            },
             "apiKeyEnv": "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN",
         },
     ]

@@ -14,8 +14,16 @@ PI_THINKING_LEVELS = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 NON_OFF_THINKING_LEVELS = PI_THINKING_LEVELS - {"off"}
 DEFAULT_MAX_TOKENS = 32768
 DEFAULT_CONTEXT_WINDOW = 128000
+GLM5_CONTEXT_WINDOW = 1_000_000
 MIN_SAMPLING_PARAM = -4.0
 MAX_SAMPLING_PARAM = 4.0
+
+
+def _default_context_window(model: str) -> int:
+    lowered = model.strip().lower()
+    if lowered.startswith("glm-5") or "/glm-5" in lowered:
+        return GLM5_CONTEXT_WINDOW
+    return DEFAULT_CONTEXT_WINDOW
 
 
 def _validate_base_url(raw: str) -> str:
@@ -94,15 +102,15 @@ def _resolve_thinking(
 
     if think_norm:
         if think_norm == "enabled":
-            return "high", True
+            return "low", True
         if think_norm in NON_OFF_THINKING_LEVELS:
             return think_norm, True
         msg = f"unsupported thinking value: {thinking!r}"
         raise ValueError(msg)
 
     hint = f"{model} {base_url}".lower()
-    if "glm" in hint or "zai" in hint:
-        return "high", True
+    if "glm" in hint or "zai" in hint or "bigmodel.cn" in hint:
+        return "low", True
     return "off", False
 
 
@@ -210,7 +218,7 @@ def build_models_config(
         "context_window",
         1024,
         10_000_000,
-        DEFAULT_CONTEXT_WINDOW,
+        _default_context_window(clean_model),
     )
 
     sampling: dict[str, float] = {}
@@ -231,10 +239,15 @@ def build_models_config(
     }
     if sampling:
         model_entry["samplingParams"] = sampling
+    lowered_model = clean_model.lower()
+    lowered_url = base_url.lower()
     if api == "openai-completions" and (
-        "glm" in clean_model.lower() or "zai" in base_url.lower()
+        "glm" in lowered_model or "zai" in lowered_url or "bigmodel.cn" in lowered_url
     ):
-        model_entry["compat"] = {"thinkingFormat": "zai"}
+        compat: dict[str, object] = {"thinkingFormat": "zai"}
+        if not (lowered_model.startswith("glm-4") or "/glm-4" in lowered_model):
+            compat["supportsReasoningEffort"] = True
+        model_entry["compat"] = compat
 
     payload: dict[str, object] = {
         "providers": {

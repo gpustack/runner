@@ -118,7 +118,10 @@ def test_protocol_and_parameters_generation(
     assert model["contextWindow"] == 200000
     assert model["samplingParams"] == {"temperature": 0.4, "top_p": 0.9}
     if expected_api == "openai-completions":
-        assert model["compat"] == {"thinkingFormat": "zai"}
+        assert model["compat"] == {
+            "thinkingFormat": "zai",
+            "supportsReasoningEffort": True,
+        }
     else:
         assert "compat" not in model
 
@@ -184,7 +187,10 @@ def test_disabled_thinking_overrides_default_effort_and_normalizes_negative_zero
     payload = json.loads(output_json.read_text(encoding="utf-8"))
     model = payload["providers"]["custom-gateway"]["models"][0]
     assert model["reasoning"] is False
-    assert model["compat"] == {"thinkingFormat": "zai"}
+    assert model["compat"] == {
+        "thinkingFormat": "zai",
+        "supportsReasoningEffort": True,
+    }
     temp = model["samplingParams"]["temperature"]
     assert temp == 0.0
     assert str(temp) == "0.0"
@@ -198,11 +204,50 @@ def test_zai_base_url_enables_compat_for_non_glm_model(tmp_path: Path) -> None:
         "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL": "https://api.z.ai/zai/v1",
         "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL": "custom-model",
     }
-    result, output_json, _ = _run_write_models(tmp_path, env)
+    result, output_json, github_output = _run_write_models(tmp_path, env)
     assert result.returncode == 0, result.stderr
     payload = json.loads(output_json.read_text(encoding="utf-8"))
     model = payload["providers"]["custom-gateway"]["models"][0]
-    assert model["compat"] == {"thinkingFormat": "zai"}
+    assert model["contextWindow"] == 128000
+    assert model["compat"] == {
+        "thinkingFormat": "zai",
+        "supportsReasoningEffort": True,
+    }
+    outputs = _parse_github_output(github_output)
+    assert outputs["thinking"] == "low"
+
+
+def test_glm5_defaults_to_1m_window_and_low_effort_while_glm4_keeps_128k(
+    tmp_path: Path,
+) -> None:
+    glm5_env = {
+        "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL": "https://open.bigmodel.cn/api/coding/paas/v4",
+        "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL": "glm-5.3",
+        "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING": "enabled",
+    }
+    res5, json5, out5 = _run_write_models(tmp_path / "glm5", glm5_env)
+    assert res5.returncode == 0, res5.stderr
+    model5 = json.loads(json5.read_text(encoding="utf-8"))["providers"][
+        "custom-gateway"
+    ]["models"][0]
+    assert model5["contextWindow"] == 1_000_000
+    assert model5["compat"] == {
+        "thinkingFormat": "zai",
+        "supportsReasoningEffort": True,
+    }
+    assert _parse_github_output(out5)["thinking"] == "low"
+
+    glm4_env = {
+        "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL": "https://open.bigmodel.cn/api/coding/paas/v4",
+        "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL": "glm-4.6v",
+    }
+    res4, json4, _ = _run_write_models(tmp_path / "glm4", glm4_env)
+    assert res4.returncode == 0, res4.stderr
+    model4 = json.loads(json4.read_text(encoding="utf-8"))["providers"][
+        "custom-gateway"
+    ]["models"][0]
+    assert model4["contextWindow"] == 128_000
+    assert model4["compat"] == {"thinkingFormat": "zai"}
 
 
 def _workflow(concurrency: str) -> str:
@@ -324,6 +369,10 @@ def test_auto_sync_and_ci_workflow_contracts() -> None:
     assert "tools.auto_sync" not in ci_raw
 
     auto_sync_wf = yaml.safe_load(auto_sync_raw)
+    on_block = auto_sync_wf.get("on") or auto_sync_wf.get(True)
+    dispatch_inputs = on_block["workflow_dispatch"]["inputs"]
+    assert dispatch_inputs["llm-reasoning-effort"]["default"] == "low"
+    assert dispatch_inputs["llm-thinking"]["default"] == "enabled"
     assert list(auto_sync_wf["jobs"].keys()) == ["sync"]
     assert auto_sync_wf["concurrency"]["queue"] == "max"
     assert auto_sync_wf["concurrency"]["cancel-in-progress"] is False

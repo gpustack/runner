@@ -60,7 +60,7 @@ on:
         description: 'LLM reasoning effort, the reasoning effort level.'
         required: false
         type: choice
-        default: high
+        default: low
         options:
           - minimal
           - low
@@ -214,6 +214,7 @@ jobs:
           github-token: ${{ steps.app-token.outputs.token }}
           total-tokens: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS }}
           wall-time-seconds: ${{ inputs.wall-time-seconds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_WALL_TIME_SECONDS }}
+          context-window: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}
           max-output-tokens: ${{ inputs.llm-max-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS }}
           output: json,github-step-summary
           dry-run: ${{ inputs.dry-run && 'true' || 'false' }}
