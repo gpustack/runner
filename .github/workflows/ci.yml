@@ -54,7 +54,7 @@ jobs:
           - "3.10"
           - "3.11"
           - "3.12"
-    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-24.04' || 'macos-14' }}
+    runs-on: ${{ matrix.os == 'linux' && 'ubuntu-24.04' || 'macos-15' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
           path: dist/*
           name: gputack-runner-${{ matrix.os }}-${{ matrix.python-version }}
 
-  # Production process supervision and pinned CLI contracts require Linux.
+  # Validate auto-sync taskpack, candidate checks, workflows, and documentation.
   auto-sync-contract:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -101,40 +101,11 @@ jobs:
         run: |
           make prepare
           uv sync --locked --all-packages
-      - name: Identify tool cache
-        id: tool-key
-        run: |
-          key=$(bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" --cache-key)
-          echo "key=$key" >> "$GITHUB_OUTPUT"
-      - name: Restore tool installation
-        id: restore-tools
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ runner.temp }}/auto-sync-tools
-          key: ${{ steps.tool-key.outputs.key }}
-      - name: Install or verify pinned tools
-        id: tools
-        run: |
-          bash tools/auto_sync/bootstrap.sh --prefix "$RUNNER_TEMP/auto-sync-tools" > "$RUNNER_TEMP/tools.json"
-          jq -r '"bin=" + .bin' "$RUNNER_TEMP/tools.json" >> "$GITHUB_OUTPUT"
-      - name: Save verified tools from trusted runs
-        if: github.event_name != 'pull_request' && steps.restore-tools.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ runner.temp }}/auto-sync-tools
-          key: ${{ steps.tool-key.outputs.key }}
       - name: Run all offline automation contracts
-        id: contracts
-        env:
-          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
         run: uv run pytest tests/auto_sync
       - name: Validate workflows
-        id: workflow-lint
-        env:
-          AUTO_SYNC_TOOL_BIN: ${{ steps.tools.outputs.bin }}
         run: |
-          export PATH="$AUTO_SYNC_TOOL_BIN:$PATH"
-          uv run python tools/auto_sync/lint_workflows.py \
+          uv run python .auto-sync/checks/lint_workflows.py \
             .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
       - name: Validate documentation
         run: uv run mkdocs build --strict

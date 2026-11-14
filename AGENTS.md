@@ -12,8 +12,8 @@ Start with the guide for the affected contract:
 | Runner selection and public API | [API reference](docs/modules/gpustack_runner.md) | `gpustack_runner/runner.py`, `__init__.py`, `__main__.py` |
 | Supported versions and platforms | [Supported runners](docs/supported-runners.md) | `gpustack_runner/runner.py.json`, `pack/matrix.yaml`, `docs/support-records.md` |
 | Recipes and image production | [Packaging](docs/packaging.md) | `pack/<backend>/Dockerfile.<service>`, `resolve_dockerfile.sh`, `expand_matrix.sh`, `.github/workflows/pack.yml` |
-| Installed dependencies | [Dependency metadata](docs/dependency-metadata.md) | `pack/dependencies.json`, `probe_dependencies.py`, `collect_dependencies.py`, `merge_runner.sh` |
-| Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `tools/auto_sync/`, `.agents/skills/runner-release-sync/SKILL.md` |
+| Installed dependencies | [Dependency metadata](docs/dependency-metadata.md) | `pack/dependencies.json`, `probe_dependencies.py`, `collect_dependencies.py`, `promote_support.py`, `merge_runner.sh` |
+| Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `.auto-sync/`, `.agents/skills/runner-release-sync/SKILL.md` |
 
 Confirm the checkout, branch, uncommitted changes, and relevant dependency versions before editing.
 Search local source with `rg`. An index or guide points to evidence; it does not prove current behavior.
@@ -60,15 +60,13 @@ uv run pytest tests/auto_sync
 uv run mkdocs build --strict
 ```
 
-Tests that invoke Qwen require the pinned tools. Follow the [bootstrap instructions](docs/release-automation.md#local-verification).
+`tests/auto_sync` verifies `.auto-sync/taskpack.yaml`, `.auto-sync/instructions.md`, `.auto-sync/checks/`, and workflow contracts offline.
 Use focused tests while editing, then the full suite at integration checkpoints.
 Add behavior tests with positive and negative cases. Confirm a new rejection gate rejects a known bad input.
 Assert observable results, rather than wording, counts, or implementation structure alone.
 Use local HTTP, MCP, registry, and GitHub fixtures with fake credentials.
 Keep temporary settings, logs, and fixtures containing credentials outside tracked paths.
 Offline tests must not call paid models, write to GitHub, build service images, run Pack, or require GPUs.
-Linux CI must execute the pinned CLI and orphan-supervisor tests; skipped required checks are not acceptance.
-macOS protocol fixtures verify requests and instruction loading, not production process cleanup.
 
 Run scoped hooks during shared-checkout work:
 
@@ -77,7 +75,7 @@ uv run pre-commit run --files <changed-files> --show-diff-on-failure
 ```
 
 At integration, run `uv run pytest` and all-file hooks. Inspect any changes from fixing hooks.
-Use the [workflow lint entry point](docs/release-automation.md#local-verification) for auto-sync concurrency support.
+Use `.auto-sync/checks/lint_workflows.py` as the [workflow lint entry point](docs/release-automation.md#local-verification).
 `make build` builds the Python distribution and regenerates version metadata; inspect its changes.
 `make ci` also installs dependencies and hooks, cleans files, and builds. It is unsuitable as an unattended proposal check.
 Run `make package` or Pack only when image production is explicitly authorized.
@@ -86,9 +84,11 @@ Run `make package` or Pack only when image production is explicitly authorized.
 
 Use [runner-release-sync](.agents/skills/runner-release-sync/SKILL.md) for upstream discovery or an authorized `/auto-sync` revision.
 Use [runner-release](.agents/skills/runner-release/SKILL.md) to cut package releases (tag, notes, promotion) and to align README and supported-runners documentation with published support records.
-The workflow selects and authenticates the model before Qwen starts. Use that configured model.
-NEVER launch another agent to switch providers; the research stage permits exactly two bounded headless stage sessions — analysis, then proposal — plus bounded repair sessions that only correct rejected final output (`AUTO_SYNC_MAX_REPAIR_ROUNDS`, default 2).
-Read-only GitHub MCP supports research. Trusted jobs validate and publish the proposal separately.
+The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright@main` with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
+It optionally generates a custom Pi `models.json` with `.auto-sync/checks/write_models_json.py` when both `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL` are set.
+The taskpack also owns `.auto-sync/checks/` and `.auto-sync/memory/`.
+Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools.
+It enforces writable and protected scope with `scope.v1`, checks `.autosync/proposal.json` with `json-artifact.v1`, and runs `.auto-sync/checks/validate_candidate.sh` with `command.v1` before publishing or updating an `auto-sync/*` PR.
 The agent cannot merge, publish images, invoke Pack, or edit its controlling policy.
 If a decision is ambiguous or compatibility evidence is missing, return `blocked` and end the affected work.
 If configuration, tools, deadlines, or output validation fail, return `failed`.

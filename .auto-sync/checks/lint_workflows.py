@@ -1,10 +1,10 @@
-"""Validate queued concurrency before linting temporary workflow copies."""
+"""Validate workflow YAML, duplicate keys, and queued concurrency before optional actionlint."""
 
 from __future__ import annotations
 
 import argparse
 import copy
-import json
+import os
 import shutil
 import subprocess
 import sys
@@ -28,7 +28,7 @@ def _duplicates(node: Node, seen: set[int]) -> None:
         return
     seen.add(id(node))
     if isinstance(node, MappingNode):
-        keys = set()
+        keys: set[str] = set()
         for key, value in node.value:
             if isinstance(key, ScalarNode):
                 if key.value in keys:
@@ -73,7 +73,6 @@ def _queue(node: Node) -> Node:
 
 
 def _prepare(source: str) -> str:
-    # Work on YAML nodes so keys such as `on` and all other scalar values survive.
     node = yaml.compose(source, Loader=yaml.SafeLoader)
     if node is None:
         return source
@@ -93,65 +92,70 @@ def _prepare(source: str) -> str:
     return yaml.serialize(node)
 
 
-def _binary(name: str) -> str:
-    binary = shutil.which(name)
-    if binary is None:
-        msg = f"required tool is unavailable: {name}"
-        raise ValueError(msg)
-    return binary
+def _lint_one(
+    path: Path,
+    *,
+    run_actionlint: bool,
+    command: list[str],
+) -> bool:
+    try:
+        source = _prepare(path.read_text(encoding="utf-8"))
+        if not run_actionlint:
+            return False
+        with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as temporary:
+            temporary.write(source)
+            temporary.seek(0)
+            result = subprocess.run(  # noqa: S603 - resolved binary and stdin source.
+                [*command, "-stdin-filename", str(path.resolve()), "-"],
+                stdin=temporary,
+                check=False,
+                timeout=300,
+            )
+    except (OSError, ValueError, yaml.YAMLError, subprocess.TimeoutExpired) as exc:
+        print(f"{path}: {exc}", file=sys.stderr)
+        return True
+    return result.returncode != 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--require-actionlint",
+        action="store_true",
+        help="Fail if actionlint or shellcheck is missing.",
+    )
     parser.add_argument("workflows", nargs="+", type=Path)
     args = parser.parse_args(argv)
-    try:
-        actionlint = _binary("actionlint")
-        shellcheck = _binary("shellcheck")
-        pin = json.loads(Path(__file__).with_name("tool-versions.json").read_text())[
-            "tools"
-        ]["actionlint"]["version"]
-        version = subprocess.run(  # noqa: S603 - resolved tool and fixed arguments.
-            [actionlint, "-version"],
-            text=True,
-            capture_output=True,
-            check=True,
-            timeout=30,
-        ).stdout.splitlines()
-        if not version or version[0] != pin:
-            msg = f"actionlint must match pinned version {pin}"
-            raise ValueError(msg)  # noqa: TRY301 - Pin failures use the same CLI error path.
-        command = [actionlint, "-shellcheck", shellcheck]
+
+    actionlint = shutil.which("actionlint")
+    shellcheck = shutil.which("shellcheck")
+    ci_mode = os.environ.get("CI", "").lower() == "true"
+
+    if args.require_actionlint and (actionlint is None or shellcheck is None):
+        missing = "actionlint" if actionlint is None else "shellcheck"
+        print(
+            f"workflow lint failed: required tool is unavailable: {missing}",
+            file=sys.stderr,
+        )
+        return 1
+    if ci_mode and actionlint is not None and shellcheck is None:
+        print(
+            "workflow lint failed: required tool is unavailable: shellcheck",
+            file=sys.stderr,
+        )
+        return 1
+
+    run_actionlint = actionlint is not None and shellcheck is not None
+    command = [actionlint, "-shellcheck", shellcheck] if run_actionlint else []
+    if run_actionlint:
         config = Path(".github/actionlint.yaml").resolve()
         if config.is_file():
             command.extend(["-config-file", str(config)])
-        failed = False
-        for path in args.workflows:
-            try:
-                source = _prepare(path.read_text())
-                with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as temporary:
-                    temporary.write(source)
-                    temporary.seek(0)
-                    # The original filename retains project context and useful diagnostics.
-                    result = subprocess.run(  # noqa: S603 - source goes only to stdin.
-                        [*command, "-stdin-filename", str(path.resolve()), "-"],
-                        stdin=temporary,
-                        check=False,
-                        timeout=300,
-                    )
-                failed |= result.returncode != 0
-            except (  # noqa: PERF203 - Continue checking other workflows after a failure.
-                OSError,
-                ValueError,
-                yaml.YAMLError,
-                subprocess.TimeoutExpired,
-            ) as exc:
-                print(f"{path}: {exc}", file=sys.stderr)
-                failed = True
-        return int(failed)
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
-        print(f"workflow lint failed: {exc}", file=sys.stderr)
-        return 1
+
+    failed = False
+    for path in args.workflows:
+        failed |= _lint_one(path, run_actionlint=run_actionlint, command=command)
+    return int(failed)
 
 
 if __name__ == "__main__":

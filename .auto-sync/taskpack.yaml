@@ -1,0 +1,94 @@
+apiVersion: loopwright.dev/v1alpha1
+kind: Taskpack
+metadata:
+  name: auto-sync
+spec:
+  goal:
+    candidate: Research upstream GPUStack Runner releases across cuda/vllm, cuda/sglang, rocm/vllm, rocm/sglang, cann/vllm, and cann/sglang, update writable recipes, patches, matrix, support docs, and .autosync/proposal.json, and pass all static candidate checks.
+    noChange: Confirm subscribed upstream GPUStack Runner releases match the current catalog and support records with no eligible release-line advancement and settle cleanly as no_change.
+  scope:
+    writable:
+      - .autosync
+      - pack/matrix.yaml
+      - pack/cuda
+      - pack/rocm
+      - pack/cann
+      - docs/support-records.md
+      - docs/supported-runners.md
+      - README.md
+    protected:
+      - pack/cuda/Dockerfile.voxbox
+      - pack/cann/Dockerfile.mindie
+      - pack/cann/mindie-atb-models_2.3.0_linux-amd64_py3.11_torch2.1.0-abi0.tar.gz
+      - pack/cann/mindie-atb-models_2.3.0_linux-arm64_py3.11_torch2.1.0-abi0.tar.gz
+      - pack/cann/patches/hixl
+      - pack/cann/patches/mindie.zip
+  instructions:
+    - .auto-sync/instructions.md
+  upstreams:
+    - id: vllm
+      kind: github-release
+      source: vllm-project/vllm
+      watchedPaths: []
+      allowPrerelease: false
+    - id: sglang
+      kind: github-release
+      source: sgl-project/sglang
+      watchedPaths: []
+      allowPrerelease: false
+    - id: vllm-ascend
+      kind: github-release
+      source: vllm-project/vllm-ascend
+      watchedPaths: []
+      allowPrerelease: true
+  proposal:
+    path: .autosync/proposal.json
+    requiredFields:
+      - schema_version
+      - summary
+      - subscriptions
+    schemaVersion: 1
+  verification:
+    localChecks:
+      - id: runner-proposal-json
+        implementation: json-artifact.v1
+      - id: runner-scope-guard
+        implementation: scope.v1
+      - id: runner-static-checks
+        implementation: command.v1
+        parameters:
+          script: .auto-sync/checks/validate_candidate.sh
+          timeoutSeconds: 55
+          allowReadOnlyGitHubToken: true
+          env:
+            - PACK_RUN_URL
+            - PYTHON_BIN
+    externalGates: []
+  publication:
+    mode: pull_request
+    targetBranch: main
+    headBranchPrefix: auto-sync/
+    titleTemplate: "feat(pack): sync upstream runner releases"
+  memory:
+    directory: .auto-sync/memory
+    apply: separate-pull-request
+    onNoModelBudget: deterministic-observations-only
+  triggers:
+    schedule: true
+    workflowDispatch: true
+    releasePublished: false
+    commentCommands:
+      - retry
+      - revise
+      - status
+    commentPrefixes:
+      - /auto-sync
+  models:
+    - provider: zai-coding-cn
+      id: glm-5.3
+      thinking: high
+      apiKeyEnv: CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN
+  output:
+    formats:
+      - json
+      - github-step-summary

@@ -326,7 +326,10 @@ def test_merge_workflow_uses_locked_runtime_dependencies(tmp_path, pack_workflow
         shutil.copyfile(REPO_ROOT / name, tmp_path / name)
     script = tmp_path / "pack/merge_runner.sh"
     script.parent.mkdir()
-    (tmp_path / "tools").symlink_to(REPO_ROOT / "tools")
+    shutil.copyfile(
+        REPO_ROOT / "pack/promote_support.py",
+        tmp_path / "pack/promote_support.py",
+    )
     script.write_text(
         "set -euo pipefail\n"
         "python3 - <<'PY'\n"
@@ -351,7 +354,7 @@ def test_merge_workflow_uses_locked_runtime_dependencies(tmp_path, pack_workflow
         '} >"$scratch/support.md"\n'
         'printf \'%s\' \'{"matrix": {"build_jobs": []}}\' >"$scratch/context.json"\n'
         "printf '%s' '{}' >\"$scratch/dependencies.json\"\n"
-        'python3 "$(dirname "${BASH_SOURCE[0]}")/../tools/auto_sync/discovery.py" promote \\\n'
+        'python3 "$(dirname "${BASH_SOURCE[0]}")/promote_support.py" promote \\\n'
         '  --support "$scratch/support.md" --context "$scratch/context.json" \\\n'
         '  --dependencies "$scratch/dependencies.json" --output "$scratch/promoted.md"\n'
         'cmp "$scratch/support.md" "$scratch/promoted.md"\n',
