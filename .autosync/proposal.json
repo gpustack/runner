@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "summary": "Chase vllm-ascend v0.32.0rc1 on cann/vllm (engine vLLM 0.32.0, CANN 9.2.1): new base image tags, mooncake 0.3.14, vllm-router 0.1.17, vllm-omni v0.32.0 commit, LMCache disabled pending an LMCache-Ascend release that supports vLLM 0.32; cuda/rocm vLLM lines already at 0.33.0 and SGLang lines at 0.5.23 with no newer upstream line, so those subscriptions stay unchanged.",
+  "versions": {
+    "vllm": "v0.32.0",
+    "sglang": "v0.5.23",
+    "vllm-ascend": "v0.32.0rc1"
+  },
+  "subscriptions": {
+    "cuda/vllm": {
+      "status": "unchanged",
+      "engine_version": "0.33.0",
+      "plugin_version": null,
+      "reason": "Base is vLLM 0.33.0 (runner.py.json, support records); the next release line 0.34 does not exist upstream (latest stable is 0.32.0, 0.33.0rc3 is a prerelease of the already-recorded line), so there is nothing to chase.",
+      "packages": [
+        {
+          "name": "lmcache",
+          "version": "0.5.6",
+          "decision": "retain",
+          "reason": "Pinned LMCache supporting vLLM 0.33; identical across cuda/rocm vLLM and SGLang.",
+          "sources": ["https://github.com/LMCache/LMCache"]
+        },
+        {
+          "name": "vllm-omni",
+          "version": "4b63581cf6527dc5c964558650e996c0a36e027a",
+          "decision": "source",
+          "reason": "Commit pin already aligned with vLLM 0.33; unchanged this run.",
+          "sources": ["https://github.com/vllm-project/vllm-omni/commit/4b63581cf6527dc5c964558650e996c0a36e027a"]
+        }
+      ],
+      "patches": [],
+      "sources": ["https://github.com/vllm-project/vllm/releases/tag/v0.32.0"]
+    },
+    "cuda/sglang": {
+      "status": "unchanged",
+      "engine_version": "0.5.23",
+      "plugin_version": null,
+      "reason": "Base is SGLang 0.5.23 which is the latest upstream stable; no newer release line exists.",
+      "packages": [
+        {
+          "name": "lmcache",
+          "version": "0.5.6",
+          "decision": "retain",
+          "reason": "Pinned LMCache supporting SGLang 0.5.23; identical to the other CUDA/ROCm subscriptions.",
+          "sources": ["https://github.com/LMCache/LMCache"]
+        }
+      ],
+      "patches": [],
+      "sources": ["https://github.com/sgl-project/sglang/releases/tag/v0.5.23"]
+    },
+    "rocm/vllm": {
+      "status": "unchanged",
+      "engine_version": "0.33.0",
+      "plugin_version": null,
+      "reason": "Base is vLLM 0.33.0 on both ROCm 7.2 and 10.0 lines; the next release line 0.34 does not exist upstream, so there is nothing to chase.",
+      "packages": [
+        {
+          "name": "lmcache",
+          "version": "0.5.6",
+          "decision": "retain",
+          "reason": "Pinned LMCache supporting vLLM 0.33; identical across CUDA/ROCm vLLM and SGLang.",
+          "sources": ["https://github.com/LMCache/LMCache"]
+        },
+        {
+          "name": "mooncake",
+          "version": "0.3.13.post1",
+          "decision": "retain",
+          "reason": "Pinned mooncake-transfer-engine supporting the vLLM 0.33 KV connector on ROCm; unchanged engine line, no bump needed.",
+          "sources": ["https://github.com/kvcache-ai/Mooncake/releases/tag/v0.3.13.post1"]
+        },
+        {
+          "name": "vllm-omni",
+          "version": "4b63581cf6527dc5c964558650e996c0a36e027a",
+          "decision": "source",
+          "reason": "Commit pin already aligned with vLLM 0.33; unchanged this run.",
+          "sources": ["https://github.com/vllm-project/vllm-omni/commit/4b63581cf6527dc5c964558650e996c0a36e027a"]
+        }
+      ],
+      "patches": [],
+      "sources": ["https://github.com/vllm-project/vllm/releases/tag/v0.32.0"]
+    },
+    "rocm/sglang": {
+      "status": "unchanged",
+      "engine_version": "0.5.23",
+      "plugin_version": null,
+      "reason": "Base is SGLang 0.5.23 which is the latest upstream stable; no newer release line exists.",
+      "packages": [
+        {
+          "name": "lmcache",
+          "version": "0.5.6",
+          "decision": "retain",
+          "reason": "Pinned LMCache supporting SGLang 0.5.23; identical to the other CUDA/ROCm subscriptions.",
+          "sources": ["https://github.com/LMCache/LMCache"]
+        }
+      ],
+      "patches": [],
+      "sources": ["https://github.com/sgl-project/sglang/releases/tag/v0.5.23"]
+    },
+    "cann/vllm": {
+      "status": "ready",
+      "engine_version": "0.32.0",
+      "plugin_version": "0.32.0rc1",
+      "reason": "Chased the vllm-ascend line above the recorded 0.30.0 base: no 0.31 line exists upstream, so the 0.32 line is next and v0.32.0rc1 is its highest eligible prerelease (vllm-ascend tracks prereleases). The release pairs with the documented stable vLLM v0.32.0 engine, CANN 9.2.1, torch/torch-npu 2.10.0/2.10.0.post7, ray >=2.47.1,<=2.48.0 and mooncake-transfer-engine-npu 0.3.14.rc1; base image tags v0.32.0rc1/-a5/-a3/-310p are published per the image-publish workflow matrix and installation docs.",
+      "packages": [
+        {
+          "name": "vllm-ascend",
+          "version": "0.32.0rc1",
+          "decision": "update",
+          "reason": "Prerelease-whitelisted plugin; release notes document pairing with vLLM v0.32.0 and CANN 9.2.1.",
+          "sources": ["https://github.com/vllm-project/vllm-ascend/releases/tag/v0.32.0rc1"]
+        },
+        {
+          "name": "lmcache",
+          "version": null,
+          "decision": "disable",
+          "reason": "No LMCache-Ascend release supports the vLLM 0.32 KV connector: v0.5.7 declares 'vLLM 0.23-0.30 on CANN 9.2.0' and v0.5.6 only up to vLLM 0.30; keeping the old pair would mix lines, so LMCache is disabled until a plugin release pairs with vLLM 0.32.",
+          "sources": ["https://github.com/LMCache/LMCache-Ascend/releases/tag/v0.5.7"]
+        },
+        {
+          "name": "lmcache-ascend",
+          "version": null,
+          "decision": "disable",
+          "reason": "Same evidence as lmcache: no plugin release supports vLLM 0.32 yet; both pins are cleared together.",
+          "sources": ["https://github.com/LMCache/LMCache-Ascend/releases/tag/v0.5.7"]
+        },
+        {
+          "name": "mooncake",
+          "version": "0.3.14",
+          "decision": "update",
+          "reason": "Stable mooncake v0.3.14 publishes mooncake_transfer_engine_npu 0.3.14 wheels (cp39-cp314, x86_64/aarch64), matching the npu 0.3.14.rc1 line the vllm-ascend v0.32.0rc1 release pairs with; mooncake is not prerelease-whitelisted so the stable release is selected.",
+          "sources": ["https://github.com/kvcache-ai/Mooncake/releases/tag/v0.3.14"]
+        },
+        {
+          "name": "vllm-omni",
+          "version": "5917730a4b02aedb44d374173cdc1b10484ccd52",
+          "decision": "source",
+          "reason": "vllm-omni v0.32.0 release tag, rebased onto vLLM 0.32.0, preferred over a main-branch commit.",
+          "sources": ["https://github.com/vllm-project/vllm-omni/releases/tag/v0.32.0", "https://github.com/vllm-project/vllm-omni/commit/5917730a4b02aedb44d374173cdc1b10484ccd52"]
+        }
+      ],
+      "patches": [
+        {
+          "path": "pack/cann/patches/vllm/001_wrong_dp_ray.patch",
+          "disposition": "retain",
+          "reason": "Context verified against vLLM v0.32.0 vllm/utils/network_utils.py: _get_reserved_port_range/get_open_port bodies still match the patch hunks.",
+          "versions": ["0.32.0"],
+          "platforms": ["linux/amd64", "linux/arm64"],
+          "sources": ["https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/utils/network_utils.py"]
+        },
+        {
+          "path": "pack/cann/patches/vllm_ascend/001_remote_host_port.patch",
+          "disposition": "retain",
+          "reason": "Context verified against vllm-ascend v0.32.0rc1 mooncake_connector.py _get_remote_host_info_by_port: the insertion point (None-check then kv_port/rank lookup) is unchanged and the mapping values still carry handshake_port.",
+          "versions": ["0.32.0rc1"],
+          "platforms": ["linux/amd64", "linux/arm64"],
+          "sources": ["https://github.com/vllm-project/vllm-ascend/blob/v0.32.0rc1/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py"]
+        },
+        {
+          "path": "pack/cann/patches/vllm_omni/001_wrong_patch.patch",
+          "disposition": "retain",
+          "reason": "Context verified at the vllm-omni v0.32.0 commit: the sys.modules patch loop and both NPU runner _prepare_inputs unpack sites still match the hunks (generation runner verified directly, AR runner mirrors it).",
+          "versions": ["0.32.0"],
+          "platforms": ["linux/amd64", "linux/arm64"],
+          "sources": ["https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/patch.py", "https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py"]
+        },
+        {
+          "path": "pack/cann/patches/vllm_omni/002_remove_humming_stub.patch",
+          "disposition": "retain",
+          "reason": "Context verified at the vllm-omni v0.32.0 commit: quantization/factory.py still calls _register_humming_stubs() at module scope followed by the vllm quantization import, matching the hunk.",
+          "versions": ["0.32.0"],
+          "platforms": ["linux/amd64", "linux/arm64"],
+          "sources": ["https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/quantization/factory.py"]
+        }
+      ],
+      "sources": [
+        "https://github.com/vllm-project/vllm-ascend/releases/tag/v0.32.0rc1",
+        "https://github.com/vllm-project/vllm/releases/tag/v0.32.0",
+        "https://quay.io/repository/ascend/vllm-ascend"
+      ]
+    },
+    "cann/sglang": {
+      "status": "unchanged",
+      "engine_version": "0.5.23",
+      "plugin_version": null,
+      "reason": "Base is SGLang 0.5.23 on the quay.io/ascend/sglang cann9.1.0 image, which is the latest upstream stable; no newer release line exists.",
+      "packages": [],
+      "patches": [],
+      "sources": ["https://github.com/sgl-project/sglang/releases/tag/v0.5.23"]
+    }
+  }
+}

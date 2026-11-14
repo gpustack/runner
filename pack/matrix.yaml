@@ -20,6 +20,8 @@ rules:
   ## (CANN_ARCHS follows the CANN variant name "950", while the vLLM Ascend
   ##  image tags the same generation "a5")
   ## (Omni has no A5 support yet, so it is switched off)
+  ## (LMCache disabled: no LMCache-Ascend release supports the vLLM 0.32 KV
+  ##  connector yet; re-enable with the plugin release that pairs with 0.32)
   ##
   - backend: "cann"
     services:
@@ -28,8 +30,8 @@ rules:
       - "CANN_VERSION=9.2.1"
       - "CANN_ARCHS=950"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.30.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0-a5"
+      - "VLLM_VERSION=0.32.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.32.0rc1-a5"
       - "VLLM_OMNI_COMMIT="
   ## Ascend CANN 9.2.1, using CANN Kernel for A3.
   ##
@@ -40,8 +42,8 @@ rules:
       - "CANN_VERSION=9.2.1"
       - "CANN_ARCHS=a3"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.30.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0-a3"
+      - "VLLM_VERSION=0.32.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.32.0rc1-a3"
   ## Ascend CANN 9.2.1, using CANN Kernel for 910B.
   ##
   - backend: "cann"
@@ -51,8 +53,8 @@ rules:
       - "CANN_VERSION=9.2.1"
       - "CANN_ARCHS=910b"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.30.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0"
+      - "VLLM_VERSION=0.32.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.32.0rc1"
   ## Ascend CANN 9.2.1, using CANN Kernel for 310P.
   ##
   - backend: "cann"
@@ -62,8 +64,8 @@ rules:
       - "CANN_VERSION=9.2.1"
       - "CANN_ARCHS=310p"
       - "PYTHON_VERSION=3.12"
-      - "VLLM_VERSION=0.30.0"
-      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.30.0-310p"
+      - "VLLM_VERSION=0.32.0"
+      - "CANN_BASE_IMAGE=quay.io/ascend/vllm-ascend:v0.32.0rc1-310p"
   ## Ascend CANN 9.1.0, SGLang 0.5.23 for A3.
   ## (no sglang upstream image for 310p variant)
   ## (910b retired: upstream publishes no 0.5.22 910b image, only 950/a3 on
