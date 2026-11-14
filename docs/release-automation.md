@@ -10,13 +10,13 @@ Static checks do not prove runtime or GPU compatibility.
 The job runs weekly on Sunday at 13:07 UTC, or by manual dispatch or an authorized PR command.
 It checks out the trusted default branch and supplies these files to Loopwright:
 
-- `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` `Taskpack` defining upstreams, scope, checks, publication, and models.
+- `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` `Taskpack` defining upstreams, scope, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, and models.
 - `.auto-sync/instructions.md`: the author instructions, limited to 24,576 UTF-8 bytes. They directly consolidate upgrade rules for all six recipes.
 - `.auto-sync/memory/`: taskpack memory, applied through a separate pull request.
 - `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic candidate checks.
 - `.auto-sync/checks/write_models_json.py` and `lint_workflows.py`: gateway configuration and workflow linting.
 
-Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools.
+Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools, plus read-only MCP tools from `github-mcp-server` (`mcp__github__*`) and DeepWiki (`mcp__deepwiki__*`) and pinned `crane` for manifest inspection.
 The taskpack defines writable and protected paths. The author cannot edit its controlling policy.
 The local checks are `runner-proposal-json` (`json-artifact.v1`), `runner-scope-guard` (`scope.v1`), and `runner-static-checks` (`command.v1`).
 The last runs `.auto-sync/checks/validate_candidate.sh`, which invokes `.auto-sync/checks/validate_candidate.py`.
@@ -101,9 +101,10 @@ Setting only one is an error. Optional gateway variables are:
 - `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P`.
 - `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE`.
 
-Manual dispatch accepts `runner_profile`, `dry-run`, `llm-thinking`, `llm-temperature`, `llm-top-p`, `llm-max-tokens`, `llm-reasoning-effort`, and `pack-run-url`.
+Manual dispatch accepts `runner_profile`, `dry-run`, `max-session-tokens`, `wall-time-seconds`, `llm-thinking`, `llm-temperature`, `llm-top-p`, `llm-max-tokens`, `llm-reasoning-effort`, and `pack-run-url`.
+Execution budgets and MCP servers are declared under `spec.limits` and `spec.mcp.servers` in `.auto-sync/taskpack.yaml`, and can be overridden without editing the manifest via workflow inputs (`max-session-tokens`, `wall-time-seconds`, `llm-max-tokens`) or optional repository variables (`CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_WALL_TIME_SECONDS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_MODEL_CALLS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_ATTEMPTS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_TOOL_TIMEOUT_SECONDS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_COMMAND_TIMEOUT_SECONDS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_MCP_SERVERS`).
 Dry runs compile and validate the taskpack without invoking the model or publishing a PR.
-The workflow uses `CI_PRT_GENERATOR_ID` and `CI_PRT_GENERATOR_KEY` for its GitHub App token.
+The workflow installs SHA-256-verified `github-mcp-server` (`v2.0.1`, wired with the read-only `GITHUB_TOKEN`) and `crane` (`v0.21.9`), and uses `CI_PRT_GENERATOR_ID` and `CI_PRT_GENERATOR_KEY` for its pull-request publication App token.
 `AUTOSYNC_RUNNER` selects the default runner unless a non-default runner profile is requested.
 Repository-wide concurrency uses `queue: max` and `cancel-in-progress: false`.
 

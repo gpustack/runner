@@ -58,12 +58,39 @@ spec:
         implementation: command.v1
         parameters:
           script: .auto-sync/checks/validate_candidate.sh
-          timeoutSeconds: 55
+          timeoutSeconds: 300
           allowReadOnlyGitHubToken: true
           env:
             - PACK_RUN_URL
             - PYTHON_BIN
     externalGates: []
+  mcp:
+    servers:
+      - id: github
+        transport: stdio
+        command: github-mcp-server
+        args:
+          - stdio
+          - --read-only
+          - --toolsets
+          - repos,pull_requests,issues
+        envFrom:
+          GITHUB_PERSONAL_ACCESS_TOKEN: GITHUB_TOKEN
+        readOnly: true
+        timeoutSeconds: 60
+      - id: deepwiki
+        transport: http
+        url: https://mcp.deepwiki.com/mcp
+        readOnly: true
+        timeoutSeconds: 60
+  limits:
+    wallTimeSeconds: 3000
+    totalTokens: 20000000
+    maxOutputTokens: 65536
+    maxModelCalls: 256
+    maxAttempts: 3
+    toolTimeoutSeconds: 300
+    commandTimeoutSeconds: 600
   publication:
     mode: pull_request
     targetBranch: main

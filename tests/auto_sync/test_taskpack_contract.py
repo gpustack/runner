@@ -201,7 +201,46 @@ def test_taskpack_manifest_structure_and_scopes() -> None:
     assert len(command_checks) == 1
     params = command_checks[0]["parameters"]
     assert params["script"] == ".auto-sync/checks/validate_candidate.sh"
-    assert 1 <= params["timeoutSeconds"] <= 55
+    assert params["timeoutSeconds"] == 300
+
+    mcp_servers = spec["mcp"]["servers"]
+    assert mcp_servers == [
+        {
+            "id": "github",
+            "transport": "stdio",
+            "command": "github-mcp-server",
+            "args": [
+                "stdio",
+                "--read-only",
+                "--toolsets",
+                "repos,pull_requests,issues",
+            ],
+            "envFrom": {
+                "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_TOKEN",
+            },
+            "readOnly": True,
+            "timeoutSeconds": 60,
+        },
+        {
+            "id": "deepwiki",
+            "transport": "http",
+            "url": "https://mcp.deepwiki.com/mcp",
+            "readOnly": True,
+            "timeoutSeconds": 60,
+        },
+    ]
+    assert "GITHUB_TOKEN" not in params["env"]
+
+    limits = spec["limits"]
+    assert limits == {
+        "wallTimeSeconds": 3000,
+        "totalTokens": 20000000,
+        "maxOutputTokens": 65536,
+        "maxModelCalls": 256,
+        "maxAttempts": 3,
+        "toolTimeoutSeconds": 300,
+        "commandTimeoutSeconds": 600,
+    }
 
     validator_sh = ROOT / params["script"]
     assert validator_sh.is_file()
@@ -430,9 +469,53 @@ const localCommandGates = (dryRun.taskpack?.localCommandGates ?? []).map((gate) 
 }));
 
 const compiledScope = dryRun.taskpack?.config?.spec?.task?.spec?.scope ?? null;
+const compiledBudgets = dryRun.taskpack?.config?.spec?.task?.spec?.budgets ?? null;
+
+const badMcpResult = await lw.runGitHubActionEntrypoint({
+  repositoryRoot: repoRoot,
+  repositoryFullName: 'gpustack/runner',
+  taskpackPath: '.auto-sync/taskpack.yaml',
+  runRoot,
+  runId: 'contract-bad-mcp',
+  mode: 'candidate',
+  eventName: 'workflow_dispatch',
+  baseRevision: '0'.repeat(40),
+  mcpServersJson: JSON.stringify([{ id: 'insecure', transport: 'http', url: 'http://example.com/mcp' }]),
+  env: {
+    ...process.env,
+    GITHUB_ACTIONS: 'true',
+    CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN: 'test-token-value',
+  },
+  dryRun: true,
+});
+
+const badLimitsResult = await lw.runGitHubActionEntrypoint({
+  repositoryRoot: repoRoot,
+  repositoryFullName: 'gpustack/runner',
+  taskpackPath: '.auto-sync/taskpack.yaml',
+  runRoot,
+  runId: 'contract-bad-limits',
+  mode: 'candidate',
+  eventName: 'workflow_dispatch',
+  baseRevision: '0'.repeat(40),
+  upstreamRecords: [{ upstreamId: 'vllm', status: 'available', version: '0.34.0' }],
+  env: {
+    ...process.env,
+    GITHUB_ACTIONS: 'true',
+    CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN: 'test-token-value',
+    LOOPWRIGHT_TOTAL_TOKENS: '-5',
+  },
+  dryRun: true,
+});
 
 console.log(JSON.stringify({
   manifestName: manifest.metadata.name,
+  mcpServerIds: (manifest.spec.mcp?.servers ?? []).map((s) => s.id),
+  manifestTotalTokens: manifest.spec.limits?.totalTokens ?? null,
+  compiledTotalTokens: compiledBudgets?.totalTokens ?? null,
+  compiledWallTimeMs: compiledBudgets?.wallTimeMs ?? null,
+  badMcpKind: badMcpResult.kind,
+  badLimitsKind: badLimitsResult.kind,
   preferredBackends: policy.preferredBackends,
   negotiatedBackendId: negotiated.backendId,
   hasCustomGateway: modelsConfig.providers.has('custom-gateway'),
@@ -468,6 +551,12 @@ console.log(JSON.stringify({
     # runActionCli prints one JSON result line to stdout before our final console.log line.
     payload = json.loads(result.stdout.strip().splitlines()[-1])
     assert payload["manifestName"] == "auto-sync"
+    assert payload["mcpServerIds"] == ["github", "deepwiki"]
+    assert payload["manifestTotalTokens"] == 20_000_000
+    assert payload["compiledTotalTokens"] == 20_000_000
+    assert payload["compiledWallTimeMs"] == 3_000_000
+    assert payload["badMcpKind"] == "blocked"
+    assert payload["badLimitsKind"] == "blocked"
     assert payload["preferredBackends"] == ["direct-dedicated"]
     assert payload["negotiatedBackendId"] == "direct-dedicated"
     assert payload["hasCustomGateway"] is True
@@ -493,7 +582,7 @@ console.log(JSON.stringify({
     assert len(local_gates) == 1
     assert local_gates[0]["checkId"] == "runner-static-checks"
     assert local_gates[0]["script"] == ".auto-sync/checks/validate_candidate.sh"
-    assert local_gates[0]["timeoutSeconds"] == 55
+    assert local_gates[0]["timeoutSeconds"] == 300
     assert local_gates[0]["allowReadOnlyGitHubToken"] is True
     assert local_gates[0]["env"] == ["PACK_RUN_URL", "PYTHON_BIN"]
 
@@ -508,5 +597,8 @@ console.log(JSON.stringify({
     assert output_lines[result_idx + 2] == "LOOPWRIGHT_EOF"
     cli_result = json.loads(output_lines[result_idx + 1])
     assert cli_result["kind"] == "compiled"
-    assert cli_result["manifest"]["metadata"]["name"] == "auto-sync"
+    assert cli_result["taskpack"]["name"] == "auto-sync"
+    assert "registryBytes" not in cli_result["taskpack"]
+    assert "configBytes" not in cli_result["taskpack"]
+    assert cli_result["taskpack"]["registryByteLength"] > 0
     assert "test-token-value" not in github_output_path.read_text(encoding="utf-8")
