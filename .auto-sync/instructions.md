@@ -130,9 +130,12 @@ Write valid UTF-8 JSON with no duplicate keys to `.autosync/proposal.json` (and 
   - `engine_version`: bare PEP 440 version string (required stable version when `ready`; `null` or string otherwise)
   - `plugin_version`: bare PEP 440 version string for `cann/vllm` when `ready`; `null` for all other subscriptions
   - `reason`: concise non-empty string
-  - `packages`: list of `{ "name": "<canonical-key>", "version": "<pep440-or-hex-or-null>", "decision": "retain" | "update" | "disable" | "source", "reason": "...", "sources": ["https://..."] }`
-  - `patches`: list of `{ "path": "pack/...", "disposition": "retain" | "adapt" | "remove" | "add", "reason": "...", "versions": ["0.33.0"], "platforms": ["linux/amd64"], "sources": ["https://..."] }`
-  - `sources`: list of bare `https://` URLs (non-empty when `status == "ready"`).
+  - `packages`: list of `{ "name": "<canonical-key>", "version": "<pep440-or-hex-or-null>", "decision": "retain" | "update" | "disable" | "source", "reason": "<non-empty>", "sources": ["https://..."] }`, strictly matching `decision`:
+    - `decision == "disable"`: `"version"` MUST be `null`
+    - `decision == "source"` (use `"source"` for any commit-pinned package such as `vllm-omni` / `VLLM_OMNI_COMMIT`, even when unchanged): `"version"` MUST be a 7–40 lowercase hex commit SHA (NEVER `null`)
+    - `decision` in `{"retain", "update"}`: `"version"` MUST be a bare PEP 440 version string without `"v"` prefix (e.g. `"0.5.6"`, NEVER `null`, even when subscription `status` is `"blocked"` or `"unchanged"` — record the recipe's pinned version or omit unconfigured packages)
+  - `patches`: list of `{ "path": "pack/...", "disposition": "retain" | "adapt" | "remove" | "add", "reason": "<non-empty>", "versions": ["0.33.0"], "platforms": ["linux/amd64"], "sources": ["https://..."] }`
+  - `sources` (subscription, package, and patch): list of bare `https://` URLs with a non-root path (non-empty on the subscription when `status == "ready"`).
 
 ## 9. Final Turn Submission (`submission.v1`)
 
