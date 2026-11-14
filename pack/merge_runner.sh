@@ -199,7 +199,7 @@ if [[ "${INPUT_CATALOG_REFRESH}" != "true" ]]; then
     # Prune/discard have no collection evidence and must preserve support state.
     SUPPORT_FILE="${INPUT_WORKSPACE}/../docs/support-records.md"
     SUPPORT_CANDIDATE="$(mktemp "$(dirname "${SUPPORT_FILE}")/.support.XXXXXX")"
-    python3 "$(dirname "${BASH_SOURCE[0]}")/../tools/auto_sync/discovery.py" promote \
+    python3 "$(dirname "${BASH_SOURCE[0]}")/promote_support.py" promote \
         --support "${SUPPORT_FILE}" \
         --context "${WORK_DIR}/context.json" \
         --dependencies "${WORK_DIR}/dependencies.json" \
