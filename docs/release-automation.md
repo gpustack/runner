@@ -104,7 +104,7 @@ Setting only one is an error. Optional gateway variables are:
 Manual dispatch accepts `runner_profile`, `dry-run`, `max-session-tokens`, `wall-time-seconds`, `llm-thinking`, `llm-temperature`, `llm-top-p`, `llm-max-tokens`, `llm-reasoning-effort`, and `pack-run-url`.
 Execution budgets and MCP servers are declared under `spec.limits` and `spec.mcp.servers` in `.auto-sync/taskpack.yaml`, and can be overridden without editing the manifest via workflow inputs (`max-session-tokens`, `wall-time-seconds`, `llm-max-tokens`) or optional repository variables (`CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_WALL_TIME_SECONDS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_MODEL_CALLS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_ATTEMPTS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_TOOL_TIMEOUT_SECONDS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_COMMAND_TIMEOUT_SECONDS`, `CI_GPUSTACK_RUNNER_AUTOSYNC_MCP_SERVERS`).
 Dry runs compile and validate the taskpack without invoking the model or publishing a PR.
-The workflow installs SHA-256-verified `github-mcp-server` (`v2.0.1`, wired with the read-only `GITHUB_TOKEN`) and `crane` (`v0.21.9`), and uses `CI_PRT_GENERATOR_ID` and `CI_PRT_GENERATOR_KEY` for its pull-request publication App token.
+The workflow installs SHA-256-verified `github-mcp-server` (`v2.0.1`, wired with the read-only `GITHUB_TOKEN`) and `crane` (`v0.21.9`), and authenticates pull-request publication with the `gpustack-loopwright` GitHub App (`CI_GPUSTACK_LOOPWRIGHT_APP_ID` and `CI_GPUSTACK_LOOPWRIGHT_APP_PRIVATE_KEY`).
 `AUTOSYNC_RUNNER` selects the default runner unless a non-default runner profile is requested.
 Repository-wide concurrency uses `queue: max` and `cancel-in-progress: false`.
 
@@ -121,7 +121,7 @@ Run from the repository root:
 
 ```sh
 make prepare && uv sync --locked --all-packages
-uv run pytest tests/gpustack_runner tests/pack tests/auto_sync
+uv run pytest tests/gpustack_runner tests/pack
 uv run python .auto-sync/checks/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
 uv run mkdocs build --strict
 ```

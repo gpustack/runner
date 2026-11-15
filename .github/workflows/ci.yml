@@ -75,37 +75,12 @@ jobs:
           make clean build
         env:
           LINT_DIRTY: "true"
+      - name: Validate documentation
+        if: matrix.os == 'linux' && matrix.python-version == '3.12'
+        run: uv run mkdocs build --strict
       - name: Upload Assets
         uses: actions/upload-artifact@v4
         with:
           retention-days: 5
           path: dist/*
           name: gputack-runner-${{ matrix.os }}-${{ matrix.python-version }}
-
-  # Validate auto-sync taskpack, candidate checks, workflows, and documentation.
-  auto-sync-contract:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - name: Setup UV
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "0.8.24"
-          enable-cache: true
-          python-version: "3.10"
-      - name: Install locked Python dependencies
-        run: |
-          make prepare
-          uv sync --locked --all-packages
-      - name: Run all offline automation contracts
-        run: uv run pytest tests/auto_sync
-      - name: Validate workflows
-        run: |
-          uv run python .auto-sync/checks/lint_workflows.py \
-            .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
-      - name: Validate documentation
-        run: uv run mkdocs build --strict

@@ -165,16 +165,6 @@ jobs:
           sudo install -m 0755 "$tool_dir/github-mcp-server" "$tool_dir/crane" /usr/local/bin/
           github-mcp-server --version
           crane version
-      - name: Create repository App token
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.CI_PRT_GENERATOR_ID }}
-          private-key: ${{ secrets.CI_PRT_GENERATOR_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: ${{ github.event.repository.name }}
-          permission-contents: write
-          permission-pull-requests: write
       - name: Prepare optional LLM gateway overrides
         id: model-config
         env:
@@ -211,7 +201,8 @@ jobs:
           models-json: ${{ steps.model-config.outputs.models-json }}
           allow-custom-base-url: 'true'
           provider-token-env: CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN
-          github-token: ${{ steps.app-token.outputs.token }}
+          github-app-id: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_APP_ID || vars.CI_GPUSTACK_LOOPWRIGHT_APP_ID }}
+          github-app-private-key: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_APP_PRIVATE_KEY }}
           total-tokens: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS }}
           wall-time-seconds: ${{ inputs.wall-time-seconds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_WALL_TIME_SECONDS }}
           context-window: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}

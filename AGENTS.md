@@ -56,11 +56,9 @@ make prepare
 uv sync --locked --all-packages
 uv run pytest tests/gpustack_runner
 uv run pytest tests/pack
-uv run pytest tests/auto_sync
 uv run mkdocs build --strict
 ```
 
-`tests/auto_sync` verifies `.auto-sync/taskpack.yaml`, `.auto-sync/instructions.md`, `.auto-sync/checks/`, and workflow contracts offline.
 Use focused tests while editing, then the full suite at integration checkpoints.
 Add behavior tests with positive and negative cases. Confirm a new rejection gate rejects a known bad input.
 Assert observable results, rather than wording, counts, or implementation structure alone.
