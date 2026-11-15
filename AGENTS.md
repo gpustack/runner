@@ -13,7 +13,7 @@ Start with the guide for the affected contract:
 | Supported versions and platforms | [Supported runners](docs/supported-runners.md) | `gpustack_runner/runner.py.json`, `pack/matrix.yaml`, `docs/support-records.md` |
 | Recipes and image production | [Packaging](docs/packaging.md) | `pack/<backend>/Dockerfile.<service>`, `resolve_dockerfile.sh`, `expand_matrix.sh`, `.github/workflows/pack.yml` |
 | Installed dependencies | [Dependency metadata](docs/dependency-metadata.md) | `pack/dependencies.json`, `probe_dependencies.py`, `collect_dependencies.py`, `promote_support.py`, `merge_runner.sh` |
-| Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `.auto-sync/`, `.agents/skills/runner-release-sync/SKILL.md` |
+| Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `.auto-sync/taskpack.yaml`, `.auto-sync/instructions.md`, `.auto-sync/checks/validate_candidate.py`, `.github/workflows/auto-sync.yml` |
 
 Confirm the checkout, branch, uncommitted changes, and relevant dependency versions before editing.
 Search local source with `rg`. An index or guide points to evidence; it does not prove current behavior.
@@ -80,13 +80,13 @@ Run `make package` or Pack only when image production is explicitly authorized.
 
 ## Release automation
 
-Use [runner-release-sync](.agents/skills/runner-release-sync/SKILL.md) for upstream discovery or an authorized `/auto-sync` revision.
+Use `loopwright step next --taskpack .auto-sync/taskpack.yaml` (with the portable `loopwright-step` skill from `gpustack/loopwright`) for local upstream discovery or an authorized `/auto-sync` revision; see [Release automation](docs/release-automation.md#local-verification).
 Use [runner-release](.agents/skills/runner-release/SKILL.md) to cut package releases (tag, notes, promotion) and to align README and supported-runners documentation with published support records.
 The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright@main` with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
 It optionally generates a custom Pi `models.json` with `.auto-sync/checks/write_models_json.py` when both `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL` and `CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL` are set.
-The taskpack also owns `.auto-sync/checks/` and `.auto-sync/memory/`.
+The taskpack also owns `.auto-sync/proposal.json`, `.auto-sync/checks/`, and `.auto-sync/memory/`.
 Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools.
-It enforces writable and protected scope with `scope.v1`, checks `.autosync/proposal.json` with `json-artifact.v1`, and runs `.auto-sync/checks/validate_candidate.sh` with `command.v1` before publishing or updating an `auto-sync/*` PR.
+It enforces writable and protected scope with `scope.v1`, checks `.auto-sync/proposal.json` with `json-artifact.v1`, and runs `.auto-sync/checks/validate_candidate.sh` with `command.v1` before publishing or updating an `auto-sync/*` PR.
 The agent cannot merge, publish images, invoke Pack, or edit its controlling policy.
 If a decision is ambiguous or compatibility evidence is missing, return `blocked` and end the affected work.
 If configuration, tools, deadlines, or output validation fail, return `failed`.

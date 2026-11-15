@@ -20,7 +20,7 @@ Upstreams:
 - `vllm-project/vllm-ascend`: releases and prereleases paired with their documented stable vLLM engine.
 
 Writable scope (edit only these paths):
-- `.autosync/proposal.json`
+- `.auto-sync/proposal.json`
 - `pack/matrix.yaml`
 - `pack/cuda/Dockerfile.vllm`, `pack/cuda/Dockerfile.sglang`, `pack/cuda/patches/**`
 - `pack/rocm/Dockerfile.vllm`, `pack/rocm/Dockerfile.sglang`, `pack/rocm/patches/**`
@@ -34,7 +34,7 @@ Protected or out-of-scope paths (NEVER edit):
 - `pack/resolve_dockerfile.sh`, `pack/expand_matrix.sh`, `pack/probe_dependencies.py`, `pack/collect_dependencies.py`, `pack/promote_support.py`, `pack/merge_runner.sh`, `pack/prune_runner.sh`, `pack/discard_runner.sh`, `pack/squash_expand_matrix.sh`, `pack/squash_image.sh`
 - `pack/cuda/Dockerfile.voxbox`, `pack/cann/Dockerfile.mindie`, `pack/cann/mindie-atb-models_*.tar.gz`, `pack/cann/patches/hixl`, `pack/cann/patches/mindie.zip`
 - `pack/corex`, `pack/dtk`, `pack/hggc`, `pack/maca`, `pack/musa`, `pack/shared`
-- `.auto-sync/`, `.github/`, `.agents/`, `.claude/`, `AGENTS.md`, `tests/`, `docs/release-automation.md`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/modules`
+- `.auto-sync/` (except `.auto-sync/proposal.json`), `.github/`, `.agents/`, `.claude/`, `AGENTS.md`, `tests/`, `docs/release-automation.md`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/modules`
 
 ## 2. Incremental Release-Line Chasing Policy
 
@@ -96,7 +96,7 @@ Read `docs/support-records.md` and `git log`/`git show` on files before changing
 ## 4. Additional-Package Prerelease Whitelist (`pack/prereleases.yaml`)
 
 - Canonical package keys: `lmcache`, `mooncake`, `lmcache-ascend`, `vllm-omni`, `diffusers`, `vllm-ascend`.
-- Always use canonical package keys in `.autosync/proposal.json` (never distribution aliases such as `mooncake-transfer-engine-rocm`).
+- Always use canonical package keys in `.auto-sync/proposal.json` (never distribution aliases such as `mooncake-transfer-engine-rocm`).
 - Additional packages must select stable PEP 440 releases unless their canonical key is listed under `packages:` in `pack/prereleases.yaml`.
 - Do not downgrade a whitelisted package's required prerelease line to an older incompatible stable release.
 
@@ -105,7 +105,7 @@ Read `docs/support-records.md` and `git log`/`git show` on files before changing
 - Review every patch under writable patch directories (`pack/cuda/patches`, `pack/rocm/patches`, `pack/cann/patches/vllm`, `pack/cann/patches/vllm_ascend`, `pack/cann/patches/vllm_omni`) against the exact selected upstream source revision using `git apply --check`.
 - Assign each patch one disposition: `retain`, `adapt`, `remove`, or `add`.
 - When removing an obsolete patch (`remove`), delete the `.patch` file using the mediated `delete` tool and update Dockerfile references if needed; never leave an unreferenced or empty `.patch` file behind.
-- Patch `versions` in `.autosync/proposal.json` must be bare PEP 440 version strings (e.g. `0.33.0`, never `v0.33.0` or `vllm-0.33.0`).
+- Patch `versions` in `.auto-sync/proposal.json` must be bare PEP 440 version strings (e.g. `0.33.0`, never `v0.33.0` or `vllm-0.33.0`).
 
 ## 6. Variant Rotation and Support Records (`docs/support-records.md`)
 
@@ -116,11 +116,11 @@ Read `docs/support-records.md` and `git log`/`git show` on files before changing
 ## 7. Focused `/auto-sync` PR Revisions and `PACK_RUN_URL` Diagnosis
 
 - On `/auto-sync` comment revisions (`retry`, `revise`, `status`), preserve human commits, accepted choices, and unrelated subscriptions. Do not guess when feedback is ambiguous or conflicting; settle affected subscriptions as `blocked`.
-- When `PACK_RUN_URL` is set in the environment, inspect the referenced failed Pack workflow run, map each failing job/step to its owning subscription, record that exact `PACK_RUN_URL` in `.autosync/proposal.json` (via top-level `"pack_run_url"` or in a subscription's `"sources"` / `"reason"`), and scope the fix to the failing recipe, patches, or pins while keeping the chasing rule.
+- When `PACK_RUN_URL` is set in the environment, inspect the referenced failed Pack workflow run, map each failing job/step to its owning subscription, record that exact `PACK_RUN_URL` in `.auto-sync/proposal.json` (via top-level `"pack_run_url"` or in a subscription's `"sources"` / `"reason"`), and scope the fix to the failing recipe, patches, or pins while keeping the chasing rule.
 
-## 8. Proposal Artifact Contract (`.autosync/proposal.json`)
+## 8. Proposal Artifact Contract (`.auto-sync/proposal.json`)
 
-Write valid UTF-8 JSON with no duplicate keys to `.autosync/proposal.json` (and keep `.autosync/` free of any other files or subdirectories):
+Write valid UTF-8 JSON with no duplicate keys to `.auto-sync/proposal.json` (and never create or modify any other files under `.auto-sync/`):
 - `schema_version`: integer `1`
 - `summary`: concise non-empty string summarizing the run
 - `versions`: object mapping upstream IDs (`"vllm"`, `"sglang"`, `"vllm-ascend"`) to their selected tags (`{"vllm": "<tag>", "sglang": "<tag>", "vllm-ascend": "<tag>"}`) so Loopwright baseline version discovery and managed-PR deduplication work deterministically
@@ -128,7 +128,7 @@ Write valid UTF-8 JSON with no duplicate keys to `.autosync/proposal.json` (and 
 - `subscriptions`: object keyed by all 6 subscription IDs (`cuda/vllm`, `cuda/sglang`, `rocm/vllm`, `rocm/sglang`, `cann/vllm`, `cann/sglang`) or list of 6 objects with `"subscription"`, each containing:
   - `status`: `"ready" | "unchanged" | "blocked" | "failed"`
   - `engine_version`: bare PEP 440 version string (required stable version when `ready`; `null` or string otherwise)
-  - `plugin_version`: bare PEP 440 version string for `cann/vllm` when `ready`; `null` for all other subscriptions
+  - `plugin_version`: bare PEP 440 version string for `cann/vllm` (required when `ready`; `null` or string otherwise); `null` for all other subscriptions
   - `reason`: concise non-empty string
   - `packages`: list of `{ "name": "<canonical-key>", "version": "<pep440-or-hex-or-null>", "decision": "retain" | "update" | "disable" | "source", "reason": "<non-empty>", "sources": ["https://..."] }`, strictly matching `decision`:
     - `decision == "disable"`: `"version"` MUST be `null`
@@ -139,5 +139,5 @@ Write valid UTF-8 JSON with no duplicate keys to `.autosync/proposal.json` (and 
 
 ## 9. Final Turn Submission (`submission.v1`)
 
-After writing `.autosync/proposal.json` and verifying the candidate workspace, your final assistant reply MUST be ONLY one raw UTF-8 JSON object (no surrounding prose, no Markdown summary, and no bare code fences):
+After writing `.auto-sync/proposal.json` and verifying the candidate workspace, your final assistant reply MUST be ONLY one raw UTF-8 JSON object (no surrounding prose, no Markdown summary, and no bare code fences):
 `{"version":1,"status":"completed","checks":[],"reason":"<single-line printable summary>"}` (or `"status":"no_change"` / `"blocked"` / `"failed"` as appropriate, with `"checks":[]` and no newlines or tabs in `"reason"`).

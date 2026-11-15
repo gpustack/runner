@@ -4,11 +4,11 @@ metadata:
   name: auto-sync
 spec:
   goal:
-    candidate: Research upstream GPUStack Runner releases across cuda/vllm, cuda/sglang, rocm/vllm, rocm/sglang, cann/vllm, and cann/sglang, update writable recipes, patches, matrix, support docs, and .autosync/proposal.json, and pass all static candidate checks.
+    candidate: Research upstream GPUStack Runner releases across cuda/vllm, cuda/sglang, rocm/vllm, rocm/sglang, cann/vllm, and cann/sglang, update writable recipes, patches, matrix, support docs, and .auto-sync/proposal.json, and pass all static candidate checks.
     noChange: Confirm subscribed upstream GPUStack Runner releases match the current catalog and support records with no eligible release-line advancement and settle cleanly as no_change.
   scope:
     writable:
-      - .autosync
+      - .auto-sync/proposal.json
       - pack/matrix.yaml
       - pack/cuda
       - pack/rocm
@@ -42,7 +42,7 @@ spec:
       watchedPaths: []
       allowPrerelease: true
   proposal:
-    path: .autosync/proposal.json
+    path: .auto-sync/proposal.json
     requiredFields:
       - schema_version
       - summary

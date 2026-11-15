@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "summary": "Bump cann/vllm to vllm-ascend v0.32.0rc1 paired with stable vLLM 0.32.0 (vLLM-Omni v0.32.0, mooncake 0.3.14, vllm-router 0.1.17, LMCache disabled until LMCache-Ascend supports the 0.32 KV connector); cuda/rocm vllm and all sglang subscriptions already track their latest stable lines and stay unchanged.",
+  "summary": "All six subscribed combinations match their pinned release lines on main (cuda/rocm vLLM 0.33.0, cuda/rocm/cann SGLang 0.5.23, and cann/vLLM vllm-ascend v0.32.0rc1 paired with stable vLLM 0.32.0).",
   "versions": {
     "vllm": "v0.33.0",
     "sglang": "v0.5.23",
@@ -67,21 +67,21 @@
     },
     {
       "subscription": "cann/vllm",
-      "status": "ready",
+      "status": "unchanged",
       "engine_version": "0.32.0",
       "plugin_version": "0.32.0rc1",
-      "reason": "Chased the next vllm-ascend release line above the 0.30.0 base: v0.32.0rc1 (prerelease whitelisted for vllm-ascend) is paired with upstream vLLM v0.32.0, CANN 9.2.1 and torch-npu 2.10.0/post7, matching the existing recipe; base images v0.32.0rc1{-a5,-a3,-310p} are built from the releases/v0.32.0rc tag push workflow; LMCache is disabled because LMCache-Ascend (v0.5.7, anchored to LMCache v0.5.6) declares support for vLLM 0.23-0.30 only.",
+      "reason": "Recipe and published support records already track vllm-ascend v0.32.0rc1 paired with stable vLLM 0.32.0 on CANN 9.2 (950/a3/910b/310p); LMCache stays disabled because LMCache-Ascend v0.5.7 supports vLLM 0.23-0.30 only.",
       "packages": [
-        { "name": "vllm-ascend", "version": "0.32.0rc1", "decision": "update", "reason": "Next release line above the 0.30.0 base; v0.32.0rc1 documents pairing with stable vLLM v0.32.0.", "sources": ["https://github.com/vllm-project/vllm-ascend/releases/tag/v0.32.0rc1", "https://github.com/vllm-project/vllm-ascend/blob/v0.32.0rc1/.github/workflows/schedule_image_build_and_push.yaml"] },
+        { "name": "vllm-ascend", "version": "0.32.0rc1", "decision": "retain", "reason": "Published CANN 9.2 support rows already track vllm-ascend v0.32.0rc1 paired with stable vLLM v0.32.0.", "sources": ["https://github.com/vllm-project/vllm-ascend/releases/tag/v0.32.0rc1", "https://github.com/vllm-project/vllm-ascend/blob/v0.32.0rc1/.github/workflows/schedule_image_build_and_push.yaml"] },
         { "name": "lmcache", "version": null, "decision": "disable", "reason": "No LMCache/LMCache-Ascend pair supports the vLLM 0.32 KV connector (LMCache-Ascend v0.5.7 supports vLLM 0.23-0.30); disabled rather than mixing lines.", "sources": ["https://github.com/LMCache/LMCache-Ascend/releases/tag/v0.5.7"] },
         { "name": "lmcache-ascend", "version": null, "decision": "disable", "reason": "v0.5.7 (LMCACHE_UPSTREAM_TAG v0.5.6) supports vLLM 0.23-0.30 on CANN only; keeping the old pair with vLLM 0.32 would mix lines, so LMCache is disabled.", "sources": ["https://github.com/LMCache/LMCache-Ascend/releases/tag/v0.5.7", "https://github.com/LMCache/LMCache-Ascend/blob/v0.5.7/lmcache_ascend/__init__.py"] },
-        { "name": "mooncake", "version": "0.3.14", "decision": "update", "reason": "Stable mooncake v0.3.14 ships mooncake-transfer-engine-npu 0.3.14 wheels (cp312 amd64/arm64) and the vllm-ascend v0.32.0rc1 line requires mooncake-transfer-engine-npu 0.3.14.rc1 or newer; 0.3.14 is the stable equivalent.", "sources": ["https://github.com/kvcache-ai/Mooncake/releases/tag/v0.3.14", "https://github.com/vllm-project/vllm-ascend/releases/tag/v0.32.0rc1"] },
+        { "name": "mooncake", "version": "0.3.14", "decision": "retain", "reason": "Pinned stable mooncake v0.3.14 ships mooncake-transfer-engine-npu 0.3.14 wheels satisfying the vllm-ascend v0.32.0rc1 requirement.", "sources": ["https://github.com/kvcache-ai/Mooncake/releases/tag/v0.3.14", "https://github.com/vllm-project/vllm-ascend/releases/tag/v0.32.0rc1"] },
         { "name": "vllm-omni", "version": "5917730a4b02aedb44d374173cdc1b10484ccd52", "decision": "source", "reason": "vLLM-Omni v0.32.0 (tag commit 5917730a) is the release aligned with vLLM 0.32.0, preferred over a main-branch commit.", "sources": ["https://github.com/vllm-project/vllm-omni/releases/tag/v0.32.0"] }
       ],
       "patches": [
         { "path": "pack/cann/patches/vllm/001_wrong_dp_ray.patch", "disposition": "retain", "reason": "Context in vllm/utils/network_utils.py at v0.32.0 still matches both hunks (_get_reserved_port_range/get_open_port unchanged).", "versions": ["0.32.0"], "platforms": ["linux/amd64", "linux/arm64"], "sources": ["https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/utils/network_utils.py"] },
         { "path": "pack/cann/patches/vllm_ascend/001_remote_host_port.patch", "disposition": "retain", "reason": "Context in vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py at v0.32.0rc1 (_get_remote_host_info_by_port) still matches.", "versions": ["0.32.0rc1"], "platforms": ["linux/amd64", "linux/arm64"], "sources": ["https://github.com/vllm-project/vllm-ascend/blob/v0.32.0rc1/vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py"] },
-        { "path": "pack/cann/patches/vllm_omni/001_wrong_patch.patch", "disposition": "adapt", "reason": "vLLM-Omni v0.32.0 changed the sys.modules snapshot to list(...) and rebinding to setattr(); the patch.py --omni gate hunk was rewritten for the new context, and the obsolete npu runner hunks (num_scheduled_tokens_compressed_list; _prepare_inputs is a 3-tuple again in v0.32.0) were removed.", "versions": ["0.32.0"], "platforms": ["linux/amd64", "linux/arm64"], "sources": ["https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/patch.py", "https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py"] },
+        { "path": "pack/cann/patches/vllm_omni/001_wrong_patch.patch", "disposition": "retain", "reason": "Unchanged subscription; patch already adapted for vLLM-Omni v0.32.0.", "versions": ["0.32.0"], "platforms": ["linux/amd64", "linux/arm64"], "sources": ["https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/patch.py", "https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py"] },
         { "path": "pack/cann/patches/vllm_omni/002_remove_humming_stub.patch", "disposition": "retain", "reason": "vllm_omni/quantization/factory.py at v0.32.0 still calls _register_humming_stubs() at the same location with matching context.", "versions": ["0.32.0"], "platforms": ["linux/amd64", "linux/arm64"], "sources": ["https://github.com/vllm-project/vllm-omni/blob/v0.32.0/vllm_omni/quantization/factory.py"] }
       ],
       "sources": [

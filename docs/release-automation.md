@@ -12,6 +12,7 @@ It checks out the trusted default branch and supplies these files to Loopwright:
 
 - `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` `Taskpack` defining upstreams, scope, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, and models.
 - `.auto-sync/instructions.md`: the author instructions, limited to 24,576 UTF-8 bytes. They directly consolidate upgrade rules for all six recipes.
+- `.auto-sync/proposal.json`: the canonical proposal artifact inside the protected `.auto-sync/` control root, exposed as an exact single-file writable entry.
 - `.auto-sync/memory/`: taskpack memory, applied through a separate pull request.
 - `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic candidate checks.
 - `.auto-sync/checks/write_models_json.py` and `lint_workflows.py`: gateway configuration and workflow linting.
@@ -74,8 +75,8 @@ Do not invent catalog dependency versions.
 
 ## Proposal output
 
-Write valid UTF-8 JSON without duplicate keys to `.autosync/proposal.json`.
-Keep `.autosync/` free of other files and directories.
+Write valid UTF-8 JSON without duplicate keys to `.auto-sync/proposal.json`.
+Never create or modify any other files under `.auto-sync/`.
 The artifact contains:
 
 - `schema_version`: integer `1`, and `summary`: a non-empty string.
@@ -121,10 +122,13 @@ Run from the repository root:
 
 ```sh
 make prepare && uv sync --locked --all-packages
+LOOPWRIGHT_CANDIDATE_DIR="$PWD" uv run bash .auto-sync/checks/validate_candidate.sh
 uv run pytest tests/gpustack_runner tests/pack
 uv run python .auto-sync/checks/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
 uv run mkdocs build --strict
 ```
+
+To drive `.auto-sync/taskpack.yaml` locally through an external coding agent without provider API secrets, install the portable `loopwright-step` skill (`npx skills add gpustack/loopwright --skill loopwright-step`), step the manifest with `loopwright step next --taskpack .auto-sync/taskpack.yaml --repo "$PWD" --run-root <outside-dir> --run-id <run-id> --json`, and export the verified overlay after terminal settlement with `loopwright inspect --run-root <outside-dir> --run-id <run-id> --output <export-dir> --json`; see [Loopwright Coding Agents](https://docs.gpustack.ai/loopwright/latest/docs/operations/coding-agents/).
 
 The tests and static checks run offline. They do not build images or validate GPU execution.
 

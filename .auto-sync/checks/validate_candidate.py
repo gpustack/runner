@@ -75,6 +75,25 @@ CANN_ALIASES = {
     "910b": "910b",
     "310p": "310p",
 }
+CONTROL_ROOT = ".auto-sync"
+PROPOSAL_REL_PATH = ".auto-sync/proposal.json"
+CONTROL_PLANE_PROTECTED_PATHS = (
+    ".auto-sync/taskpack.yaml",
+    ".auto-sync/taskpack.yml",
+    ".auto-sync/taskpack.json",
+    ".auto-sync/checks",
+    ".auto-sync/policies",
+)
+ALLOWED_CONTROL_ROOT_ENTRIES = {
+    "checks",
+    "instructions.md",
+    "memory",
+    "policies",
+    "proposal.json",
+    "taskpack.json",
+    "taskpack.yaml",
+    "taskpack.yml",
+}
 BUILTIN_PROTECTED_PATHS = (
     ".github",
     ".claude",
@@ -83,7 +102,7 @@ BUILTIN_PROTECTED_PATHS = (
     ".loopwright/policies",
     "AGENTS.md",
     "CLAUDE.md",
-    ".auto-sync",
+    CONTROL_ROOT,
 )
 SYNCED_PACK_BACKENDS = ("cuda", "rocm", "cann")
 BACKEND_WRITABLE_PATCH_PREFIXES = {
@@ -317,6 +336,10 @@ def _path_covered_by(candidate: str, prefix: str) -> bool:
     return candidate == clean_prefix or candidate.startswith(f"{clean_prefix}/")
 
 
+def _path_covered_by_ci(candidate: str, prefix: str) -> bool:
+    return _path_covered_by(candidate.lower(), prefix.lower())
+
+
 def _normalize_scope_rel_path(rel: object, label: str) -> str:
     _require(
         isinstance(rel, str) and bool(rel.strip()),
@@ -338,20 +361,35 @@ def classify_scope_path(
     rel_path: str,
     writable: tuple[str, ...],
     protected: tuple[str, ...],
+    *,
+    proposal_path: str | None = None,
 ) -> str:
     """Classify a repo-relative path using Loopwright Protected-Wins-Over-Writable subtree rules."""
     norm = _normalize_scope_rel_path(rel_path, "candidate path")
-    if any(_path_covered_by(norm, p_path) for p_path in protected):
+    if proposal_path is not None:
+        norm_proposal = _normalize_scope_rel_path(proposal_path, "spec.proposal.path")
+        if (
+            norm == norm_proposal
+            and norm_proposal.startswith(f"{CONTROL_ROOT}/")
+            and norm_proposal in writable
+        ):
+            if any(
+                p_path != CONTROL_ROOT and _path_covered_by_ci(norm, p_path)
+                for p_path in protected
+            ):
+                return "protected"
+            return "writable"
+    if any(_path_covered_by_ci(norm, p_path) for p_path in protected):
         return "protected"
     if any(_path_covered_by(norm, w_path) for w_path in writable):
         return "writable"
     return "outside_writable"
 
 
-def load_effective_scope(
+def _load_scope_and_proposal_path(
     root: Path,
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    """Load writable, effective-protected, and manifest-protected scope prefixes from taskpack.yaml."""
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], str]:
+    """Load writable, effective-protected, manifest-protected scope prefixes, and proposal.path."""
     raw = _load_strict_yaml(
         _read_regular_text(root, ".auto-sync/taskpack.yaml"),
         ".auto-sync/taskpack.yaml",
@@ -373,6 +411,16 @@ def load_effective_scope(
         isinstance(raw_protected, list),
         ".auto-sync/taskpack.yaml spec.scope.protected must be a list",
     )
+    proposal_cfg = spec.get("proposal")
+    _require(
+        isinstance(proposal_cfg, dict) and isinstance(proposal_cfg.get("path"), str),
+        ".auto-sync/taskpack.yaml missing spec.proposal.path",
+    )
+    proposal_path = _normalize_scope_rel_path(
+        proposal_cfg["path"],
+        "spec.proposal.path",
+    )
+
     writable = tuple(
         _normalize_scope_rel_path(item, "spec.scope.writable entry")
         for item in raw_writable
@@ -382,13 +430,31 @@ def load_effective_scope(
         for item in raw_protected
     )
 
-    extra_protected: list[str] = list(BUILTIN_PROTECTED_PATHS)
+    non_carvable_protected: list[str] = [
+        item for item in BUILTIN_PROTECTED_PATHS if item != CONTROL_ROOT
+    ]
+    non_carvable_protected.extend(CONTROL_PLANE_PROTECTED_PATHS)
+
     instructions = spec.get("instructions")
-    if isinstance(instructions, list):
+    if isinstance(instructions, str):
+        non_carvable_protected.append(
+            _normalize_scope_rel_path(instructions, "spec.instructions entry"),
+        )
+    elif isinstance(instructions, list):
         for item in instructions:
-            extra_protected.append(
+            non_carvable_protected.append(
                 _normalize_scope_rel_path(item, "spec.instructions entry"),
             )
+
+    memory_cfg = spec.get("memory")
+    if isinstance(memory_cfg, dict) and isinstance(memory_cfg.get("directory"), str):
+        non_carvable_protected.append(
+            _normalize_scope_rel_path(
+                memory_cfg["directory"],
+                "spec.memory.directory",
+            ),
+        )
+
     verification = spec.get("verification")
     if isinstance(verification, dict) and isinstance(
         verification.get("localChecks"),
@@ -398,28 +464,79 @@ def load_effective_scope(
             if isinstance(check, dict) and check.get("implementation") == "command.v1":
                 params = check.get("parameters")
                 if isinstance(params, dict) and isinstance(params.get("script"), str):
-                    extra_protected.append(
+                    non_carvable_protected.append(
                         _normalize_scope_rel_path(
                             params["script"],
                             "command.v1 script",
                         ),
                     )
 
-    effective_protected = tuple(dict.fromkeys([*extra_protected, *manifest_protected]))
-    for w_path in writable:
-        for p_path in effective_protected:
+    non_carvable_protected.extend(manifest_protected)
+    effective_protected = tuple(
+        dict.fromkeys([*BUILTIN_PROTECTED_PATHS, *non_carvable_protected]),
+    )
+
+    proposal_in_control_root = _path_covered_by_ci(proposal_path, CONTROL_ROOT)
+    if proposal_in_control_root:
+        _require(
+            proposal_path.startswith(f"{CONTROL_ROOT}/")
+            and proposal_path != CONTROL_ROOT,
+            f"spec.proposal.path must name a file inside {CONTROL_ROOT}, not the directory itself",
+        )
+        for p_path in dict.fromkeys(non_carvable_protected):
             _require(
-                not _path_covered_by(w_path, p_path),
+                not _path_covered_by_ci(proposal_path, p_path)
+                and not _path_covered_by_ci(p_path, proposal_path),
+                f"spec.proposal.path {proposal_path!r} overlaps protected path {p_path!r}",
+            )
+        _require(
+            proposal_path in writable,
+            f"control-root spec.proposal.path {proposal_path!r} requires an exact entry in spec.scope.writable",
+        )
+        _safe_path(root, proposal_path)
+
+    for w_path in writable:
+        is_carved_proposal = proposal_in_control_root and w_path == proposal_path
+        for p_path in effective_protected:
+            if is_carved_proposal and p_path == CONTROL_ROOT:
+                continue
+            _require(
+                not _path_covered_by_ci(w_path, p_path),
                 f"writable path {w_path!r} lives inside protected path {p_path!r}",
             )
         for builtin_path in BUILTIN_PROTECTED_PATHS:
             _require(
-                not _path_covered_by(builtin_path, w_path),
+                not _path_covered_by_ci(builtin_path, w_path),
                 f"writable path {w_path!r} encompasses built-in protected path {builtin_path!r}",
             )
+
+    if not proposal_in_control_root:
+        _require(
+            classify_scope_path(
+                proposal_path,
+                writable,
+                effective_protected,
+                proposal_path=proposal_path,
+            )
+            == "writable",
+            f"spec.proposal.path {proposal_path!r} must resolve inside writable scope",
+        )
+
     for p_path in manifest_protected:
         target = _safe_path(root, p_path)
         _require(target.exists(), f"protected path missing from candidate: {p_path}")
+    return writable, effective_protected, manifest_protected, proposal_path
+
+
+def load_effective_scope(
+    root: Path,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """Load writable, effective-protected, and manifest-protected scope prefixes from taskpack.yaml."""
+    writable, effective_protected, manifest_protected, _ = (
+        _load_scope_and_proposal_path(
+            root,
+        )
+    )
     return writable, effective_protected, manifest_protected
 
 
@@ -427,6 +544,8 @@ def _validate_git_scope(
     root: Path,
     writable: tuple[str, ...],
     protected: tuple[str, ...],
+    *,
+    proposal_path: str | None = None,
 ) -> None:
     if not (root / ".git").exists():
         return
@@ -484,7 +603,12 @@ def _validate_git_scope(
     for rel_path in sorted(changed_paths):
         if PurePosixPath(rel_path).name == ".DS_Store":
             continue
-        verdict = classify_scope_path(rel_path, writable, protected)
+        verdict = classify_scope_path(
+            rel_path,
+            writable,
+            protected,
+            proposal_path=proposal_path,
+        )
         _require(
             verdict != "protected",
             f"modified path is protected: {rel_path}",
@@ -650,28 +774,69 @@ def _validate_patches(root: Path, raw_patches: object, sub_id: str) -> None:
 def _validate_proposal(
     root: Path,
     prerelease_packages: set[str],
+    *,
+    proposal_path: str = PROPOSAL_REL_PATH,
 ) -> dict[str, dict[str, object]]:
-    autosync_dir = _safe_path(root, ".autosync")
-    _require(autosync_dir.is_dir(), "missing required .autosync directory")
     _require(
-        sorted(p.name for p in autosync_dir.iterdir()) == ["proposal.json"],
-        ".autosync/ must contain only proposal.json",
+        proposal_path == PROPOSAL_REL_PATH,
+        f".auto-sync/taskpack.yaml spec.proposal.path must be {PROPOSAL_REL_PATH!r}, got {proposal_path!r}",
+    )
+    legacy_autosync = root / ".autosync"
+    _require(
+        not legacy_autosync.exists() and not legacy_autosync.is_symlink(),
+        "legacy .autosync path must not exist; use .auto-sync/proposal.json",
+    )
+    control_dir = _safe_path(root, CONTROL_ROOT)
+    _require(control_dir.is_dir(), "missing required .auto-sync directory")
+    for entry in sorted(control_dir.rglob("*")):
+        _safe_path(root, entry.relative_to(root).as_posix())
+    unexpected_control_entries = sorted(
+        entry.name
+        for entry in control_dir.iterdir()
+        if entry.name not in {".DS_Store", "__pycache__"}
+        and entry.name not in ALLOWED_CONTROL_ROOT_ENTRIES
+    )
+    _require(
+        not unexpected_control_entries,
+        f".auto-sync/ contains unexpected entries: {unexpected_control_entries}",
+    )
+
+    proposal_file = _safe_path(root, PROPOSAL_REL_PATH)
+    _require(
+        proposal_file.is_file(),
+        f"missing required regular file: {PROPOSAL_REL_PATH}",
+    )
+    _require(
+        proposal_file.stat().st_nlink == 1,
+        f"{PROPOSAL_REL_PATH} must not be hardlinked",
     )
 
     raw = _load_strict_json(
-        _read_regular_text(root, ".autosync/proposal.json"),
-        ".autosync/proposal.json",
+        _read_regular_text(root, PROPOSAL_REL_PATH),
+        PROPOSAL_REL_PATH,
     )
-    _require(isinstance(raw, dict), ".autosync/proposal.json must be a JSON object")
+    _require(isinstance(raw, dict), ".auto-sync/proposal.json must be a JSON object")
+    allowed_top_keys = {
+        "schema_version",
+        "summary",
+        "versions",
+        "pack_run_url",
+        "subscriptions",
+    }
+    unknown_top_keys = sorted(set(raw) - allowed_top_keys)
+    _require(
+        not unknown_top_keys,
+        f".auto-sync/proposal.json contains unknown top-level keys: {unknown_top_keys}",
+    )
     schema_version = raw.get("schema_version")
     _require(
         type(schema_version) is int and schema_version == 1,
-        ".autosync/proposal.json schema_version must be integer 1",
+        ".auto-sync/proposal.json schema_version must be integer 1",
     )
     summary = raw.get("summary")
     _require(
         isinstance(summary, str) and bool(summary.strip()),
-        ".autosync/proposal.json summary must be a non-empty string",
+        ".auto-sync/proposal.json summary must be a non-empty string",
     )
 
     parsed_versions: dict[str, Version] = {}
@@ -679,40 +844,40 @@ def _validate_proposal(
         raw_versions = raw["versions"]
         _require(
             isinstance(raw_versions, dict),
-            ".autosync/proposal.json versions must be a JSON object",
+            ".auto-sync/proposal.json versions must be a JSON object",
         )
         for upstream_id, ver_val in raw_versions.items():
             _require(
                 isinstance(upstream_id, str) and upstream_id in UPSTREAM_IDS,
-                f".autosync/proposal.json versions has unknown upstream key: {upstream_id!r}",
+                f".auto-sync/proposal.json versions has unknown upstream key: {upstream_id!r}",
             )
             _require(
                 isinstance(ver_val, str) and bool(ver_val.strip()),
-                f".autosync/proposal.json versions[{upstream_id!r}] must be a non-empty version string",
+                f".auto-sync/proposal.json versions[{upstream_id!r}] must be a non-empty version string",
             )
             _require(
                 ver_val.strip() == ver_val,
-                f".autosync/proposal.json versions[{upstream_id!r}] must not have surrounding whitespace",
+                f".auto-sync/proposal.json versions[{upstream_id!r}] must not have surrounding whitespace",
             )
             try:
                 parsed_ver = Version(ver_val)
             except InvalidVersion as exc:
                 msg = (
-                    f".autosync/proposal.json versions[{upstream_id!r}] "
+                    f".auto-sync/proposal.json versions[{upstream_id!r}] "
                     f"invalid PEP 440 version {ver_val!r}: {exc}"
                 )
                 raise ValidationError(msg) from exc
             if upstream_id in {"vllm", "sglang"}:
                 _require(
                     not parsed_ver.is_prerelease and not parsed_ver.is_devrelease,
-                    f".autosync/proposal.json versions[{upstream_id!r}] must be stable: {ver_val!r}",
+                    f".auto-sync/proposal.json versions[{upstream_id!r}] must be stable: {ver_val!r}",
                 )
             parsed_versions[upstream_id] = parsed_ver
 
     if "pack_run_url" in raw and raw["pack_run_url"] is not None:
         _validate_https_urls(
             [raw["pack_run_url"]],
-            ".autosync/proposal.json pack_run_url",
+            ".auto-sync/proposal.json pack_run_url",
         )
 
     raw_subs = raw.get("subscriptions")
@@ -736,7 +901,7 @@ def _validate_proposal(
             _require(key not in subs, f"duplicate subscription in proposal: {key}")
             subs[key] = item
     else:
-        msg = ".autosync/proposal.json subscriptions must be an object or list"
+        msg = ".auto-sync/proposal.json subscriptions must be an object or list"
         raise ValidationError(msg)
 
     _require(
@@ -782,15 +947,16 @@ def _validate_proposal(
         _validate_packages(entry.get("packages"), sub_id, prerelease_packages)
         _validate_patches(root, entry.get("patches"), sub_id)
 
-        if status == "ready":
+        if status in {"ready", "unchanged"}:
             upstream_key = (
                 "vllm-ascend" if sub_id == "cann/vllm" else sub_id.split("/", 1)[1]
             )
-            if upstream_key in parsed_versions:
-                expected_ver = Version(str(plugin if sub_id == "cann/vllm" else engine))
+            target_ver = plugin if sub_id == "cann/vllm" else engine
+            if upstream_key in parsed_versions and target_ver is not None:
+                expected_ver = Version(str(target_ver))
                 _require(
                     parsed_versions[upstream_key] == expected_ver,
-                    f".autosync/proposal.json versions[{upstream_key!r}] ({parsed_versions[upstream_key]}) does not match {sub_id} ready version ({expected_ver})",
+                    f".auto-sync/proposal.json versions[{upstream_key!r}] ({parsed_versions[upstream_key]}) does not match {sub_id} {status} version ({expected_ver})",
                 )
 
     pack_run_url = os.environ.get("PACK_RUN_URL", "").strip()
@@ -810,7 +976,7 @@ def _validate_proposal(
         )
         _require(
             referenced,
-            f".autosync/proposal.json must reference PACK_RUN_URL ({pack_run_url})",
+            f".auto-sync/proposal.json must reference PACK_RUN_URL ({pack_run_url})",
         )
 
     return subs
@@ -955,6 +1121,8 @@ def _validate_dockerfiles_and_patches(
     prerelease_packages: set[str],
     writable: tuple[str, ...],
     protected: tuple[str, ...],
+    *,
+    proposal_path: str | None = None,
 ) -> None:
     lmcache_pins: set[str] = set()
     dockerfile_globs: dict[tuple[str, str], set[str]] = {}
@@ -1114,11 +1282,19 @@ def _validate_dockerfiles_and_patches(
             f"pack/{backend}/Dockerfile.sglang",
         }
         for entry in sorted(backend_root.rglob("*")):
-            if entry.name == ".DS_Store" or "__pycache__" in entry.parts:
-                continue
             rel = entry.relative_to(root).as_posix()
             _safe_path(root, rel)
-            if classify_scope_path(rel, writable, protected) == "protected":
+            if entry.name == ".DS_Store" or "__pycache__" in entry.parts:
+                continue
+            if (
+                classify_scope_path(
+                    rel,
+                    writable,
+                    protected,
+                    proposal_path=proposal_path,
+                )
+                == "protected"
+            ):
                 continue
             if entry.is_dir():
                 continue
@@ -1681,10 +1857,17 @@ def _validate_support_records(root: Path, subs: dict[str, dict[str, object]]) ->
 def validate_candidate(candidate_dir: Path) -> None:
     root = candidate_dir.resolve()
     _require(root.is_dir(), f"candidate directory does not exist: {candidate_dir}")
-    writable, effective_protected, _ = load_effective_scope(root)
-    _validate_git_scope(root, writable, effective_protected)
+    writable, effective_protected, _, proposal_path = _load_scope_and_proposal_path(
+        root,
+    )
+    _validate_git_scope(
+        root,
+        writable,
+        effective_protected,
+        proposal_path=proposal_path,
+    )
     prerelease_packages = _load_prereleases(root)
-    subs = _validate_proposal(root, prerelease_packages)
+    subs = _validate_proposal(root, prerelease_packages, proposal_path=proposal_path)
     rules = _validate_matrix(root)
     _validate_dockerfiles_and_patches(
         root,
@@ -1693,6 +1876,7 @@ def validate_candidate(candidate_dir: Path) -> None:
         prerelease_packages,
         writable,
         effective_protected,
+        proposal_path=proposal_path,
     )
     _validate_pack_scripts(root, rules)
     _validate_support_records(root, subs)
