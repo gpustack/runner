@@ -6,12 +6,24 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
 PI_THINKING_LEVELS = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 NON_OFF_THINKING_LEVELS = PI_THINKING_LEVELS - {"off"}
+PROVIDER_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+DISALLOWED_OAUTH_PROVIDERS = {
+    "github-copilot",
+    "openai-codex",
+    "claude-code",
+    "gemini",
+    "google",
+    "gemini-cli",
+    "google-gemini-cli",
+    "google-antigravity",
+}
 DEFAULT_MAX_TOKENS = 32768
 DEFAULT_CONTEXT_WINDOW = 128000
 GLM5_CONTEXT_WINDOW = 1_000_000
@@ -154,6 +166,58 @@ def _parse_int_range(
     return value
 
 
+def _resolve_provider(provider: str, base_url: str) -> str:
+    explicit = provider.strip()
+    if explicit:
+        if (
+            not PROVIDER_ID_RE.match(explicit)
+            or ".." in explicit
+            or explicit in DISALLOWED_OAUTH_PROVIDERS
+        ):
+            msg = f"unsupported LLM provider identifier: {provider!r}"
+            raise ValueError(msg)
+        return explicit
+
+    parsed = urlsplit(base_url)
+    host = (parsed.hostname or "").lower()
+    path = parsed.path.lower()
+    if host == "open.bigmodel.cn" or host.endswith(".bigmodel.cn"):
+        return "zai-coding-cn" if "/api/coding" in path else "zai-cn"
+    if host == "api.z.ai" or host.endswith(".z.ai"):
+        return "zai"
+    host_map = {
+        "api.anthropic.com": "anthropic",
+        "api.openai.com": "openai",
+        "api.deepseek.com": "deepseek",
+        "openrouter.ai": "openrouter",
+        "api.moonshot.cn": "moonshotai-cn",
+        "api.moonshot.ai": "moonshotai",
+        "api.kimi.com": "kimi-coding",
+        "api.minimaxi.com": "minimax-cn",
+        "api.minimax.io": "minimax",
+        "token-plan.cn-beijing.maas.aliyuncs.com": "qwen-token-plan-cn",
+        "dashscope.aliyuncs.com": "qwen-token-plan-cn",
+        "token-plan.ap-southeast-1.maas.aliyuncs.com": "qwen-token-plan",
+        "dashscope-intl.aliyuncs.com": "qwen-token-plan",
+        "api.fireworks.ai": "fireworks",
+        "api.together.xyz": "together",
+        "inference.baseten.co": "baseten",
+        "integrate.api.nvidia.com": "nvidia",
+        "api.groq.com": "groq",
+        "api.cerebras.ai": "cerebras",
+        "api.mistral.ai": "mistral",
+        "api.x.ai": "xai",
+        "router.huggingface.co": "huggingface",
+        "ai-gateway.vercel.sh": "vercel-ai-gateway",
+        "token-plan-cn.xiaomimimo.com": "xiaomi-token-plan-cn",
+        "token-plan-sgp.xiaomimimo.com": "xiaomi-token-plan-sgp",
+        "token-plan-ams.xiaomimimo.com": "xiaomi-token-plan-ams",
+        "api.xiaomimimo.com": "xiaomi",
+        "api.ant-ling.com": "ant-ling",
+    }
+    return host_map.get(host, "custom-gateway")
+
+
 def _write_github_output(path: Path | None, values: dict[str, str]) -> None:
     if path is None:
         return
@@ -167,6 +231,7 @@ def build_models_config(
     *,
     url: str,
     model: str,
+    provider: str = "",
     protocol: str = "",
     use_anthropic: str = "",
     thinking: str = "",
@@ -179,11 +244,14 @@ def build_models_config(
     clean_url = url.strip()
     clean_model = model.strip()
     if not clean_url and not clean_model:
+        provider_out = ""
+        if provider.strip():
+            provider_out = _resolve_provider(provider, "")
         thinking_out = ""
         if thinking.strip() or reasoning_effort.strip():
             thinking_out, _ = _resolve_thinking(thinking, reasoning_effort)
         return None, {
-            "provider": "",
+            "provider": provider_out,
             "model": "",
             "thinking": thinking_out,
             "api": "",
@@ -199,6 +267,7 @@ def build_models_config(
         raise ValueError(msg)
 
     base_url = _validate_base_url(clean_url)
+    provider_id = _resolve_provider(provider, base_url)
     api = _resolve_api(protocol, use_anthropic)
     thinking_level, reasoning = _resolve_thinking(
         thinking,
@@ -251,7 +320,7 @@ def build_models_config(
 
     payload: dict[str, object] = {
         "providers": {
-            "custom-gateway": {
+            provider_id: {
                 "baseUrl": base_url,
                 "api": api,
                 "apiKey": "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN",
@@ -260,7 +329,7 @@ def build_models_config(
         },
     }
     outputs = {
-        "provider": "custom-gateway",
+        "provider": provider_id,
         "model": clean_model,
         "thinking": thinking_level,
         "api": api,
@@ -289,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
         payload, outputs = build_models_config(
             url=os.environ.get("CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL", ""),
             model=os.environ.get("CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL", ""),
+            provider=os.environ.get("CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROVIDER", ""),
             protocol=os.environ.get("CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL", ""),
             use_anthropic=os.environ.get(
                 "CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC",
