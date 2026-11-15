@@ -1,39 +1,20 @@
+Adapted for vLLM-Omni v0.32.0 (commit 5917730a):
+- the patch.py hunk keeps the "--omni" argv gate, updated for upstream's
+  list(sys.modules.items()) snapshot and setattr()-based rebinding;
+- the npu_ar_model_runner.py / npu_generation_model_runner.py hunks that
+  added num_scheduled_tokens_compressed_list are obsolete: upstream
+  _prepare_inputs in v0.32.0 returns a 3-tuple again, so they were removed.
+
 diff --git a/vllm_omni/patch.py b/vllm_omni/patch.py
 index 687ff51..6b67924 100644
 --- a/vllm_omni/patch.py
 +++ b/vllm_omni/patch.py
-@@ -19,6 +19,8 @@ for module_name, module in sys.modules.items():
+@@ -19,6 +19,8 @@ for module_name, module in list(sys.modules.items()):
      # only do patch on module of vllm, pass others
      if "vllm" not in module_name:
          continue
 +    if "--omni" not in sys.argv:
 +        continue
      if hasattr(module, "EngineCoreOutput") and module.EngineCoreOutput == _OriginalEngineCoreOutput:
-         module.EngineCoreOutput = OmniEngineCoreOutput
+         setattr(module, "EngineCoreOutput", OmniEngineCoreOutput)
      if hasattr(module, "EngineCoreOutputs") and module.EngineCoreOutputs == _OriginalEngineCoreOutputs:
-diff --git a/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py b/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py
-index 8cff1849..00000001 100644
---- a/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py
-+++ b/vllm_omni/platforms/npu/worker/npu_ar_model_runner.py
-@@ -388,6 +388,7 @@
-                 (
-                     logits_indices,
-                     spec_decode_metadata,
-                     total_num_scheduled_tokens,
-+                    num_scheduled_tokens_compressed_list,
-                 ) = self._prepare_inputs(
-                     scheduler_output,
-                     num_scheduled_tokens_np,
-diff --git a/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py b/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py
-index 00000002..00000003 100644
---- a/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py
-+++ b/vllm_omni/platforms/npu/worker/npu_generation_model_runner.py
-@@ -160,6 +160,7 @@
-                 (
-                     logits_indices,
-                     spec_decode_metadata,
-                     total_num_scheduled_tokens,
-+                    num_scheduled_tokens_compressed_list,
-                 ) = self._prepare_inputs(
-                     scheduler_output,
-                     num_scheduled_tokens_np,
