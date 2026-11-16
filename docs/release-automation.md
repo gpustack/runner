@@ -13,7 +13,7 @@ It checks out the trusted default branch and supplies these files to Loopwright:
 - `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` `Taskpack` defining upstreams, scope, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, and models.
 - `.auto-sync/instructions.md`: the author instructions, limited to 24,576 UTF-8 bytes. They directly consolidate upgrade rules for all six recipes.
 - `.auto-sync/proposal.json`: the canonical proposal artifact inside the protected `.auto-sync/` control root, exposed as an exact single-file writable entry.
-- `.auto-sync/memory/`: taskpack memory, applied through a separate pull request.
+- `.auto-sync/memory/`: protected root for Loopwright taskpack memory. Verified facts and failure observations for `auto-sync` live under `.auto-sync/memory/auto-sync/` (`index.json` and `entries/<id>.md`) and are proposed through a separate `loopwright/memory/auto-sync/main` pull request.
 - `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic candidate checks.
 - `.auto-sync/checks/write_models_json.py` and `lint_workflows.py`: gateway configuration and workflow linting.
 
@@ -22,6 +22,10 @@ The taskpack defines writable and protected paths. The author cannot edit its co
 The local checks are `runner-proposal-json` (`json-artifact.v1`), `runner-scope-guard` (`scope.v1`), and `runner-static-checks` (`command.v1`).
 The last runs `.auto-sync/checks/validate_candidate.sh`, which invokes `.auto-sync/checks/validate_candidate.py`.
 These checks precede publication or update of an `auto-sync/*` pull request.
+
+After the primary cycle settles, Loopwright finalizes deterministic run memory (`onNoModelBudget: deterministic-observations-only`) in an isolated clone of `main` without mutating the candidate branch.
+When new or updated memory entries are produced, Loopwright pushes `loopwright/memory/auto-sync/main`, opens or updates a dedicated memory pull request containing only `.auto-sync/memory/auto-sync/index.json` and `.auto-sync/memory/auto-sync/entries/<id>.md`, exports its URL as the `memory-pr-url` action output, and writes a scrubbed per-run `memory-publication.json` receipt under the diagnostics directory.
+Once that memory pull request merges into `main`, subsequent `auto-sync` runs select valid entries whose `codeFingerprint` and `upstreamVersions` match the current checkout and mount a read-only `.auto-sync/memory/auto-sync/active-snapshot.md` resource alongside `<active_memory>` prompt context.
 
 ## Discovery and compatibility
 

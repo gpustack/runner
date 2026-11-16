@@ -387,3 +387,157 @@ def test_invalid_taskpack_control_root_scope_configs_are_rejected(
 
     with pytest.raises(vc_mod.ValidationError, match=expected_match):
         vc_mod.load_effective_scope(cand)
+
+
+def _sample_memory_entry(
+    entry_id: str,
+    claim: str = "Verified static checks on main.",
+) -> dict[str, object]:
+    digest_hex = "a" * 64
+    return {
+        "version": 1,
+        "id": entry_id,
+        "claimKey": "check.runner-static-checks",
+        "claim": claim,
+        "kind": "fact",
+        "scope": {
+            "taskpack": "auto-sync",
+            "repository": "gpustack/runner",
+            "paths": [".auto-sync/proposal.json"],
+            "targetMatrix": None,
+        },
+        "sourceRef": {
+            "runId": "run-1",
+            "lockHash": {"algorithm": "sha256", "hex": digest_hex},
+            "candidateDigest": {"algorithm": "sha256", "hex": digest_hex},
+        },
+        "sourceDigest": {"algorithm": "sha256", "hex": digest_hex},
+        "verifiedAtMs": 1000,
+        "validFor": {
+            "baseRevision": "0" * 40,
+            "sourceRevision": "0" * 40,
+            "codeFingerprint": {"algorithm": "sha256", "hex": digest_hex},
+            "upstreamVersions": {"vllm": "v0.19.0"},
+        },
+        "expiresAtMs": 2000,
+        "supersedes": [],
+        "evidenceRefs": [
+            {
+                "evidenceId": "ev-1",
+                "checkId": "runner-static-checks",
+                "level": "local_execution",
+                "observedStatus": "passed",
+                "artifact": {
+                    "name": "checks/runner-static-checks.json",
+                    "digest": {"algorithm": "sha256", "hex": digest_hex},
+                    "byteLength": 128,
+                },
+            },
+        ],
+    }
+
+
+def _write_memory_store(
+    cand: Path,
+    entry_id: str = "entry.run-1.check.runner-static-checks",
+) -> Path:
+    digest_hex = "b" * 64
+    entry = _sample_memory_entry(entry_id)
+    taskpack_dir = cand / ".auto-sync" / "memory" / "auto-sync"
+    entries_dir = taskpack_dir / "entries"
+    entries_dir.mkdir(parents=True, exist_ok=True)
+    index_payload = {
+        "version": 1,
+        "taskpack": "auto-sync",
+        "repository": "gpustack/runner",
+        "updatedAtMs": 1000,
+        "entries": [entry],
+        "retired": [],
+        "storeDigest": {"algorithm": "sha256", "hex": digest_hex},
+    }
+    (taskpack_dir / "index.json").write_text(
+        json.dumps(index_payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    entry_path = entries_dir / f"{entry_id}.md"
+    canonical_header = json.dumps(entry, separators=(",", ":"), sort_keys=True)
+    entry_path.write_text(
+        f"---\n{canonical_header}\n---\n\n{entry['claim']}\n",
+        encoding="utf-8",
+    )
+    return entry_path
+
+
+def _commit_all(cand: Path, message: str) -> None:
+    git_bin = shutil.which("git")
+    assert git_bin is not None
+    git_env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Test Bot",
+        "GIT_AUTHOR_EMAIL": "bot@gpustack.ai",
+        "GIT_COMMITTER_NAME": "Test Bot",
+        "GIT_COMMITTER_EMAIL": "bot@gpustack.ai",
+    }
+    subprocess.run([git_bin, "add", "-A"], cwd=cand, env=git_env, check=True)
+    subprocess.run(
+        [git_bin, "commit", "-q", "-m", message],
+        cwd=cand,
+        env=git_env,
+        check=True,
+    )
+
+
+def test_validate_candidate_accepts_committed_memory_store_on_head(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    _write_memory_store(cand)
+    _commit_all(cand, "chore(memory): commit auto-sync memory store")
+    vc_mod.validate_candidate(cand)
+
+
+def test_validate_candidate_rejects_candidate_modifying_memory_store(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    _write_memory_store(cand)
+    _commit_all(cand, "chore(memory): commit auto-sync memory store")
+
+    evil_entry = cand / ".auto-sync" / "memory" / "auto-sync" / "entries" / "evil.md"
+    evil_entry.write_text("tampered\n", encoding="utf-8")
+
+    with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
+        vc_mod.validate_candidate(cand)
+
+
+def test_validate_candidate_rejects_corrupt_or_forbidden_memory_files(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+    entry_path = _write_memory_store(cand)
+    taskpack_dir = cand / ".auto-sync" / "memory" / "auto-sync"
+
+    for bad_name in (".cas.lock", "run.json", "ledger.sqlite", "active-snapshot.md"):
+        bad_file = taskpack_dir / bad_name
+        bad_file.write_text("bad\n", encoding="utf-8")
+        with pytest.raises(vc_mod.ValidationError):
+            vc_mod.validate_candidate(cand)
+        bad_file.unlink()
+
+    orphan = taskpack_dir / "entries" / "orphan.md"
+    orphan.write_text('---\n{"id":"orphan"}\n---\n\norphan\n', encoding="utf-8")
+    with pytest.raises(vc_mod.ValidationError, match=r"do not match index\.json"):
+        vc_mod.validate_candidate(cand)
+    orphan.unlink()
+
+    original_text = entry_path.read_text(encoding="utf-8")
+    entry_path.write_text("missing frontmatter\n", encoding="utf-8")
+    with pytest.raises(vc_mod.ValidationError, match="front-matter"):
+        vc_mod.validate_candidate(cand)
+    entry_path.write_text(original_text, encoding="utf-8")
+
+    vc_mod.validate_candidate(cand)
