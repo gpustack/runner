@@ -659,8 +659,11 @@ def _validate_memory_store(root: Path) -> None:
             not _is_forbidden_memory_filename(child.name),
             f"forbidden file in .auto-sync/memory: {child.name}",
         )
-        if child.name == ".gitkeep":
-            _require_non_hardlinked_regular_file(child, ".auto-sync/memory/.gitkeep")
+        if child.name in {".gitkeep", ".DS_Store"}:
+            _require_non_hardlinked_regular_file(
+                child,
+                f".auto-sync/memory/{child.name}",
+            )
             continue
         _require(
             child.name == "auto-sync",
