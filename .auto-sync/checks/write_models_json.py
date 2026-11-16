@@ -26,6 +26,8 @@ DISALLOWED_OAUTH_PROVIDERS = {
 }
 DEFAULT_MAX_TOKENS = 32768
 DEFAULT_CONTEXT_WINDOW = 128000
+DEFAULT_TASKPACK_PROVIDER = "zai-coding-cn"
+DEFAULT_TASKPACK_MODEL = "glm-5.3"
 GLM5_CONTEXT_WINDOW = 1_000_000
 MIN_SAMPLING_PARAM = -4.0
 MAX_SAMPLING_PARAM = 4.0
@@ -87,12 +89,47 @@ def _resolve_api(protocol: str, use_anthropic: str) -> str:
     raise ValueError(msg)
 
 
+def _snap_thinking_level(
+    model: str,
+    level: str,
+    *,
+    thinking_enabled: bool,
+    provider: str = "",
+) -> tuple[str, bool]:
+    norm_model = model.strip().lower().rsplit("/", 1)[-1]
+    norm_provider = provider.strip().lower()
+    uses_zai_builtin_map = norm_provider in {"", "zai", "zai-coding-cn"}
+
+    if norm_model.startswith("glm-5.3") and uses_zai_builtin_map:
+        # Built-in zai/glm-5.3 only maps low/high/max, and taskpack.yaml pins
+        # zai-coding-cn/glm-5.3 as a reasoning-capable model.
+        if not thinking_enabled or level in {"off", "minimal", "low"}:
+            return "low", True
+        if level in {"medium", "high", "xhigh"}:
+            return "high", True
+        return "max", True
+
+    if norm_model.startswith("glm-5.2") and uses_zai_builtin_map:
+        if not thinking_enabled or level == "off":
+            return "off", False
+        if level == "max":
+            return "max", True
+        return "high", True
+
+    if not thinking_enabled or level == "off":
+        return "off", False
+    if level == "max":
+        return "xhigh", True
+    return level, True
+
+
 def _resolve_thinking(
     thinking: str,
     reasoning_effort: str,
     *,
     model: str = "",
     base_url: str = "",
+    provider: str = "",
 ) -> tuple[str, bool]:
     think_norm = thinking.strip().lower()
     effort_norm = reasoning_effort.strip().lower()
@@ -101,7 +138,12 @@ def _resolve_thinking(
         if effort_norm and effort_norm not in NON_OFF_THINKING_LEVELS:
             msg = f"unsupported reasoning_effort: {reasoning_effort!r}"
             raise ValueError(msg)
-        return "off", False
+        return _snap_thinking_level(
+            model,
+            "off",
+            thinking_enabled=False,
+            provider=provider,
+        )
 
     if effort_norm:
         if effort_norm not in NON_OFF_THINKING_LEVELS:
@@ -110,20 +152,45 @@ def _resolve_thinking(
         if think_norm and think_norm not in {"enabled", *NON_OFF_THINKING_LEVELS}:
             msg = f"unsupported thinking value: {thinking!r}"
             raise ValueError(msg)
-        return effort_norm, True
+        return _snap_thinking_level(
+            model,
+            effort_norm,
+            thinking_enabled=True,
+            provider=provider,
+        )
 
     if think_norm:
         if think_norm == "enabled":
-            return "low", True
+            return _snap_thinking_level(
+                model,
+                "low",
+                thinking_enabled=True,
+                provider=provider,
+            )
         if think_norm in NON_OFF_THINKING_LEVELS:
-            return think_norm, True
+            return _snap_thinking_level(
+                model,
+                think_norm,
+                thinking_enabled=True,
+                provider=provider,
+            )
         msg = f"unsupported thinking value: {thinking!r}"
         raise ValueError(msg)
 
     hint = f"{model} {base_url}".lower()
     if "glm" in hint or "zai" in hint or "bigmodel.cn" in hint:
-        return "low", True
-    return "off", False
+        return _snap_thinking_level(
+            model,
+            "low",
+            thinking_enabled=True,
+            provider=provider,
+        )
+    return _snap_thinking_level(
+        model,
+        "off",
+        thinking_enabled=False,
+        provider=provider,
+    )
 
 
 def _parse_sampling_float(raw: str, name: str) -> float | None:
@@ -249,7 +316,17 @@ def build_models_config(
             provider_out = _resolve_provider(provider, "")
         thinking_out = ""
         if thinking.strip() or reasoning_effort.strip():
-            thinking_out, _ = _resolve_thinking(thinking, reasoning_effort)
+            default_model = (
+                DEFAULT_TASKPACK_MODEL
+                if provider_out in {"", "zai", DEFAULT_TASKPACK_PROVIDER}
+                else ""
+            )
+            thinking_out, _ = _resolve_thinking(
+                thinking,
+                reasoning_effort,
+                model=default_model,
+                provider=provider_out or DEFAULT_TASKPACK_PROVIDER,
+            )
         return None, {
             "provider": provider_out,
             "model": "",
@@ -274,6 +351,7 @@ def build_models_config(
         reasoning_effort,
         model=clean_model,
         base_url=base_url,
+        provider=provider_id,
     )
     max_tokens_val = _parse_int_range(
         max_tokens,

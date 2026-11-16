@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -94,6 +95,14 @@ ALLOWED_CONTROL_ROOT_ENTRIES = {
     "taskpack.yaml",
     "taskpack.yml",
 }
+MEMORY_ENTRY_HEADER_FENCE = "---"
+FORBIDDEN_MEMORY_NAME_PATTERNS = (
+    re.compile(r"\.sqlite(?:-wal|-shm)?$", re.IGNORECASE),
+    re.compile(r"^run\.json$", re.IGNORECASE),
+    re.compile(r"^privateSession", re.IGNORECASE),
+    re.compile(r"checkpoint", re.IGNORECASE),
+)
+SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 BUILTIN_PROTECTED_PATHS = (
     ".github",
     ".claude",
@@ -617,6 +626,196 @@ def _validate_git_scope(
             verdict == "writable",
             f"modified path is outside writable scope: {rel_path}",
         )
+
+
+def _is_forbidden_memory_filename(name: str) -> bool:
+    return any(pattern.search(name) for pattern in FORBIDDEN_MEMORY_NAME_PATTERNS)
+
+
+def _require_non_hardlinked_regular_file(path: Path, label: str) -> None:
+    _require(not path.is_symlink(), f"symbolic link not allowed: {label}")
+    st = path.lstat()
+    _require(
+        stat.S_ISREG(st.st_mode) and st.st_nlink == 1,
+        f"{label} must be a non-hardlinked regular file",
+    )
+
+
+def _validate_memory_store(root: Path) -> None:
+    memory_root = root / ".auto-sync" / "memory"
+    if not memory_root.exists() and not memory_root.is_symlink():
+        return
+    _require(
+        not memory_root.is_symlink() and memory_root.is_dir(),
+        ".auto-sync/memory must be a non-symlink directory",
+    )
+
+    for child in sorted(memory_root.iterdir(), key=lambda p: p.name):
+        _require(
+            not child.is_symlink(),
+            f"symbolic links are not allowed under .auto-sync/memory: {child.name}",
+        )
+        _require(
+            not _is_forbidden_memory_filename(child.name),
+            f"forbidden file in .auto-sync/memory: {child.name}",
+        )
+        if child.name in {".gitkeep", ".DS_Store"}:
+            _require_non_hardlinked_regular_file(
+                child,
+                f".auto-sync/memory/{child.name}",
+            )
+            continue
+        _require(
+            child.name == "auto-sync",
+            f"unexpected entry under .auto-sync/memory: {child.name}",
+        )
+
+    taskpack_dir = memory_root / "auto-sync"
+    if not taskpack_dir.exists() and not taskpack_dir.is_symlink():
+        return
+    _require(
+        not taskpack_dir.is_symlink() and taskpack_dir.is_dir(),
+        ".auto-sync/memory/auto-sync must be a non-symlink directory",
+    )
+
+    for item in sorted(taskpack_dir.iterdir(), key=lambda p: p.name):
+        _require(
+            not item.is_symlink(),
+            f"symbolic links are not allowed under .auto-sync/memory/auto-sync: {item.name}",
+        )
+        _require(
+            not _is_forbidden_memory_filename(item.name)
+            and item.name != ".cas.lock"
+            and ".tmp-" not in item.name,
+            f"forbidden or transient file in .auto-sync/memory/auto-sync: {item.name}",
+        )
+        _require(
+            item.name in {"index.json", "entries"},
+            f"unexpected entry in .auto-sync/memory/auto-sync: {item.name}",
+        )
+
+    index_path = taskpack_dir / "index.json"
+    entries_dir = taskpack_dir / "entries"
+    if not index_path.exists():
+        if entries_dir.exists():
+            _require(
+                not entries_dir.is_symlink() and entries_dir.is_dir(),
+                ".auto-sync/memory/auto-sync/entries must be a directory",
+            )
+            _require(
+                not any(entries_dir.iterdir()),
+                ".auto-sync/memory/auto-sync/entries cannot contain files without index.json",
+            )
+        return
+
+    _require_non_hardlinked_regular_file(
+        index_path,
+        ".auto-sync/memory/auto-sync/index.json",
+    )
+    _require(
+        entries_dir.exists() and not entries_dir.is_symlink() and entries_dir.is_dir(),
+        ".auto-sync/memory/auto-sync/entries directory is required when index.json exists",
+    )
+
+    index_data = _load_strict_json(
+        index_path.read_text(encoding="utf-8"),
+        ".auto-sync/memory/auto-sync/index.json",
+    )
+    _require(
+        isinstance(index_data, dict),
+        ".auto-sync/memory/auto-sync/index.json must be a JSON object",
+    )
+    _require(
+        index_data.get("version") == 1
+        and not isinstance(index_data.get("version"), bool),
+        ".auto-sync/memory/auto-sync/index.json version must be 1",
+    )
+    _require(
+        index_data.get("taskpack") == "auto-sync",
+        ".auto-sync/memory/auto-sync/index.json taskpack must be 'auto-sync'",
+    )
+    repo_slug = index_data.get("repository")
+    _require(
+        isinstance(repo_slug, str) and bool(repo_slug.strip()),
+        ".auto-sync/memory/auto-sync/index.json repository must be non-empty",
+    )
+    raw_entries = index_data.get("entries")
+    raw_retired = index_data.get("retired")
+    store_digest = index_data.get("storeDigest")
+    _require(
+        isinstance(raw_entries, list) and isinstance(raw_retired, list),
+        ".auto-sync/memory/auto-sync/index.json entries and retired must be lists",
+    )
+    _require(
+        isinstance(store_digest, dict)
+        and store_digest.get("algorithm") == "sha256"
+        and isinstance(store_digest.get("hex"), str)
+        and bool(SHA256_HEX_RE.fullmatch(store_digest["hex"])),
+        ".auto-sync/memory/auto-sync/index.json storeDigest must be a sha256 digest object",
+    )
+
+    expected_ids: set[str] = set()
+    for row in raw_entries:
+        _require(
+            isinstance(row, dict)
+            and isinstance(row.get("id"), str)
+            and bool(row["id"].strip()),
+            "memory index entry must be an object with non-empty id",
+        )
+        expected_ids.add(row["id"])
+    for retired_row in raw_retired:
+        _require(
+            isinstance(retired_row, dict)
+            and isinstance(retired_row.get("entry"), dict),
+            "memory retired row must contain an entry object",
+        )
+        retired_id = retired_row["entry"].get("id")
+        _require(
+            isinstance(retired_id, str) and bool(retired_id.strip()),
+            "memory retired entry must have a non-empty id",
+        )
+        expected_ids.add(retired_id)
+
+    observed_ids: set[str] = set()
+    fence_open = f"{MEMORY_ENTRY_HEADER_FENCE}\n"
+    fence_close = f"\n{MEMORY_ENTRY_HEADER_FENCE}\n"
+    for entry_file in sorted(entries_dir.iterdir(), key=lambda p: p.name):
+        label = f".auto-sync/memory/auto-sync/entries/{entry_file.name}"
+        _require_non_hardlinked_regular_file(entry_file, label)
+        _require(
+            not _is_forbidden_memory_filename(entry_file.name)
+            and ".tmp-" not in entry_file.name,
+            f"forbidden or staging file in memory entries: {entry_file.name}",
+        )
+        _require(
+            entry_file.name.endswith(".md"),
+            f"unexpected non-markdown file in memory entries: {entry_file.name}",
+        )
+        entry_id = entry_file.name[: -len(".md")]
+        text = entry_file.read_text(encoding="utf-8")
+        _require(
+            text.startswith(fence_open),
+            f"memory entry missing JSON front-matter fence: {entry_file.name}",
+        )
+        closing = text.find(fence_close, len(fence_open))
+        _require(
+            closing > len(fence_open),
+            f"memory entry missing closing front-matter fence: {entry_file.name}",
+        )
+        header_data = _load_strict_json(
+            text[len(fence_open) : closing],
+            f"{label} front-matter",
+        )
+        _require(
+            isinstance(header_data, dict) and header_data.get("id") == entry_id,
+            f"memory entry front-matter id mismatch: {entry_file.name}",
+        )
+        observed_ids.add(entry_id)
+
+    _require(
+        observed_ids == expected_ids,
+        "memory entries directory files do not match index.json entry IDs",
+    )
 
 
 def _load_prereleases(root: Path) -> set[str]:
@@ -1866,6 +2065,7 @@ def validate_candidate(candidate_dir: Path) -> None:
         effective_protected,
         proposal_path=proposal_path,
     )
+    _validate_memory_store(root)
     prerelease_packages = _load_prereleases(root)
     subs = _validate_proposal(root, prerelease_packages, proposal_path=proposal_path)
     rules = _validate_matrix(root)

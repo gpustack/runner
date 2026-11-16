@@ -107,6 +107,34 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Fetch pull request head ref for /auto-sync comment
+        if: github.event_name == 'issue_comment'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid pull request number '${PR_NUMBER}' in issue_comment payload." >&2
+            exit 1
+          fi
+          MAIN_SHA="$(git rev-parse --verify 'HEAD^{commit}')"
+          if [[ -n "${GH_TOKEN}" ]]; then
+            AUTH_B64="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\r\n')"
+            GIT_CONFIG_COUNT=1 \
+            GIT_CONFIG_KEY_0="http.${SERVER_URL}/.extraheader" \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic ${AUTH_B64}" \
+            git -c core.hooksPath=/dev/null fetch --no-tags --no-recurse-submodules origin \
+              "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr/${PR_NUMBER}"
+          else
+            git -c core.hooksPath=/dev/null fetch --no-tags --no-recurse-submodules origin \
+              "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr/${PR_NUMBER}"
+          fi
+          if [[ "$(git rev-parse --verify 'HEAD^{commit}')" != "${MAIN_SHA}" ]]; then
+            echo "HEAD moved unexpectedly during pull request head fetch." >&2
+            exit 1
+          fi
       - name: Setup UV
         uses: astral-sh/setup-uv@v7
         with:
@@ -210,7 +238,7 @@ jobs:
           max-output-tokens: ${{ inputs.llm-max-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS }}
           output: json,github-step-summary
           dry-run: ${{ inputs.dry-run && 'true' || 'false' }}
-          publication-endpoint-url: ${{ inputs.dry-run && 'http://127.0.0.1:65535/loopwright-dry-run-publication' || '' }}
+          upstream-records: ${{ inputs.dry-run && '[{"upstreamId":"vllm","status":"available","version":"v0.0.0-dry-run"}]' || '' }}
         env:
           CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -226,6 +254,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: auto-sync-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/loopwright-runs
+          path: |
+            ${{ runner.temp }}/loopwright-runs/**/run.json
+            ${{ runner.temp }}/loopwright-runs/**/memory-publication.json
+            ${{ runner.temp }}/loopwright-runs/**/artifacts/**/*.json
+            ${{ runner.temp }}/loopwright-runs/lw-action-*/config/config.yaml
+            ${{ runner.temp }}/loopwright-runs/lw-action-*/registry/registry.yaml
+            !${{ runner.temp }}/loopwright-runs/**/secrets.json
+            !${{ runner.temp }}/loopwright-runs/**/*.sqlite*
           retention-days: 30
           if-no-files-found: ignore
