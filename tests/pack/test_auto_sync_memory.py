@@ -19,7 +19,6 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATE_SCRIPT_PATH = REPO_ROOT / ".auto-sync" / "checks" / "validate_candidate.py"
-WRITE_MODELS_SCRIPT_PATH = REPO_ROOT / ".auto-sync" / "checks" / "write_models_json.py"
 LINT_WORKFLOWS_SCRIPT_PATH = REPO_ROOT / ".auto-sync" / "checks" / "lint_workflows.py"
 TASKPACK_PATH = REPO_ROOT / ".auto-sync" / "taskpack.yaml"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "auto-sync.yml"
@@ -36,7 +35,6 @@ def _load_module(name: str, path: Path):
 
 
 validate_candidate = _load_module("validate_candidate", VALIDATE_SCRIPT_PATH)
-write_models_json = _load_module("write_models_json", WRITE_MODELS_SCRIPT_PATH)
 lint_workflows = _load_module("lint_workflows", LINT_WORKFLOWS_SCRIPT_PATH)
 
 
@@ -111,11 +109,7 @@ def test_auto_sync_workflow_scrubbed_diagnostics_and_dry_run_alignment() -> None
     workflow = yaml.safe_load(workflow_text)
     steps = workflow["jobs"]["sync"]["steps"]
 
-    fetch_steps = [
-        s
-        for s in steps
-        if s.get("name") == "Fetch pull request head ref for /auto-sync comment"
-    ]
+    fetch_steps = [s for s in steps if s.get("name") == "Fetch PR head"]
     assert len(fetch_steps) == 1
     assert fetch_steps[0].get("if") == "github.event_name == 'issue_comment'"
     assert (
@@ -123,16 +117,15 @@ def test_auto_sync_workflow_scrubbed_diagnostics_and_dry_run_alignment() -> None
         in fetch_steps[0]["run"]
     )
 
-    run_steps = [s for s in steps if s.get("name") == "Run Loopwright auto-sync"]
+    run_steps = [s for s in steps if s.get("name") == "Run Loopwright"]
     assert len(run_steps) == 1
     run_with = run_steps[0]["with"]
     assert "publication-endpoint-url" not in run_with
+    assert run_with["force"] == "${{ inputs.force && 'true' || 'false' }}"
     assert "upstream-records" in run_with
     assert "inputs.dry-run" in run_with["upstream-records"]
 
-    upload_steps = [
-        s for s in steps if s.get("name") == "Upload Loopwright run diagnostics"
-    ]
+    upload_steps = [s for s in steps if s.get("name") == "Upload diagnostics"]
     assert len(upload_steps) == 1
     upload_path = upload_steps[0]["with"]["path"]
     for required_pattern in (
@@ -158,145 +151,9 @@ def test_release_automation_docs_document_turnkey_memory() -> None:
         assert expected in docs_text
 
 
-@pytest.mark.parametrize(
-    "thinking, effort, model_id, expected_thinking, expected_reasoning",
-    [
-        ("", "medium", "glm-5.3", "high", True),
-        ("", "minimal", "glm-5.3", "low", True),
-        ("", "low", "glm-5.3", "low", True),
-        ("", "high", "glm-5.3", "high", True),
-        ("", "xhigh", "glm-5.3", "high", True),
-        ("", "max", "glm-5.3", "max", True),
-        ("disabled", "", "glm-5.3", "low", True),
-        ("disabled", "", "glm-5.2", "off", False),
-        ("", "medium", "glm-5.2", "high", True),
-        ("", "max", "gpt-5.4", "xhigh", True),
-        ("disabled", "", "gpt-5.4", "off", False),
-    ],
-)
-def test_write_models_json_snaps_thinking_levels(
-    thinking: str,
-    effort: str,
-    model_id: str,
-    expected_thinking: str,
-    expected_reasoning: bool,
-) -> None:
-    payload, outputs = write_models_json.build_models_config(
-        url="https://open.bigmodel.cn/api/coding/paas/v4",
-        model=model_id,
-        provider="zai-coding-cn",
-        thinking=thinking,
-        reasoning_effort=effort,
-    )
-    assert payload is not None
-    assert outputs["thinking"] == expected_thinking
-    providers = payload["providers"]
-    assert isinstance(providers, dict)
-    provider_cfg = providers["zai-coding-cn"]
-    assert isinstance(provider_cfg, dict)
-    models = provider_cfg["models"]
-    assert isinstance(models, list)
-    assert models[0]["reasoning"] is expected_reasoning
-
-
-@pytest.mark.parametrize(
-    "thinking, effort, expected_thinking",
-    [
-        ("disabled", "", "low"),
-        ("", "medium", "high"),
-        ("", "minimal", "low"),
-        ("", "xhigh", "high"),
-        ("", "max", "max"),
-    ],
-)
-def test_write_models_json_snaps_default_taskpack_model_without_custom_url(
-    thinking: str,
-    effort: str,
-    expected_thinking: str,
-) -> None:
-    payload, outputs = write_models_json.build_models_config(
-        url="",
-        model="",
-        thinking=thinking,
-        reasoning_effort=effort,
-    )
-    assert payload is None
-    assert outputs["thinking"] == expected_thinking
-
-
 # ============================================================================
 # Tier B: Live @loopwright/github-app + @loopwright/memory Node Bridge Tests
 # ============================================================================
-
-
-@pytest.mark.skipif(
-    LOOPWRIGHT_ROOT is None or not HAS_NODE,
-    reason="Built Loopwright checkout not present; skipping Tier B live Node bridge tests",
-)
-def test_tier_b_write_models_json_accepted_by_loopwright(tmp_path: Path) -> None:
-    assert LOOPWRIGHT_ROOT is not None
-    assert NODE_BIN is not None
-    gh_app_js = LOOPWRIGHT_ROOT / "packages" / "github-app" / "dist" / "index.js"
-    for thinking, effort, expected_thinking in (
-        ("", "medium", "high"),
-        ("disabled", "", "low"),
-    ):
-        payload, outputs = write_models_json.build_models_config(
-            url="https://open.bigmodel.cn/api/coding/paas/v4",
-            model="glm-5.3",
-            provider="zai-coding-cn",
-            thinking=thinking,
-            reasoning_effort=effort,
-        )
-        assert payload is not None
-        models_file = tmp_path / f"models-{expected_thinking}.json"
-        models_file.write_text(json.dumps(payload), encoding="utf-8")
-
-        check_script = f"""
-import {{ readFile }} from 'node:fs/promises';
-import {{ loadDeclarativeTaskpack, parsePiModelsJson, resolveTaskpackModelCandidates }} from {json.dumps(str(gh_app_js))};
-
-const manifest = await loadDeclarativeTaskpack({{
-  manifestPath: '.auto-sync/taskpack.yaml',
-  repositoryRoot: {json.dumps(str(REPO_ROOT))},
-}});
-const modelsConfig = parsePiModelsJson(
-  await readFile({json.dumps(str(models_file))}),
-  '/models.json',
-);
-const candidates = resolveTaskpackModelCandidates(
-  manifest,
-  {{
-    roleSelection: {{
-      provider: {json.dumps(outputs["provider"])},
-      model: {json.dumps(outputs["model"])},
-      thinking: {json.dumps(outputs["thinking"])},
-    }},
-  }},
-  {{
-    modelsConfig,
-    env: {{ CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN: 'test-token-1234' }},
-  }},
-);
-console.log(JSON.stringify(candidates.map(c => ({{
-  provider: c.selection.provider,
-  model: c.selection.model,
-  thinking: c.selection.thinking,
-}}))));
-"""
-        res = subprocess.run(
-            [NODE_BIN, "--input-type=module", "-e", check_script],
-            cwd=str(REPO_ROOT),
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        resolved = json.loads(res.stdout)
-        assert resolved[0] == {
-            "provider": "zai-coding-cn",
-            "model": "glm-5.3",
-            "thinking": expected_thinking,
-        }
 
 
 @pytest.mark.skipif(
@@ -409,10 +266,6 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
     shutil.copy2(
         VALIDATE_SCRIPT_PATH,
         work_repo / ".auto-sync" / "checks" / "validate_candidate.py",
-    )
-    shutil.copy2(
-        WRITE_MODELS_SCRIPT_PATH,
-        work_repo / ".auto-sync" / "checks" / "write_models_json.py",
     )
 
     subprocess.run(

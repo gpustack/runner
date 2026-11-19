@@ -117,7 +117,7 @@ spec:
       samplingParams:
         temperature: 0.4
         top_p: 0.9
-      apiKeyEnv: CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN
+      apiKeyEnv: LOOPWRIGHT_PROVIDER_TOKEN
   output:
     formats:
       - json

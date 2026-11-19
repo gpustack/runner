@@ -11,7 +11,7 @@ on:
         description: 'Runner profile, which profile to use for the runner.'
         required: false
         type: choice
-        default: normal
+        default: 'normal'
         options:
           - normal
           - 4x
@@ -21,53 +21,11 @@ on:
         required: false
         type: boolean
         default: false
-      # Execution budgets.
-      max-session-tokens:
-        description: 'Max session tokens, optional cumulative token budget override across all model calls.'
+      force:
+        description: 'Force sync execution even when upstream state appears unchanged.'
         required: false
-        type: string
-        default: ""
-      wall-time-seconds:
-        description: 'Wall time seconds, optional total run wall-time limit override in seconds.'
-        required: false
-        type: string
-        default: ""
-      # Model behavior.
-      llm-thinking:
-        description: 'LLM thinking, the provider thinking switch.'
-        required: false
-        type: choice
-        default: enabled
-        options:
-          - disabled
-          - enabled
-      llm-temperature:
-        description: 'LLM temperature, the sampling temperature.'
-        required: false
-        type: string
-        default: "0.4"
-      llm-top-p:
-        description: 'LLM top-p, the top-p sampling value.'
-        required: false
-        type: string
-        default: "0.9"
-      llm-max-tokens:
-        description: 'LLM max tokens, the per-reply output token ceiling.'
-        required: false
-        type: string
-        default: "65536"
-      llm-reasoning-effort:
-        description: 'LLM reasoning effort, the reasoning effort level.'
-        required: false
-        type: choice
-        default: low
-        options:
-          - minimal
-          - low
-          - medium
-          - high
-          - xhigh
-          - max
+        type: boolean
+        default: false
       # Failure diagnosis.
       pack-run-url:
         description: 'Pack run URL, a failed Pack workflow run for this sync to diagnose.'
@@ -101,13 +59,13 @@ jobs:
     runs-on: ${{ inputs.runner_profile && inputs.runner_profile != 'normal' && format('ubuntu-24.04-{0}', inputs.runner_profile) || vars.AUTOSYNC_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 60
     steps:
-      - name: Checkout trusted default branch
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Fetch pull request head ref for /auto-sync comment
+      - name: Fetch PR head
         if: github.event_name == 'issue_comment'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,22 +93,22 @@ jobs:
             echo "HEAD moved unexpectedly during pull request head fetch." >&2
             exit 1
           fi
-      - name: Setup UV
+      - name: Setup uv
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.24"
           enable-cache: true
           python-version: "3.10"
-      - name: Install locked Python dependencies
+      - name: Install dependencies
         run: |
           make prepare
           uv sync --locked --all-packages
-      - name: Cache pinned research tools
+      - name: Cache research tools
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/auto-sync-tools
           key: auto-sync-tools-v1-${{ runner.os }}-${{ runner.arch }}-ghmcp-2.0.1-crane-0.21.9
-      - name: Install pinned research tools
+      - name: Setup research tools
         run: |
           set -euo pipefail
           tool_dir="$RUNNER_TEMP/auto-sync-tools"
@@ -193,25 +151,7 @@ jobs:
           sudo install -m 0755 "$tool_dir/github-mcp-server" "$tool_dir/crane" /usr/local/bin/
           github-mcp-server --version
           crane version
-      - name: Prepare optional LLM gateway overrides
-        id: model-config
-        env:
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROVIDER: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROVIDER }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_URL }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MODEL }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_PROTOCOL }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_USE_ANTHROPIC }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING: ${{ inputs.llm-thinking || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_THINKING }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE: ${{ inputs.llm-temperature || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TEMPERATURE }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P: ${{ inputs.llm-top-p || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_TOP_P }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS: ${{ inputs.llm-max-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT: ${{ inputs.llm-reasoning-effort || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_REASONING_EFFORT }}
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}
-        run: |
-          uv run python .auto-sync/checks/write_models_json.py \
-            --output "$RUNNER_TEMP/loopwright-models.json" \
-            --github-output "$GITHUB_OUTPUT"
-      - name: Run Loopwright auto-sync
+      - name: Run Loopwright
         id: loopwright
         uses: gpustack/loopwright@main
         with:
@@ -222,34 +162,20 @@ jobs:
           run-root: ${{ runner.temp }}/loopwright-runs
           run-id: auto-sync-${{ github.run_id }}-${{ github.run_attempt }}
           storage-profile: actions-basic
-          provider: ${{ steps.model-config.outputs.provider }}
-          model: ${{ steps.model-config.outputs.model }}
-          thinking: ${{ steps.model-config.outputs.thinking }}
-          api: ${{ steps.model-config.outputs.api }}
-          base-url: ${{ steps.model-config.outputs.base-url }}
-          models-json: ${{ steps.model-config.outputs.models-json }}
           allow-custom-base-url: 'true'
-          provider-token-env: CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN
+          provider-token-env: LOOPWRIGHT_PROVIDER_TOKEN
           github-app-id: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_APP_ID || vars.CI_GPUSTACK_LOOPWRIGHT_APP_ID }}
           github-app-private-key: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_APP_PRIVATE_KEY }}
-          total-tokens: ${{ inputs.max-session-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_SESSION_TOKENS }}
-          wall-time-seconds: ${{ inputs.wall-time-seconds || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_WALL_TIME_SECONDS }}
-          context-window: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_CONTEXT_WINDOW_SIZE }}
-          max-output-tokens: ${{ inputs.llm-max-tokens || vars.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_MAX_TOKENS }}
           output: json,github-step-summary
           dry-run: ${{ inputs.dry-run && 'true' || 'false' }}
+          force: ${{ inputs.force && 'true' || 'false' }}
           upstream-records: ${{ inputs.dry-run && '[{"upstreamId":"vllm","status":"available","version":"v0.0.0-dry-run"}]' || '' }}
         env:
-          CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN: ${{ secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
+          LOOPWRIGHT_PROVIDER_TOKEN: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_LLM_AUTH_TOKEN || secrets.CI_GPUSTACK_CODEREVIEW_LLM_AUTH_TOKEN || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LOOPWRIGHT_MAX_MODEL_CALLS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_MODEL_CALLS }}
-          LOOPWRIGHT_MAX_ATTEMPTS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MAX_ATTEMPTS }}
-          LOOPWRIGHT_TOOL_TIMEOUT_SECONDS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_TOOL_TIMEOUT_SECONDS }}
-          LOOPWRIGHT_COMMAND_TIMEOUT_SECONDS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_COMMAND_TIMEOUT_SECONDS }}
-          LOOPWRIGHT_MCP_SERVERS: ${{ vars.CI_GPUSTACK_RUNNER_AUTOSYNC_MCP_SERVERS }}
           PACK_RUN_URL: ${{ inputs.pack-run-url }}
           PYTHON_BIN: ${{ github.workspace }}/.venv/bin/python
-      - name: Upload Loopwright run diagnostics
+      - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
