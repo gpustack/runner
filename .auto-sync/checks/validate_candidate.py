@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import filecmp
 import importlib.util
 import json
 import os
@@ -902,6 +903,7 @@ def _validate_base_dir_scope(
     *,
     proposal_path: str | None = None,
 ) -> None:
+    filecmp.clear_cache()
     cand_files = _collect_regular_tree_files(root)
     base_files = _collect_regular_tree_files(base_dir)
     changed_paths: set[str] = set()
@@ -911,8 +913,10 @@ def _validate_base_dir_scope(
         if cand_f is None or base_f is None:
             changed_paths.add(rel_path)
             continue
-        if cand_f.stat().st_size != base_f.stat().st_size or (
-            cand_f.read_bytes() != base_f.read_bytes()
+        if cand_f.stat().st_size != base_f.stat().st_size or not filecmp.cmp(
+            cand_f,
+            base_f,
+            shallow=False,
         ):
             changed_paths.add(rel_path)
 

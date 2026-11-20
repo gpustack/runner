@@ -640,7 +640,8 @@ def test_loopwright_base_dir_enforces_scope_and_published_rows_without_git(
 
     voxbox = cand / "pack" / "cuda" / "Dockerfile.voxbox"
     orig_voxbox = voxbox.read_text(encoding="utf-8")
-    voxbox.write_text(orig_voxbox + "\n# unauthorized\n", encoding="utf-8")
+    same_len_voxbox = ("#" if orig_voxbox[0] != "#" else " ") + orig_voxbox[1:]
+    voxbox.write_text(same_len_voxbox, encoding="utf-8")
     with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
         vc_mod.validate_candidate(cand)
     voxbox.write_text(orig_voxbox, encoding="utf-8")
@@ -666,6 +667,10 @@ def test_shell_entrypoint_ignores_candidate_checks_script(
     poisoned = cand / ".auto-sync" / "checks" / "validate_candidate.py"
     poisoned.write_text("import sys; sys.exit(99)\n", encoding="utf-8")
 
+    pycache_dir = REPO_ROOT / ".auto-sync" / "checks" / "__pycache__"
+    if pycache_dir.exists():
+        shutil.rmtree(pycache_dir)
+
     bash_bin = shutil.which("bash") or "/bin/bash"
     res = subprocess.run(
         [bash_bin, str(SCRIPT_PATH)],
@@ -676,4 +681,4 @@ def test_shell_entrypoint_ignores_candidate_checks_script(
         check=False,
     )
     assert res.returncode == 0, res.stderr
-    assert not (REPO_ROOT / ".auto-sync" / "checks" / "__pycache__").exists()
+    assert not pycache_dir.exists()
