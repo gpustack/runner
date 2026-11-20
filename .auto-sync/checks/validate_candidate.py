@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import filecmp
 import importlib.util
 import json
 import os
@@ -78,15 +79,18 @@ CANN_ALIASES = {
 }
 CONTROL_ROOT = ".auto-sync"
 PROPOSAL_REL_PATH = ".auto-sync/proposal.json"
+DIGESTS_LOCK_REL_PATH = ".auto-sync/digests.lock.json"
 CONTROL_PLANE_PROTECTED_PATHS = (
     ".auto-sync/taskpack.yaml",
     ".auto-sync/taskpack.yml",
     ".auto-sync/taskpack.json",
+    ".auto-sync/digests.lock.json",
     ".auto-sync/checks",
     ".auto-sync/policies",
 )
 ALLOWED_CONTROL_ROOT_ENTRIES = {
     "checks",
+    "digests.lock.json",
     "instructions.md",
     "memory",
     "policies",
@@ -340,6 +344,13 @@ def _validate_https_urls(
     return list(urls)
 
 
+WINDOWS_RESERVED_RE = re.compile(
+    r"^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)",
+    re.IGNORECASE,
+)
+SCOPE_SEGMENT_RE = re.compile(r"^[A-Za-z0-9._*?-]+$")
+
+
 def _path_covered_by(candidate: str, prefix: str) -> bool:
     clean_prefix = prefix.rstrip("/")
     return candidate == clean_prefix or candidate.startswith(f"{clean_prefix}/")
@@ -366,6 +377,211 @@ def _normalize_scope_rel_path(rel: object, label: str) -> str:
     return rel
 
 
+def _normalize_scope_pattern(raw: object, label: str) -> str:
+    _require(
+        isinstance(raw, str) and bool(raw.strip()) and len(raw) <= 1024,
+        f"{label} must be a non-empty scope pattern",
+    )
+    _require(
+        raw != "**",
+        f"{label} unbounded '**' scope pattern is not allowed",
+    )
+    _require(
+        not raw.startswith("/") and not raw.endswith("/") and "\\" not in raw,
+        f"{label} must be a normalized relative POSIX scope pattern: {raw!r}",
+    )
+    recursive = raw.endswith("/**")
+    body = raw[:-3] if recursive else raw
+    _require(
+        bool(body) and "//" not in raw,
+        f"{label} invalid scope pattern: {raw!r}",
+    )
+    _require(
+        not any(ch in body for ch in "{}[]!") and "**" not in body,
+        f"{label} unsupported glob syntax in scope pattern: {raw!r}",
+    )
+    segments = body.split("/")
+    _require(len(segments) <= 32, f"{label} exceeds segment limit: {raw!r}")
+    wildcards = 0
+    for seg in segments:
+        _require(
+            bool(seg)
+            and seg not in {".", ".."}
+            and not seg.endswith(".")
+            and not WINDOWS_RESERVED_RE.match(seg)
+            and bool(SCOPE_SEGMENT_RE.fullmatch(seg)),
+            f"{label} contains unsafe segment {seg!r} in {raw!r}",
+        )
+        wildcards += seg.count("*") + seg.count("?")
+        _require(wildcards <= 16, f"{label} exceeds wildcard limit: {raw!r}")
+    return raw
+
+
+def _match_segment(pattern: str, text: str) -> bool:
+    pi = 0
+    ti = 0
+    star_pi = -1
+    star_ti = 0
+    while ti < len(text):
+        if pi < len(pattern) and (pattern[pi] == "?" or pattern[pi] == text[ti]):
+            pi += 1
+            ti += 1
+        elif pi < len(pattern) and pattern[pi] == "*":
+            star_pi = pi
+            pi += 1
+            star_ti = ti
+        elif star_pi != -1:
+            pi = star_pi + 1
+            star_ti += 1
+            ti = star_ti
+        else:
+            return False
+    while pi < len(pattern) and pattern[pi] == "*":
+        pi += 1
+    return pi == len(pattern)
+
+
+def _matches_scope_pattern(
+    pattern: str,
+    rel_path: str,
+    *,
+    case_insensitive: bool = False,
+) -> bool:
+    pat = pattern.lower() if case_insensitive else pattern
+    name = rel_path.lower() if case_insensitive else rel_path
+    if pat == "**":
+        return True
+    if pat.endswith("/**"):
+        prefix = pat[:-3]
+        if "*" not in prefix and "?" not in prefix:
+            return name == prefix or name.startswith(f"{prefix}/")
+        pat_segs = prefix.split("/")
+        name_segs = name.split("/")
+        if len(name_segs) < len(pat_segs):
+            return False
+        return all(_match_segment(ps, name_segs[i]) for i, ps in enumerate(pat_segs))
+    if "*" not in pat and "?" not in pat:
+        return pat == name
+    pat_segs = pat.split("/")
+    name_segs = name.split("/")
+    if len(name_segs) != len(pat_segs):
+        return False
+    return all(_match_segment(ps, name_segs[i]) for i, ps in enumerate(pat_segs))
+
+
+def _as_protected_subtree_pattern(entry: str) -> str:
+    if entry == "**" or entry.endswith("/**") or "*" in entry or "?" in entry:
+        return entry
+    return f"{entry}/**"
+
+
+def _segments_may_intersect(seg_a: str, seg_b: str) -> bool:
+    m, n = len(seg_a), len(seg_b)
+    memo: dict[tuple[int, int], bool] = {}
+
+    def solve(i: int, j: int) -> bool:
+        key = (i, j)
+        if key in memo:
+            return memo[key]
+        if i == m and j == n:
+            res = True
+        elif i < m and seg_a[i] == "*":
+            res = solve(i + 1, j) or (j < n and solve(i, j + 1))
+        elif j < n and seg_b[j] == "*":
+            res = solve(i, j + 1) or (i < m and solve(i + 1, j))
+        elif (
+            i < m
+            and j < n
+            and (seg_a[i] == "?" or seg_b[j] == "?" or seg_a[i] == seg_b[j])
+        ):
+            res = solve(i + 1, j + 1)
+        else:
+            res = False
+        memo[key] = res
+        return res
+
+    return solve(0, 0)
+
+
+def _segment_subset_of(seg_a: str, seg_b: str) -> bool:
+    m, n = len(seg_a), len(seg_b)
+    memo: dict[tuple[int, int], bool] = {}
+
+    def solve(i: int, j: int) -> bool:
+        key = (i, j)
+        if key in memo:
+            return memo[key]
+        if i == m and j == n:
+            res = True
+        elif j < n and seg_b[j] == "*":
+            res = solve(i, j + 1) or (i < m and solve(i + 1, j))
+        elif (
+            i < m
+            and j < n
+            and seg_a[i] != "*"
+            and (seg_b[j] == "?" or seg_a[i] == seg_b[j])
+        ):
+            res = solve(i + 1, j + 1)
+        else:
+            res = False
+        memo[key] = res
+        return res
+
+    return solve(0, 0)
+
+
+def _split_scope_pattern(
+    pattern: str,
+    *,
+    case_insensitive: bool = False,
+) -> tuple[list[str], bool]:
+    norm = pattern.lower() if case_insensitive else pattern
+    if norm == "**":
+        return [], True
+    recursive = norm.endswith("/**")
+    body = norm[:-3] if recursive else norm
+    return body.split("/"), recursive
+
+
+def _scope_patterns_may_intersect(
+    pat_a: str,
+    pat_b: str,
+    *,
+    case_insensitive: bool = False,
+) -> bool:
+    segs_a, rec_a = _split_scope_pattern(pat_a, case_insensitive=case_insensitive)
+    segs_b, rec_b = _split_scope_pattern(pat_b, case_insensitive=case_insensitive)
+    for k in range(max(len(segs_a), len(segs_b))):
+        if k >= len(segs_a):
+            return rec_a
+        if k >= len(segs_b):
+            return rec_b
+        if not _segments_may_intersect(segs_a[k], segs_b[k]):
+            return False
+    return True
+
+
+def _scope_pattern_subset_of(
+    sub: str,
+    sup: str,
+    *,
+    case_insensitive: bool = False,
+) -> bool:
+    segs_a, rec_a = _split_scope_pattern(sub, case_insensitive=case_insensitive)
+    segs_b, rec_b = _split_scope_pattern(sup, case_insensitive=case_insensitive)
+    if rec_b:
+        if len(segs_a) < len(segs_b):
+            return False
+        return all(_segment_subset_of(segs_a[k], segs_b[k]) for k in range(len(segs_b)))
+    if rec_a or len(segs_a) != len(segs_b):
+        return False
+    return all(_segment_subset_of(segs_a[k], segs_b[k]) for k in range(len(segs_b)))
+
+
+def _is_bare_literal_scope_pattern(pattern: str) -> bool:
+    return not pattern.endswith("/**") and "*" not in pattern and "?" not in pattern
+
+
 def classify_scope_path(
     rel_path: str,
     writable: tuple[str, ...],
@@ -373,7 +589,7 @@ def classify_scope_path(
     *,
     proposal_path: str | None = None,
 ) -> str:
-    """Classify a repo-relative path using Loopwright Protected-Wins-Over-Writable subtree rules."""
+    """Classify a repo-relative path using Taskpack 2.0 Protected-Wins-Over-Writable glob rules."""
     norm = _normalize_scope_rel_path(rel_path, "candidate path")
     if proposal_path is not None:
         norm_proposal = _normalize_scope_rel_path(proposal_path, "spec.proposal.path")
@@ -383,14 +599,26 @@ def classify_scope_path(
             and norm_proposal in writable
         ):
             if any(
-                p_path != CONTROL_ROOT and _path_covered_by_ci(norm, p_path)
+                p_path != CONTROL_ROOT
+                and _matches_scope_pattern(
+                    _as_protected_subtree_pattern(p_path),
+                    norm,
+                    case_insensitive=True,
+                )
                 for p_path in protected
             ):
                 return "protected"
             return "writable"
-    if any(_path_covered_by_ci(norm, p_path) for p_path in protected):
+    if any(
+        _matches_scope_pattern(
+            _as_protected_subtree_pattern(p_path),
+            norm,
+            case_insensitive=True,
+        )
+        for p_path in protected
+    ):
         return "protected"
-    if any(_path_covered_by(norm, w_path) for w_path in writable):
+    if any(_matches_scope_pattern(w_path, norm) for w_path in writable):
         return "writable"
     return "outside_writable"
 
@@ -398,7 +626,7 @@ def classify_scope_path(
 def _load_scope_and_proposal_path(
     root: Path,
 ) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], str]:
-    """Load writable, effective-protected, manifest-protected scope prefixes, and proposal.path."""
+    """Load writable, effective-protected, manifest-protected scope patterns, and proposal.path."""
     raw = _load_strict_yaml(
         _read_regular_text(root, ".auto-sync/taskpack.yaml"),
         ".auto-sync/taskpack.yaml",
@@ -431,33 +659,47 @@ def _load_scope_and_proposal_path(
     )
 
     writable = tuple(
-        _normalize_scope_rel_path(item, "spec.scope.writable entry")
+        _normalize_scope_pattern(item, "spec.scope.writable entry")
         for item in raw_writable
     )
     manifest_protected = tuple(
-        _normalize_scope_rel_path(item, "spec.scope.protected entry")
+        _normalize_scope_pattern(item, "spec.scope.protected entry")
         for item in raw_protected
     )
 
-    non_carvable_protected: list[str] = [
+    mandatory_protected: list[str] = [
         item for item in BUILTIN_PROTECTED_PATHS if item != CONTROL_ROOT
     ]
-    non_carvable_protected.extend(CONTROL_PLANE_PROTECTED_PATHS)
+    mandatory_protected.extend(CONTROL_PLANE_PROTECTED_PATHS)
+
+    exec_cfg = spec.get("execution")
+    if isinstance(exec_cfg, dict):
+        digests_cfg = exec_cfg.get("digests")
+        if isinstance(digests_cfg, dict) and isinstance(
+            digests_cfg.get("lockfile"),
+            str,
+        ):
+            mandatory_protected.append(
+                _normalize_scope_rel_path(
+                    digests_cfg["lockfile"],
+                    "spec.execution.digests.lockfile",
+                ),
+            )
 
     instructions = spec.get("instructions")
     if isinstance(instructions, str):
-        non_carvable_protected.append(
+        mandatory_protected.append(
             _normalize_scope_rel_path(instructions, "spec.instructions entry"),
         )
     elif isinstance(instructions, list):
         for item in instructions:
-            non_carvable_protected.append(
+            mandatory_protected.append(
                 _normalize_scope_rel_path(item, "spec.instructions entry"),
             )
 
     memory_cfg = spec.get("memory")
     if isinstance(memory_cfg, dict) and isinstance(memory_cfg.get("directory"), str):
-        non_carvable_protected.append(
+        mandatory_protected.append(
             _normalize_scope_rel_path(
                 memory_cfg["directory"],
                 "spec.memory.directory",
@@ -473,14 +715,15 @@ def _load_scope_and_proposal_path(
             if isinstance(check, dict) and check.get("implementation") == "command.v1":
                 params = check.get("parameters")
                 if isinstance(params, dict) and isinstance(params.get("script"), str):
-                    non_carvable_protected.append(
+                    mandatory_protected.append(
                         _normalize_scope_rel_path(
                             params["script"],
                             "command.v1 script",
                         ),
                     )
 
-    non_carvable_protected.extend(manifest_protected)
+    mandatory_protected_set = set(mandatory_protected)
+    non_carvable_protected = [*mandatory_protected, *manifest_protected]
     effective_protected = tuple(
         dict.fromkeys([*BUILTIN_PROTECTED_PATHS, *non_carvable_protected]),
     )
@@ -494,8 +737,11 @@ def _load_scope_and_proposal_path(
         )
         for p_path in dict.fromkeys(non_carvable_protected):
             _require(
-                not _path_covered_by_ci(proposal_path, p_path)
-                and not _path_covered_by_ci(p_path, proposal_path),
+                not _scope_patterns_may_intersect(
+                    proposal_path,
+                    _as_protected_subtree_pattern(p_path),
+                    case_insensitive=True,
+                ),
                 f"spec.proposal.path {proposal_path!r} overlaps protected path {p_path!r}",
             )
         _require(
@@ -509,14 +755,38 @@ def _load_scope_and_proposal_path(
         for p_path in effective_protected:
             if is_carved_proposal and p_path == CONTROL_ROOT:
                 continue
+            p_subtree = _as_protected_subtree_pattern(p_path)
             _require(
-                not _path_covered_by_ci(w_path, p_path),
+                not _scope_pattern_subset_of(w_path, p_subtree, case_insensitive=True),
                 f"writable path {w_path!r} lives inside protected path {p_path!r}",
             )
+            if p_path in mandatory_protected_set or (
+                p_path == CONTROL_ROOT and not is_carved_proposal
+            ):
+                _require(
+                    not _scope_patterns_may_intersect(
+                        w_path,
+                        p_subtree,
+                        case_insensitive=True,
+                    ),
+                    f"writable path {w_path!r} encompasses built-in protected path {p_path!r}",
+                )
         for builtin_path in BUILTIN_PROTECTED_PATHS:
+            if is_carved_proposal and builtin_path == CONTROL_ROOT:
+                continue
             _require(
-                not _path_covered_by_ci(builtin_path, w_path),
+                not _scope_patterns_may_intersect(
+                    w_path,
+                    _as_protected_subtree_pattern(builtin_path),
+                    case_insensitive=True,
+                ),
                 f"writable path {w_path!r} encompasses built-in protected path {builtin_path!r}",
+            )
+        if not is_carved_proposal and _is_bare_literal_scope_pattern(w_path):
+            w_target = _safe_path(root, w_path)
+            _require(
+                not w_target.is_dir(),
+                f"directory writable path {w_path!r} must use explicit '{w_path}/**' glob",
             )
 
     if not proposal_in_control_root:
@@ -532,8 +802,41 @@ def _load_scope_and_proposal_path(
         )
 
     for p_path in manifest_protected:
-        target = _safe_path(root, p_path)
-        _require(target.exists(), f"protected path missing from candidate: {p_path}")
+        if p_path.endswith("/**") and "*" not in p_path[:-3] and "?" not in p_path[:-3]:
+            dir_rel = p_path[:-3]
+            target = _safe_path(root, dir_rel)
+            _require(
+                target.is_dir(),
+                f"protected directory missing from candidate: {p_path}",
+            )
+        elif _is_bare_literal_scope_pattern(p_path):
+            target = _safe_path(root, p_path)
+            _require(
+                target.exists(),
+                f"protected path missing from candidate: {p_path}",
+            )
+            _require(
+                not target.is_dir(),
+                f"directory protected path {p_path!r} must use explicit '{p_path}/**' glob",
+            )
+        else:
+            p_subtree = _as_protected_subtree_pattern(p_path)
+            matched_any = False
+            for entry in sorted(root.rglob("*")):
+                if (
+                    ".git" in entry.parts
+                    or "__pycache__" in entry.parts
+                    or entry.name == ".DS_Store"
+                ):
+                    continue
+                rel_entry = entry.relative_to(root).as_posix()
+                if _matches_scope_pattern(p_subtree, rel_entry):
+                    _safe_path(root, rel_entry)
+                    matched_any = True
+            _require(
+                matched_any,
+                f"protected glob matched no files in candidate: {p_path}",
+            )
     return writable, effective_protected, manifest_protected, proposal_path
 
 
@@ -549,6 +852,91 @@ def load_effective_scope(
     return writable, effective_protected, manifest_protected
 
 
+def _resolve_base_snapshot_dir() -> Path | None:
+    raw_base = os.environ.get("LOOPWRIGHT_BASE_DIR", "").strip()
+    if not raw_base:
+        return None
+    base_path = Path(raw_base)
+    _require(
+        not base_path.is_symlink() and base_path.is_dir(),
+        f"LOOPWRIGHT_BASE_DIR must be a non-symlink directory: {raw_base!r}",
+    )
+    return base_path.resolve()
+
+
+def _collect_regular_tree_files(tree_root: Path) -> dict[str, Path]:
+    files: dict[str, Path] = {}
+    for dirpath, dirnames, filenames in os.walk(
+        tree_root,
+        topdown=True,
+        followlinks=False,
+    ):
+        dirnames[:] = [d for d in dirnames if d not in {".git", "__pycache__"}]
+        cur_dir = Path(dirpath)
+        for dname in dirnames:
+            dpath = cur_dir / dname
+            rel_d = dpath.relative_to(tree_root).as_posix()
+            _require(
+                not dpath.is_symlink(),
+                f"symlink not allowed in workspace tree: {rel_d}",
+            )
+        for fname in filenames:
+            if fname == ".DS_Store":
+                continue
+            fpath = cur_dir / fname
+            rel_f = fpath.relative_to(tree_root).as_posix()
+            if rel_f == ".git":
+                continue
+            _require(
+                not fpath.is_symlink() and fpath.is_file(),
+                f"non-regular or symlink entry in workspace tree: {rel_f}",
+            )
+            files[rel_f] = fpath
+    return files
+
+
+def _validate_base_dir_scope(
+    root: Path,
+    base_dir: Path,
+    writable: tuple[str, ...],
+    protected: tuple[str, ...],
+    *,
+    proposal_path: str | None = None,
+) -> None:
+    filecmp.clear_cache()
+    cand_files = _collect_regular_tree_files(root)
+    base_files = _collect_regular_tree_files(base_dir)
+    changed_paths: set[str] = set()
+    for rel_path in sorted(set(cand_files) | set(base_files)):
+        cand_f = cand_files.get(rel_path)
+        base_f = base_files.get(rel_path)
+        if cand_f is None or base_f is None:
+            changed_paths.add(rel_path)
+            continue
+        if cand_f.stat().st_size != base_f.stat().st_size or not filecmp.cmp(
+            cand_f,
+            base_f,
+            shallow=False,
+        ):
+            changed_paths.add(rel_path)
+
+    for rel_path in sorted(changed_paths):
+        verdict = classify_scope_path(
+            rel_path,
+            writable,
+            protected,
+            proposal_path=proposal_path,
+        )
+        _require(
+            verdict != "protected",
+            f"modified path is protected: {rel_path}",
+        )
+        _require(
+            verdict == "writable",
+            f"modified path is outside writable scope: {rel_path}",
+        )
+
+
 def _validate_git_scope(
     root: Path,
     writable: tuple[str, ...],
@@ -557,6 +945,15 @@ def _validate_git_scope(
     proposal_path: str | None = None,
 ) -> None:
     if not (root / ".git").exists():
+        base_dir = _resolve_base_snapshot_dir()
+        if base_dir is not None:
+            _validate_base_dir_scope(
+                root,
+                base_dir,
+                writable,
+                protected,
+                proposal_path=proposal_path,
+            )
         return
     git_bin = shutil.which("git")
     if git_bin is None:
@@ -999,6 +1396,43 @@ def _validate_proposal(
         not unexpected_control_entries,
         f".auto-sync/ contains unexpected entries: {unexpected_control_entries}",
     )
+
+    raw_taskpack = _load_strict_yaml(
+        _read_regular_text(root, ".auto-sync/taskpack.yaml"),
+        ".auto-sync/taskpack.yaml",
+    )
+    pin_digests = (
+        isinstance(raw_taskpack, dict)
+        and isinstance(raw_taskpack.get("spec"), dict)
+        and isinstance(raw_taskpack["spec"].get("execution"), dict)
+        and isinstance(raw_taskpack["spec"]["execution"].get("digests"), dict)
+        and raw_taskpack["spec"]["execution"]["digests"].get("pinDigests") is True
+    )
+    digests_lock_file = root / DIGESTS_LOCK_REL_PATH
+    if pin_digests or digests_lock_file.exists() or digests_lock_file.is_symlink():
+        _require_non_hardlinked_regular_file(digests_lock_file, DIGESTS_LOCK_REL_PATH)
+        lock_data = _load_strict_json(
+            digests_lock_file.read_text(encoding="utf-8"),
+            DIGESTS_LOCK_REL_PATH,
+        )
+        _require(
+            isinstance(lock_data, dict)
+            and type(lock_data.get("version")) is int
+            and lock_data.get("version") == 1
+            and lock_data.get("taskpack") == "auto-sync"
+            and isinstance(lock_data.get("entries"), list)
+            and bool(lock_data["entries"]),
+            f"{DIGESTS_LOCK_REL_PATH} must be a valid version 1 auto-sync digest lockfile",
+        )
+        for lock_entry in lock_data["entries"]:
+            _require(
+                isinstance(lock_entry, dict)
+                and isinstance(lock_entry.get("path"), str)
+                and lock_entry.get("kind") in {"file", "directory"}
+                and isinstance(lock_entry.get("sha256"), str)
+                and bool(SHA256_HEX_RE.fullmatch(lock_entry["sha256"])),
+                f"{DIGESTS_LOCK_REL_PATH} contains invalid entry: {lock_entry!r}",
+            )
 
     proposal_file = _safe_path(root, PROPOSAL_REL_PATH)
     _require(
@@ -2019,20 +2453,29 @@ def _validate_support_records(root: Path, subs: dict[str, dict[str, object]]) ->
                     f"latest measured published support record missing from docs/support-records.md: {group_key[0]}/{group_key[1]}/{group_key[2]}/{group_key[3] or '-'}/{group_key[4]}",
                 )
 
-    if not (root / ".git").exists():
-        return
-    git_bin = shutil.which("git")
-    if git_bin is None:
-        return
-    head_res = subprocess.run(  # noqa: S603 - fixed read-only git show on candidate root.
-        [git_bin, "-C", str(root), "show", "HEAD:docs/support-records.md"],
-        text=True,
-        capture_output=True,
-        check=False,
-        timeout=10,
-    )
-    if head_res.returncode == 0:
-        head_records = _parse_support_records(head_res.stdout)
+    baseline_support_text: str | None = None
+    if (root / ".git").exists():
+        git_bin = shutil.which("git")
+        if git_bin is not None:
+            head_res = subprocess.run(  # noqa: S603 - fixed read-only git show on candidate root.
+                [git_bin, "-C", str(root), "show", "HEAD:docs/support-records.md"],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+            if head_res.returncode == 0:
+                baseline_support_text = head_res.stdout
+    else:
+        base_dir = _resolve_base_snapshot_dir()
+        if base_dir is not None and (base_dir / "docs" / "support-records.md").exists():
+            baseline_support_text = _read_regular_text(
+                base_dir,
+                "docs/support-records.md",
+            )
+
+    if baseline_support_text is not None:
+        head_records = _parse_support_records(baseline_support_text)
         head_published_rows = {
             (
                 str(r["backend"]),

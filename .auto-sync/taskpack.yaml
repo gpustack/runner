@@ -6,13 +6,17 @@ spec:
   goal:
     candidate: Research upstream GPUStack Runner releases across cuda/vllm, cuda/sglang, rocm/vllm, rocm/sglang, cann/vllm, and cann/sglang, update writable recipes, patches, matrix, support docs, and .auto-sync/proposal.json, and pass all static candidate checks.
     noChange: Confirm subscribed upstream GPUStack Runner releases match the current catalog and support records with no eligible release-line advancement and settle cleanly as no_change.
+  execution:
+    mode: strict
+    digests:
+      pinDigests: true
   scope:
     writable:
       - .auto-sync/proposal.json
       - pack/matrix.yaml
-      - pack/cuda
-      - pack/rocm
-      - pack/cann
+      - pack/cuda/**
+      - pack/rocm/**
+      - pack/cann/**
       - docs/support-records.md
       - docs/supported-runners.md
       - README.md
@@ -21,7 +25,7 @@ spec:
       - pack/cann/Dockerfile.mindie
       - pack/cann/mindie-atb-models_2.3.0_linux-amd64_py3.11_torch2.1.0-abi0.tar.gz
       - pack/cann/mindie-atb-models_2.3.0_linux-arm64_py3.11_torch2.1.0-abi0.tar.gz
-      - pack/cann/patches/hixl
+      - pack/cann/patches/hixl/**
       - pack/cann/patches/mindie.zip
   instructions:
     - .auto-sync/instructions.md
@@ -59,7 +63,10 @@ spec:
         parameters:
           script: .auto-sync/checks/validate_candidate.sh
           timeoutSeconds: 300
-          allowReadOnlyGitHubToken: true
+          allowReadOnlyGitHubToken: false
+          toolchainPaths:
+            - /usr/local/bin
+            - /usr/bin
           env:
             - PACK_RUN_URL
             - PYTHON_BIN

@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,6 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATE_SCRIPT_PATH = REPO_ROOT / ".auto-sync" / "checks" / "validate_candidate.py"
 LINT_WORKFLOWS_SCRIPT_PATH = REPO_ROOT / ".auto-sync" / "checks" / "lint_workflows.py"
 TASKPACK_PATH = REPO_ROOT / ".auto-sync" / "taskpack.yaml"
+DIGESTS_LOCK_PATH = REPO_ROOT / ".auto-sync" / "digests.lock.json"
 WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "auto-sync.yml"
 DOCS_PATH = REPO_ROOT / "docs" / "release-automation.md"
 
@@ -30,7 +32,12 @@ def _load_module(name: str, path: Path):
     assert spec is not None
     assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    prev_dont_write = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = prev_dont_write
     return module
 
 
@@ -44,12 +51,28 @@ BASH_BIN = shutil.which("bash") or "/bin/bash"
 HAS_NODE = NODE_BIN is not None
 
 
+def _is_taskpack_v2_loopwright(candidate: Path) -> bool:
+    cli_js = candidate / "packages" / "cli" / "dist" / "main.js"
+    action_js = candidate / "packages" / "github-app" / "dist" / "action.js"
+    index_js = candidate / "packages" / "github-app" / "dist" / "index.js"
+    if not (cli_js.is_file() and action_js.is_file() and index_js.is_file()):
+        return False
+    return "digest sync" in cli_js.read_text(encoding="utf-8", errors="ignore")
+
+
 def _resolve_loopwright_root() -> Path | None:
     env_root = os.environ.get("LOOPWRIGHT_REPO_ROOT", "").strip()
     candidates: list[Path] = []
     if env_root:
         candidates.append(Path(env_root))
     candidates.append(REPO_ROOT.parent / "loopwright")
+    if REPO_ROOT.parent.parent.is_dir():
+        lw_ws_dir = REPO_ROOT.parent.parent / "loopwright"
+        if lw_ws_dir.is_dir():
+            candidates.append(lw_ws_dir)
+            for sub_dir in sorted(lw_ws_dir.iterdir()):
+                if sub_dir.is_dir():
+                    candidates.append(sub_dir)
     try:
         common_git = Path(
             subprocess.check_output(
@@ -66,11 +89,7 @@ def _resolve_loopwright_root() -> Path | None:
     except (OSError, subprocess.CalledProcessError):
         pass
     for candidate in candidates:
-        if (
-            (candidate / "packages" / "github-app" / "dist" / "index.js").is_file()
-            and (candidate / "packages" / "github-app" / "dist" / "action.js").is_file()
-            and (candidate / "packages" / "cli" / "dist" / "main.js").is_file()
-        ):
+        if _is_taskpack_v2_loopwright(candidate):
             return candidate.resolve()
     return None
 
@@ -88,6 +107,33 @@ def test_taskpack_memory_and_upstreams_contract() -> None:
     assert manifest["apiVersion"] == "loopwright.dev/v1alpha1"
     assert manifest["kind"] == "Taskpack"
     assert manifest["metadata"]["name"] == "auto-sync"
+
+    execution = manifest["spec"]["execution"]
+    assert execution["mode"] == "strict"
+    assert execution["digests"]["pinDigests"] is True
+    assert DIGESTS_LOCK_PATH.is_file()
+
+    writable = manifest["spec"]["scope"]["writable"]
+    protected = manifest["spec"]["scope"]["protected"]
+    assert "pack/cuda/**" in writable
+    assert "pack/rocm/**" in writable
+    assert "pack/cann/**" in writable
+    assert "pack/cann/patches/hixl/**" in protected
+    for bare in ("pack/cuda", "pack/rocm", "pack/cann", "pack/cann/patches/hixl"):
+        assert bare not in writable
+        assert bare not in protected
+
+    static_checks = [
+        c
+        for c in manifest["spec"]["verification"]["localChecks"]
+        if c["id"] == "runner-static-checks"
+    ]
+    assert len(static_checks) == 1
+    assert static_checks[0]["parameters"]["allowReadOnlyGitHubToken"] is False
+    assert static_checks[0]["parameters"]["toolchainPaths"] == [
+        "/usr/local/bin",
+        "/usr/bin",
+    ]
 
     memory = manifest["spec"]["memory"]
     assert memory == {
@@ -107,6 +153,7 @@ def test_auto_sync_workflow_scrubbed_diagnostics_and_dry_run_alignment() -> None
     assert "publication-endpoint-url" not in workflow_text
 
     workflow = yaml.safe_load(workflow_text)
+    assert workflow["name"] == "Auto Sync"
     steps = workflow["jobs"]["sync"]["steps"]
 
     fetch_steps = [s for s in steps if s.get("name") == "Fetch PR head"]
@@ -121,9 +168,13 @@ def test_auto_sync_workflow_scrubbed_diagnostics_and_dry_run_alignment() -> None
     assert len(run_steps) == 1
     run_with = run_steps[0]["with"]
     assert "publication-endpoint-url" not in run_with
-    assert run_with["force"] == "${{ inputs.force && 'true' || 'false' }}"
-    assert "upstream-records" in run_with
-    assert "inputs.dry-run" in run_with["upstream-records"]
+    assert "upstream-records" not in run_with
+    assert "allow-custom-base-url" not in run_with
+    assert run_with["mode"] == "auto"
+    assert run_with["allow-privileged-execution"] == "false"
+    assert run_with["allow-workflow-writes"] == "false"
+    assert run_with["output"] == "json,github-step-summary"
+    assert "inputs.force" in run_with["force"]
 
     upload_steps = [s for s in steps if s.get("name") == "Upload diagnostics"]
     assert len(upload_steps) == 1
@@ -143,6 +194,8 @@ def test_auto_sync_workflow_scrubbed_diagnostics_and_dry_run_alignment() -> None
 def test_release_automation_docs_document_turnkey_memory() -> None:
     docs_text = DOCS_PATH.read_text(encoding="utf-8")
     for expected in (
+        "digests.lock.json",
+        "mode: auto",
         "loopwright/memory/auto-sync/main",
         "memory-pr-url",
         "memory-publication.json",
@@ -158,12 +211,59 @@ def test_release_automation_docs_document_turnkey_memory() -> None:
 
 @pytest.mark.skipif(
     LOOPWRIGHT_ROOT is None or not HAS_NODE,
-    reason="Built Loopwright checkout not present; skipping Tier B live Node bridge tests",
+    reason="Built Loopwright v2 checkout not present; skipping Tier B live Node bridge tests",
 )
 def test_tier_b_action_dry_run_compiles_runner_taskpack(tmp_path: Path) -> None:
     assert LOOPWRIGHT_ROOT is not None
     assert NODE_BIN is not None
+    cli_js = LOOPWRIGHT_ROOT / "packages" / "cli" / "dist" / "main.js"
     action_js = LOOPWRIGHT_ROOT / "packages" / "github-app" / "dist" / "action.js"
+    gh_app_js = LOOPWRIGHT_ROOT / "packages" / "github-app" / "dist" / "index.js"
+
+    digest_res = subprocess.run(
+        [
+            NODE_BIN,
+            str(cli_js),
+            "digest",
+            "sync",
+            "--taskpack",
+            ".auto-sync/taskpack.yaml",
+            "--repo",
+            str(REPO_ROOT),
+            "--check",
+            "--json",
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    digest_payload = json.loads(digest_res.stdout)
+    assert digest_payload["data"]["ok"] is True
+
+    schema_script = f"""
+import {{ readFileSync }} from 'node:fs';
+import {{ parseTaskpackDocument, validateTaskpackV2Manifest }} from {json.dumps(str(gh_app_js))};
+const raw = parseTaskpackDocument(readFileSync({json.dumps(str(TASKPACK_PATH))}), '.auto-sync/taskpack.yaml');
+const v2 = validateTaskpackV2Manifest(raw, {{
+  controlRoot: '.auto-sync',
+  manifestPath: '.auto-sync/taskpack.yaml',
+}});
+console.log(JSON.stringify({{ name: v2.metadata.name, mode: v2.spec.execution?.mode, pinDigests: v2.spec.execution?.digests.pinDigests }}));
+"""
+    schema_res = subprocess.run(
+        [NODE_BIN, "--input-type=module", "-e", schema_script],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(schema_res.stdout) == {
+        "name": "auto-sync",
+        "mode": "strict",
+        "pinDigests": True,
+    }
+
     run_root = (tmp_path / "runs").resolve()
     run_root.mkdir(parents=True, exist_ok=True)
     summary_file = tmp_path / "summary.md"
@@ -176,7 +276,7 @@ def test_tier_b_action_dry_run_compiles_runner_taskpack(tmp_path: Path) -> None:
         text=True,
     ).strip()
 
-    env = {
+    base_env = {
         **os.environ,
         "GITHUB_ACTIONS": "true",
         "GITHUB_WORKSPACE": str(REPO_ROOT),
@@ -186,26 +286,40 @@ def test_tier_b_action_dry_run_compiles_runner_taskpack(tmp_path: Path) -> None:
         "GITHUB_STEP_SUMMARY": str(summary_file),
         "GITHUB_OUTPUT": str(output_file),
         "INPUT_TASKPACK-PATH": ".auto-sync/taskpack.yaml",
+        "INPUT_MODE": "auto",
+        "INPUT_ALLOW-PRIVILEGED-EXECUTION": "false",
+        "INPUT_ALLOW-WORKFLOW-WRITES": "false",
+        "INPUT_OUTPUT": "json,github-step-summary",
         "INPUT_DRY-RUN": "true",
         "INPUT_RUN-ROOT": str(run_root),
-        "INPUT_UPSTREAM-RECORDS": (
-            '[{"upstreamId":"vllm","status":"available","version":"v0.0.0-dry-run"}]'
-        ),
     }
-    res = subprocess.run(
+    nc_res = subprocess.run(
         [NODE_BIN, str(action_js)],
         cwd=str(REPO_ROOT),
-        env=env,
+        env={**base_env, "INPUT_FORCE": "false"},
         capture_output=True,
         text=True,
         check=True,
     )
-    payload = json.loads(res.stdout)
-    assert payload["kind"] == "compiled"
-    assert payload["taskpack"]["name"] == "auto-sync"
-    assert payload["intake"]["kind"] == "discover"
-    assert payload["intake"]["disposition"] == "ready"
-    assert payload["delegateOutcome"] is None
+    nc_payload = json.loads(nc_res.stdout)
+    assert nc_payload["kind"] == "no_change"
+    assert nc_payload["taskpack"]["name"] == "auto-sync"
+    assert nc_payload["delegateOutcome"] is None
+
+    cand_res = subprocess.run(
+        [NODE_BIN, str(action_js)],
+        cwd=str(REPO_ROOT),
+        env={**base_env, "INPUT_FORCE": "true"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    cand_payload = json.loads(cand_res.stdout)
+    assert cand_payload["kind"] == "compiled"
+    assert cand_payload["taskpack"]["name"] == "auto-sync"
+    assert cand_payload["intake"]["kind"] == "discover"
+    assert cand_payload["intake"]["disposition"] == "ready"
+    assert cand_payload["delegateOutcome"] is None
 
 
 @pytest.mark.skipif(
@@ -263,10 +377,17 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
         else:
             shutil.copy2(src, dst)
 
-    shutil.copy2(
-        VALIDATE_SCRIPT_PATH,
-        work_repo / ".auto-sync" / "checks" / "validate_candidate.py",
-    )
+    for sync_rel in (
+        ".auto-sync/taskpack.yaml",
+        ".auto-sync/digests.lock.json",
+        ".auto-sync/instructions.md",
+        ".auto-sync/checks/validate_candidate.sh",
+        ".auto-sync/checks/validate_candidate.py",
+        ".auto-sync/checks/lint_workflows.py",
+    ):
+        sync_dst = work_repo / sync_rel
+        sync_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO_ROOT / sync_rel, sync_dst)
 
     subprocess.run(
         [GIT_BIN, "init", "--initial-branch=main", str(work_repo)],
@@ -300,7 +421,9 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
     )
 
     prs: list[dict[str, object]] = []
-    vllm_tag = ["v0.19.0"]
+    vllm_tag = ["v0.33.0"]
+    sglang_tag = ["v0.5.23"]
+    ascend_tag = ["v0.32.0rc1"]
 
     def current_mem_sha() -> str:
         res = subprocess.run(
@@ -347,7 +470,7 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
             if "/repos/sgl-project/sglang/releases/latest" in self.path:
                 self._send_json(
                     200,
-                    {"tag_name": "v0.5.10.post1", "draft": False, "prerelease": False},
+                    {"tag_name": sglang_tag[0], "draft": False, "prerelease": False},
                 )
                 return
             if "/repos/sgl-project/sglang/releases" in self.path:
@@ -355,7 +478,7 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
                     200,
                     [
                         {
-                            "tag_name": "v0.5.10.post1",
+                            "tag_name": sglang_tag[0],
                             "draft": False,
                             "prerelease": False,
                         },
@@ -365,13 +488,23 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
             if "/repos/vllm-project/vllm-ascend/releases/latest" in self.path:
                 self._send_json(
                     200,
-                    {"tag_name": "v0.18.0rc1", "draft": False, "prerelease": True},
+                    {"tag_name": ascend_tag[0], "draft": False, "prerelease": True},
                 )
                 return
             if "/repos/vllm-project/vllm-ascend/releases" in self.path:
                 self._send_json(
                     200,
-                    [{"tag_name": "v0.18.0rc1", "draft": False, "prerelease": True}],
+                    [{"tag_name": ascend_tag[0], "draft": False, "prerelease": True}],
+                )
+                return
+            if self.path == "/repos/gpustack/runner":
+                self._send_json(
+                    200,
+                    {
+                        "id": 12345,
+                        "full_name": "gpustack/runner",
+                        "default_branch": "main",
+                    },
                 )
                 return
             if "/pulls" in self.path:
@@ -434,9 +567,44 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
         **git_env,
         "GITHUB_API_URL": api_url,
         "LOOPWRIGHT_REPOSITORY": "gpustack/runner",
+        "PYTHON_BIN": sys.executable,
     }
 
     try:
+        action_js = LOOPWRIGHT_ROOT / "packages" / "github-app" / "dist" / "action.js"
+        init_sha = subprocess.check_output(
+            [GIT_BIN, "-C", str(work_repo), "rev-parse", "HEAD"],
+            env=git_env,
+            text=True,
+        ).strip()
+        live_nc = subprocess.run(
+            [NODE_BIN, str(action_js)],
+            cwd=str(work_repo),
+            env={
+                **step_env,
+                "GITHUB_ACTIONS": "true",
+                "GITHUB_WORKSPACE": str(work_repo),
+                "GITHUB_REPOSITORY": "gpustack/runner",
+                "GITHUB_SHA": init_sha,
+                "GITHUB_EVENT_NAME": "schedule",
+                "GITHUB_TOKEN": "ghs_test_token_123456",
+                "INPUT_TASKPACK-PATH": ".auto-sync/taskpack.yaml",
+                "INPUT_MODE": "auto",
+                "INPUT_ALLOW-PRIVILEGED-EXECUTION": "false",
+                "INPUT_ALLOW-WORKFLOW-WRITES": "false",
+                "INPUT_DRY-RUN": "false",
+                "INPUT_FORCE": "false",
+                "INPUT_OUTPUT": "json",
+                "INPUT_RUN-ROOT": str(run_root),
+                "INPUT_RUN-ID": "run-auto-nc-live",
+            },
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        live_nc_payload = json.loads(live_nc.stdout)
+        assert live_nc_payload["kind"] == "no_change"
+        assert live_nc_payload["delegateOutcome"]["ok"] is True
 
         def run_cycle(
             run_id: str,
@@ -513,7 +681,7 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
             == "no_change"
         )
 
-        vllm_tag[0] = "v0.19.1"
+        vllm_tag[0] = "v0.34.0"
 
         def mutate_static_check_failure(cand_dir: Path, attempt_idx: int) -> None:
             prop_p = cand_dir / ".auto-sync" / "proposal.json"
@@ -562,9 +730,9 @@ def test_tier_b_settled_cycles_publish_memory_pr_and_inject_active_memory(
         ).strip()
 
         for rid, expected_status in (
-            ("run-nochange-0", "published"),
-            ("run-blocked-1", "updated"),
-            ("run-completed-2", "updated"),
+            ("run-nochange-0", "no_entries"),
+            ("run-blocked-1", "skipped"),
+            ("run-completed-2", "published"),
         ):
             pub_script = f"""
 import {{ finalizeAndPublishTurnkeyMemory, loadDeclarativeTaskpack, SecretScrubber }} from {json.dumps(str(gh_app_js))};
@@ -583,9 +751,9 @@ const res = await finalizeAndPublishTurnkeyMemory({{
   manifest,
   taskpackPath: '.auto-sync/taskpack.yaml',
   upstreamRecords: [
-    {{ upstreamId: 'vllm', status: 'available', version: 'v0.19.1' }},
-    {{ upstreamId: 'sglang', status: 'up_to_date', version: 'v0.5.10.post1' }},
-    {{ upstreamId: 'vllm-ascend', status: 'up_to_date', version: 'v0.18.0rc1' }},
+    {{ upstreamId: 'vllm', status: 'available', version: 'v0.34.0' }},
+    {{ upstreamId: 'sglang', status: 'up_to_date', version: 'v0.5.23' }},
+    {{ upstreamId: 'vllm-ascend', status: 'up_to_date', version: 'v0.32.0rc1' }},
   ],
   scrubber: new SecretScrubber(),
   remoteUrl: {json.dumps(str(bare_remote))},
@@ -603,16 +771,17 @@ console.log(JSON.stringify(res));
             )
             pub_json = json.loads(pub.stdout)
             assert pub_json["status"] == expected_status
-            assert (
-                pub_json["pullRequestUrl"]
-                == "https://github.com/gpustack/runner/pull/1"
-            )
-            receipt = json.loads(
-                (run_root / rid / "memory-publication.json").read_text(
-                    encoding="utf-8",
-                ),
-            )
-            assert receipt["state"] == "completed"
+            if expected_status == "published":
+                assert (
+                    pub_json["pullRequestUrl"]
+                    == "https://github.com/gpustack/runner/pull/1"
+                )
+                receipt = json.loads(
+                    (run_root / rid / "memory-publication.json").read_text(
+                        encoding="utf-8",
+                    ),
+                )
+                assert receipt["state"] == "completed"
 
         branch_files = subprocess.check_output(
             [
