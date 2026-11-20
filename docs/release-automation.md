@@ -6,15 +6,17 @@ Static checks do not prove runtime or GPU compatibility.
 
 ## Architecture
 
-`.github/workflows/auto-sync.yml` runs a single `sync` job using `gpustack/loopwright@main`.
+`.github/workflows/auto-sync.yml` runs a single `sync` job using `gpustack/loopwright@main` in `mode: auto` with `allow-privileged-execution: 'false'` and `allow-workflow-writes: 'false'`.
 The job runs weekly on Sunday at 13:07 UTC, or by manual dispatch or an authorized PR command.
-It checks out the trusted default branch and supplies these files to Loopwright:
+When subscribed upstream releases match `.auto-sync/proposal.json` (and neither `force` nor `pack-run-url` is set), `mode: auto` runs check-only `no_change` verification with zero model calls; otherwise it dispatches `candidate` mode.
+It checks out and verifies the trusted default branch and supplies these files to Loopwright:
 
-- `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` `Taskpack` defining upstreams, scope, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, and model configuration (authenticated via `LOOPWRIGHT_PROVIDER_TOKEN`).
+- `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` Taskpack 2.0 manifest declaring `spec.execution` (`mode: strict`, `digests.pinDigests: true`), explicit `/**` and single-file scope globs, upstreams, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, and model configuration (authenticated via `LOOPWRIGHT_PROVIDER_TOKEN`).
+- `.auto-sync/digests.lock.json`: deterministic SHA-256 lockfile pinning `.auto-sync/instructions.md` and the `.auto-sync/checks` directory tree (`loopwright digest sync --taskpack .auto-sync/taskpack.yaml --repo .`).
 - `.auto-sync/instructions.md`: the author instructions, limited to 24,576 UTF-8 bytes. They directly consolidate upgrade rules for all six recipes.
 - `.auto-sync/proposal.json`: the canonical proposal artifact inside the protected `.auto-sync/` control root, exposed as an exact single-file writable entry.
 - `.auto-sync/memory/`: protected root for Loopwright taskpack memory. Verified facts and failure observations for `auto-sync` live under `.auto-sync/memory/auto-sync/` (`index.json` and `entries/<id>.md`) and are proposed through a separate `loopwright/memory/auto-sync/main` pull request.
-- `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic candidate checks.
+- `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic offline candidate checks mounted read-only as a SHA-256-verified directory under `command.v1` (with `$LOOPWRIGHT_CANDIDATE_DIR` and `$LOOPWRIGHT_BASE_DIR`).
 - `.auto-sync/checks/lint_workflows.py`: workflow linting.
 
 Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools, plus read-only MCP tools from `github-mcp-server` (`mcp__github__*`) and DeepWiki (`mcp__deepwiki__*`) and pinned `crane` for manifest inspection.
@@ -110,9 +112,11 @@ Run from the repository root:
 make prepare && uv sync --locked --all-packages
 LOOPWRIGHT_CANDIDATE_DIR="$PWD" uv run bash .auto-sync/checks/validate_candidate.sh
 uv run pytest tests/gpustack_runner tests/pack
-uv run python .auto-sync/checks/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
+uv run python -B .auto-sync/checks/lint_workflows.py .github/workflows/auto-sync.yml .github/workflows/pack.yml .github/workflows/ci.yml
 uv run mkdocs build --strict
 ```
+
+When editing `.auto-sync/instructions.md` or files under `.auto-sync/checks/`, refresh `.auto-sync/digests.lock.json` with `loopwright digest sync --taskpack .auto-sync/taskpack.yaml --repo .` and verify parity with `loopwright digest sync --taskpack .auto-sync/taskpack.yaml --repo . --check --json`.
 
 To drive `.auto-sync/taskpack.yaml` locally through an external coding agent without provider API secrets, install the portable `loopwright-step` skill (`npx skills add gpustack/loopwright --skill loopwright-step`), step the manifest with `loopwright step next --taskpack .auto-sync/taskpack.yaml --repo "$PWD" --run-root <outside-dir> --run-id <run-id> --json`, and export the verified overlay after terminal settlement with `loopwright inspect --run-root <outside-dir> --run-id <run-id> --output <export-dir> --json`; see [Loopwright Coding Agents](https://docs.gpustack.ai/loopwright/latest/docs/operations/coding-agents/).
 

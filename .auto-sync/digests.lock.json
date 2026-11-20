@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "taskpack": "auto-sync",
+  "entries": [
+    {
+      "path": ".auto-sync/checks",
+      "kind": "directory",
+      "sha256": "6305b4dd85aaa4916448e112a5a9d0db2a7a890e6de3c9c379d2c49003a10e8a"
+    },
+    {
+      "path": ".auto-sync/instructions.md",
+      "kind": "file",
+      "sha256": "1b154ac64438a2315acbc0ba31f832b9691e06bf4ef1716962eceb7ed93c6255"
+    }
+  ]
+}

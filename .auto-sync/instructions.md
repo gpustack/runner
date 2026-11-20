@@ -32,9 +32,9 @@ Protected or out-of-scope paths (NEVER edit):
 - `gpustack_runner/` (including `gpustack_runner/runner.py.json`)
 - `pack/dependencies.json`, `pack/prereleases.yaml`, `pack/.post_operation`
 - `pack/resolve_dockerfile.sh`, `pack/expand_matrix.sh`, `pack/probe_dependencies.py`, `pack/collect_dependencies.py`, `pack/promote_support.py`, `pack/merge_runner.sh`, `pack/prune_runner.sh`, `pack/discard_runner.sh`, `pack/squash_expand_matrix.sh`, `pack/squash_image.sh`
-- `pack/cuda/Dockerfile.voxbox`, `pack/cann/Dockerfile.mindie`, `pack/cann/mindie-atb-models_*.tar.gz`, `pack/cann/patches/hixl`, `pack/cann/patches/mindie.zip`
-- `pack/corex`, `pack/dtk`, `pack/hggc`, `pack/maca`, `pack/musa`, `pack/shared`
-- `.auto-sync/` (except `.auto-sync/proposal.json`), `.github/`, `.agents/`, `.claude/`, `AGENTS.md`, `tests/`, `docs/release-automation.md`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/modules`
+- `pack/cuda/Dockerfile.voxbox`, `pack/cann/Dockerfile.mindie`, `pack/cann/mindie-atb-models_*.tar.gz`, `pack/cann/patches/hixl/**`, `pack/cann/patches/mindie.zip`
+- `pack/corex/**`, `pack/dtk/**`, `pack/hggc/**`, `pack/maca/**`, `pack/musa/**`, `pack/shared/**`
+- `.auto-sync/**` (except `.auto-sync/proposal.json`; including `.auto-sync/taskpack.yaml`, `.auto-sync/digests.lock.json`, `.auto-sync/instructions.md`, `.auto-sync/checks/**`, and `.auto-sync/memory/**`), `.github/**`, `.agents/**`, `.claude/**`, `AGENTS.md`, `tests/**`, `docs/release-automation.md`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/modules/**`
 
 ## 2. Incremental Release-Line Chasing Policy
 

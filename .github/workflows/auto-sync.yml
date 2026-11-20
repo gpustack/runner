@@ -1,4 +1,4 @@
-name: Runner Auto Sync
+name: Auto Sync
 
 on:
   schedule:
@@ -65,11 +65,26 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Verify main ref
+        id: main_ref
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_REF}" != "refs/heads/${DEFAULT_BRANCH}" ]]; then
+            echo "Refusing workflow_dispatch from '${DISPATCH_REF}'; dispatch Auto Sync from refs/heads/${DEFAULT_BRANCH}." >&2
+            exit 1
+          fi
+          MAIN_SHA="$(git rev-parse --verify 'HEAD^{commit}')"
+          echo "sha=${MAIN_SHA}" >> "${GITHUB_OUTPUT}"
       - name: Fetch PR head
         if: github.event_name == 'issue_comment'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.issue.number }}
+          EXPECTED_MAIN_SHA: ${{ steps.main_ref.outputs.sha }}
           SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
@@ -77,7 +92,6 @@ jobs:
             echo "Invalid pull request number '${PR_NUMBER}' in issue_comment payload." >&2
             exit 1
           fi
-          MAIN_SHA="$(git rev-parse --verify 'HEAD^{commit}')"
           if [[ -n "${GH_TOKEN}" ]]; then
             AUTH_B64="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 | tr -d '\r\n')"
             GIT_CONFIG_COUNT=1 \
@@ -89,26 +103,34 @@ jobs:
             git -c core.hooksPath=/dev/null fetch --no-tags --no-recurse-submodules origin \
               "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/pr/${PR_NUMBER}"
           fi
-          if [[ "$(git rev-parse --verify 'HEAD^{commit}')" != "${MAIN_SHA}" ]]; then
+          if [[ "$(git rev-parse --verify 'HEAD^{commit}')" != "${EXPECTED_MAIN_SHA}" ]]; then
             echo "HEAD moved unexpectedly during pull request head fetch." >&2
             exit 1
           fi
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "Working tree became dirty after pull request object fetch." >&2
+            exit 1
+          fi
       - name: Setup uv
+        if: ${{ !inputs.dry-run }}
         uses: astral-sh/setup-uv@v7
         with:
           version: "0.8.24"
           enable-cache: true
           python-version: "3.10"
       - name: Install dependencies
+        if: ${{ !inputs.dry-run }}
         run: |
           make prepare
           uv sync --locked --all-packages
       - name: Cache research tools
+        if: ${{ !inputs.dry-run }}
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/auto-sync-tools
           key: auto-sync-tools-v1-${{ runner.os }}-${{ runner.arch }}-ghmcp-2.0.1-crane-0.21.9
       - name: Setup research tools
+        if: ${{ !inputs.dry-run }}
         run: |
           set -euo pipefail
           tool_dir="$RUNNER_TEMP/auto-sync-tools"
@@ -156,21 +178,21 @@ jobs:
         uses: gpustack/loopwright@main
         with:
           taskpack-path: .auto-sync/taskpack.yaml
-          mode: candidate
+          mode: auto
+          allow-privileged-execution: 'false'
+          allow-workflow-writes: 'false'
           event-name: ${{ github.event_name }}
           event-path: ${{ github.event_path }}
           run-root: ${{ runner.temp }}/loopwright-runs
           run-id: auto-sync-${{ github.run_id }}-${{ github.run_attempt }}
           storage-profile: actions-basic
-          allow-custom-base-url: 'true'
-          provider-token-env: LOOPWRIGHT_PROVIDER_TOKEN
           github-app-id: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_APP_ID || vars.CI_GPUSTACK_LOOPWRIGHT_APP_ID }}
           github-app-private-key: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_APP_PRIVATE_KEY }}
           output: json,github-step-summary
           dry-run: ${{ inputs.dry-run && 'true' || 'false' }}
-          force: ${{ inputs.force && 'true' || 'false' }}
-          upstream-records: ${{ inputs.dry-run && '[{"upstreamId":"vllm","status":"available","version":"v0.0.0-dry-run"}]' || '' }}
+          force: ${{ (inputs.force || inputs.pack-run-url != '') && 'true' || 'false' }}
         env:
+          GITHUB_SHA: ${{ steps.main_ref.outputs.sha }}
           LOOPWRIGHT_PROVIDER_TOKEN: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_LLM_AUTH_TOKEN || secrets.CI_GPUSTACK_CODEREVIEW_LLM_AUTH_TOKEN || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACK_RUN_URL: ${{ inputs.pack-run-url }}

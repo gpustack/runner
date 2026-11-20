@@ -7,6 +7,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,12 @@ SPEC = importlib.util.spec_from_file_location("validate_candidate", MODULE_PATH)
 assert SPEC is not None
 assert SPEC.loader is not None
 vc_mod = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(vc_mod)
+_prev_dont_write_bytecode = sys.dont_write_bytecode
+sys.dont_write_bytecode = True
+try:
+    SPEC.loader.exec_module(vc_mod)
+finally:
+    sys.dont_write_bytecode = _prev_dont_write_bytecode
 
 CANDIDATE_COPY_PATHS = (
     ".auto-sync",
@@ -177,6 +183,7 @@ def test_classify_scope_path_defaults_fail_closed_without_proposal_carveout(
     [
         ".auto-sync/instructions.md",
         ".auto-sync/taskpack.yaml",
+        ".auto-sync/digests.lock.json",
         ".auto-sync/checks/validate_candidate.sh",
         ".auto-sync/memory/.gitkeep",
     ],
@@ -541,3 +548,132 @@ def test_validate_candidate_rejects_corrupt_or_forbidden_memory_files(
     entry_path.write_text(original_text, encoding="utf-8")
 
     vc_mod.validate_candidate(cand)
+
+
+def test_taskpack_v2_explicit_glob_scope_and_bare_directory_rejection(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    writable, protected, _ = vc_mod.load_effective_scope(baseline_template)
+    assert (
+        vc_mod.classify_scope_path("pack/cuda/Dockerfile.vllm", writable, protected)
+        == "writable"
+    )
+    assert (
+        vc_mod.classify_scope_path(
+            "pack/cuda/patches/vllm/001_wrong_dp_ray.patch",
+            writable,
+            protected,
+        )
+        == "writable"
+    )
+    assert (
+        vc_mod.classify_scope_path("pack/cuda/Dockerfile.voxbox", writable, protected)
+        == "protected"
+    )
+    assert (
+        vc_mod.classify_scope_path(
+            "pack/cann/patches/hixl/001_fix.patch",
+            writable,
+            protected,
+        )
+        == "protected"
+    )
+    assert (
+        vc_mod.classify_scope_path(
+            "pack/cuda/Dockerfile.vllm",
+            ("pack/*/Dockerfile.vllm",),
+            protected,
+        )
+        == "writable"
+    )
+    assert (
+        vc_mod.classify_scope_path(
+            "pack/cuda/sub/Dockerfile.vllm",
+            ("pack/*/Dockerfile.vllm",),
+            protected,
+        )
+        == "outside_writable"
+    )
+
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+    taskpack_path = cand / ".auto-sync" / "taskpack.yaml"
+    manifest = yaml.safe_load(taskpack_path.read_text(encoding="utf-8"))
+    manifest["spec"]["scope"]["writable"] = [".auto-sync/proposal.json", "pack/cuda"]
+    taskpack_path.write_text(
+        yaml.safe_dump(manifest, sort_keys=False),
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match=r"directory writable path 'pack/cuda' must use explicit 'pack/cuda/\*\*'",
+    ):
+        vc_mod.load_effective_scope(cand)
+
+    manifest["spec"]["scope"]["writable"] = [".auto-sync/proposal.json", "pack/cann/**"]
+    manifest["spec"]["scope"]["protected"] = ["pack/cann/patches/hixl"]
+    taskpack_path.write_text(
+        yaml.safe_dump(manifest, sort_keys=False),
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match=r"directory protected path 'pack/cann/patches/hixl' must use explicit 'pack/cann/patches/hixl/\*\*'",
+    ):
+        vc_mod.load_effective_scope(cand)
+
+
+def test_loopwright_base_dir_enforces_scope_and_published_rows_without_git(
+    baseline_template: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base_snap = tmp_path / "base"
+    shutil.copytree(baseline_template, base_snap, symlinks=True)
+    shutil.rmtree(base_snap / ".git")
+
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+    monkeypatch.setenv("LOOPWRIGHT_BASE_DIR", str(base_snap))
+    vc_mod.validate_candidate(cand)
+
+    voxbox = cand / "pack" / "cuda" / "Dockerfile.voxbox"
+    orig_voxbox = voxbox.read_text(encoding="utf-8")
+    voxbox.write_text(orig_voxbox + "\n# unauthorized\n", encoding="utf-8")
+    with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
+        vc_mod.validate_candidate(cand)
+    voxbox.write_text(orig_voxbox, encoding="utf-8")
+
+    support_records = cand / "docs" / "support-records.md"
+    lines = support_records.read_text(encoding="utf-8").splitlines()
+    first_pub = next(r for r in lines if "| published |" in r)
+    dropped = [line for line in lines if line != first_pub]
+    support_records.write_text("\n".join(dropped) + "\n", encoding="utf-8")
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match="deleted or altered existing published row",
+    ):
+        vc_mod.validate_candidate(cand)
+
+
+def test_shell_entrypoint_ignores_candidate_checks_script(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+    poisoned = cand / ".auto-sync" / "checks" / "validate_candidate.py"
+    poisoned.write_text("import sys; sys.exit(99)\n", encoding="utf-8")
+
+    bash_bin = shutil.which("bash") or "/bin/bash"
+    res = subprocess.run(
+        [bash_bin, str(SCRIPT_PATH)],
+        cwd=cand,
+        env={**os.environ, "LOOPWRIGHT_CANDIDATE_DIR": str(cand)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert res.returncode == 0, res.stderr
+    assert not (REPO_ROOT / ".auto-sync" / "checks" / "__pycache__").exists()

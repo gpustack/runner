@@ -13,7 +13,7 @@ Start with the guide for the affected contract:
 | Supported versions and platforms | [Supported runners](docs/supported-runners.md) | `gpustack_runner/runner.py.json`, `pack/matrix.yaml`, `docs/support-records.md` |
 | Recipes and image production | [Packaging](docs/packaging.md) | `pack/<backend>/Dockerfile.<service>`, `resolve_dockerfile.sh`, `expand_matrix.sh`, `.github/workflows/pack.yml` |
 | Installed dependencies | [Dependency metadata](docs/dependency-metadata.md) | `pack/dependencies.json`, `probe_dependencies.py`, `collect_dependencies.py`, `promote_support.py`, `merge_runner.sh` |
-| Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `.auto-sync/taskpack.yaml`, `.auto-sync/instructions.md`, `.auto-sync/checks/validate_candidate.py`, `.github/workflows/auto-sync.yml` |
+| Release proposals and PR revisions | [Release automation](docs/release-automation.md) | `.auto-sync/taskpack.yaml`, `.auto-sync/digests.lock.json`, `.auto-sync/instructions.md`, `.auto-sync/checks/validate_candidate.py`, `.github/workflows/auto-sync.yml` |
 
 Confirm the checkout, branch, uncommitted changes, and relevant dependency versions before editing.
 Search local source with `rg`. An index or guide points to evidence; it does not prove current behavior.
@@ -82,8 +82,8 @@ Run `make package` or Pack only when image production is explicitly authorized.
 
 Use `loopwright step next --taskpack .auto-sync/taskpack.yaml` (with the portable `loopwright-step` skill from `gpustack/loopwright`) for local upstream discovery or an authorized `/auto-sync` revision; see [Release automation](docs/release-automation.md#local-verification).
 Use [runner-release](.agents/skills/runner-release/SKILL.md) to cut package releases (tag, notes, promotion) and to align README and supported-runners documentation with published support records.
-The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright@main` with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
-The taskpack also owns `.auto-sync/proposal.json`, `.auto-sync/checks/`, and `.auto-sync/memory/`.
+The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright@main` (`mode: auto`) with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
+The taskpack also owns `.auto-sync/proposal.json`, `.auto-sync/digests.lock.json`, `.auto-sync/checks/`, and `.auto-sync/memory/`.
 Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools.
 It enforces writable and protected scope with `scope.v1`, checks `.auto-sync/proposal.json` with `json-artifact.v1`, and runs `.auto-sync/checks/validate_candidate.sh` with `command.v1` before publishing or updating an `auto-sync/*` PR.
 The agent cannot merge, publish images, invoke Pack, or edit its controlling policy.
