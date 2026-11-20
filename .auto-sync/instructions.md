@@ -107,7 +107,7 @@ Workspace and tool path rules:
 
 - Review every affected patch under writable patch directories (`pack/cuda/patches`, `pack/rocm/patches`, `pack/cann/patches/vllm`, `pack/cann/patches/vllm_ascend`, `pack/cann/patches/vllm_omni`, `pack/cann/patches/sglang`) against the exact selected upstream source revision using `git apply --check`:
   - For `"unchanged"` subscriptions whose component versions did not change, retain baseline patch entries without re-fetching upstream sources.
-  - For updated components in offline `bash`, fetch the exact target file(s) touched by each patch at the selected tag/commit via `mcp__github__get_file_contents`, stage them at their patch-relative paths under `$TMPDIR` in one `bash` call, and verify with `git apply --check "$CANDIDATE_DIR/<patch-path>"`.
+  - For updated components in offline `bash`, fetch the exact target file(s) touched by each patch at the selected tag/commit via `mcp__github__get_file_contents`, stage them at their patch-relative paths in the current working directory in one `bash` call, and verify with `git apply --check "$CANDIDATE_DIR/<patch-path>"`.
 - Assign each patch one disposition: `retain`, `adapt`, `remove`, or `add`.
 - When removing an obsolete patch (`remove`), delete the `.patch` file using the mediated `delete` tool and update Dockerfile references if needed; never leave an unreferenced or empty `.patch` file behind.
 - Patch `versions` in `.auto-sync/proposal.json` must be bare PEP 440 version strings (e.g. `0.33.0`, never `v0.33.0` or `vllm-0.33.0`).
