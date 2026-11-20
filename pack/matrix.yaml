@@ -130,19 +130,10 @@ rules:
   # AMD ROCm
   #
 
-  ## AMD ROCm 7.2.3
-  ##
-  - backend: "rocm"
-    services:
-      - "vllm"
-    platforms:
-      - "linux/amd64"
-    args:
-      - "ROCM_VERSION=7.2.3"
-      - "VLLM_VERSION=0.33.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm72"
-  ## AMD ROCm 10.0.0 (TheRock SDK); keep 7.2.3 during the upstream transition.
-  ## vllm-project/vllm#58761 publishes both runtime lines for vLLM 0.33.0.
+  ## AMD ROCm 10.0.0 (TheRock SDK); vLLM 0.34.0
+  ## vllm-project/vllm#61939 dropped the ROCm 7.2 wheels and -rocm72 image tags,
+  ## so vLLM 0.34.0 publishes the ROCm 10.0 line only (tag v0.34.0, also
+  ## mirrored as v0.34.0-rocm100).
   ##
   - backend: "rocm"
     services:
@@ -151,8 +142,13 @@ rules:
       - "linux/amd64"
     args:
       - "ROCM_VERSION=10.0.0"
-      - "VLLM_VERSION=0.33.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm100"
+      - "VLLM_VERSION=0.34.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.34.0"
+  ## AMD ROCm 7.2.3 (retired at vLLM 0.34.0)
+  ## vLLM 0.34.0 ships ROCm 10.0-only wheels and images; the -rocm72 tags are
+  ## no longer published (vllm-project/vllm#61939). Re-add this rule when
+  ## upstream ships rocm72 images for a supported release again.
+  ##
   ## AMD ROCm 7.2.1 - SGLang 0.5.23 (rocm720-mi30x)
   ##
   - backend: "rocm"
@@ -176,8 +172,8 @@ rules:
       - "vllm"
     args:
       - "CUDA_VERSION=13.0.3"
-      - "VLLM_VERSION=0.33.0"
-      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.33.0"
+      - "VLLM_VERSION=0.34.0"
+      - "VLLM_BASE_IMAGE=vllm/vllm-openai:v0.34.0"
   ## NVIDIA CUDA 13.0.3 - SGLang 0.5.22
   ## (upstream publishes no cu129 image for 0.5.22, so only the cu130 rule remains)
   ##
