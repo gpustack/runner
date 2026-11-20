@@ -27,14 +27,45 @@ def _wheel(directory: Path, name: str, version: str, metadata: str = "") -> None
         wheel.writestr(f"{info}/RECORD", "")
 
 
+def _extract_ray_requirements(recipe: str) -> tuple[str, str]:
+    block = recipe.split("## Install Ray\n", 1)[1]
+    next_section = re.search(r"\n## ", block)
+    if next_section is not None:
+        block = block[: next_section.start()]
+    requirements = block.split("cat <<EOT >/tmp/requirements.txt\n", 1)[1].split(
+        "\nEOT",
+        1,
+    )[0]
+    match = re.search(r"RAY_VERSION=([^\s]+)", block) or re.search(
+        r"^ARG\s+RAY_VERSION=([^\s]+)",
+        recipe,
+        re.MULTILINE,
+    )
+    if match is not None:
+        version = match.group(1).strip('"')
+        requirements = requirements.replace("${RAY_VERSION}", version).replace(
+            "$RAY_VERSION",
+            version,
+        )
+        return version, requirements
+    pinned = re.search(r"^ray\[[^\]]+\]==([^\s,;]+)", requirements, re.MULTILINE)
+    if pinned is not None:
+        return pinned.group(1), requirements
+    bounded = re.search(r"^ray\[[^\]]+\]>?=([^\s,;]+)", requirements, re.MULTILINE)
+    return (bounded.group(1) if bounded is not None else "2.54.0"), requirements
+
+
 @pytest.mark.parametrize("add_cuda_extra", [False, True])
 def test_rocm_ray_resolution_preserves_hip_cupy(tmp_path, add_cuda_extra):
-    # Reduced Ray 2.54.0 extras: cgraph's sole dependency is CUDA CuPy.
+    recipe = (ROOT / "pack/rocm/Dockerfile.vllm").read_text(encoding="utf-8")
+    version, requirements = _extract_ray_requirements(recipe)
+
+    # Reduced Ray extras matching the pinned version: cgraph's sole dependency is CUDA CuPy.
     # https://github.com/ray-project/ray/blob/48bd1f8fa43d0e8222b0f57357b99b48c7437ed3/python/setup.py
     _wheel(
         tmp_path,
         "ray",
-        "2.54.0",
+        version,
         "Provides-Extra: cgraph\nProvides-Extra: client\nProvides-Extra: default\n"
         'Requires-Dist: cupy-cuda12x; sys_platform != "darwin" and extra == "cgraph"\n'
         'Requires-Dist: grpcio; extra == "client"\n'
@@ -45,14 +76,6 @@ def test_rocm_ray_resolution_preserves_hip_cupy(tmp_path, add_cuda_extra):
     _wheel(tmp_path, "grpcio", "1.78.0")
     _wheel(tmp_path, "colorful", "0.6.0")
 
-    recipe = (ROOT / "pack/rocm/Dockerfile.vllm").read_text(encoding="utf-8")
-    block = recipe.split("## Install Ray\n", 1)[1].split("## Install LMCache\n", 1)[0]
-    version = re.search(r"RAY_VERSION=([^\s]+)", block).group(1)
-    requirements = block.split("cat <<EOT >/tmp/requirements.txt\n", 1)[1].split(
-        "\nEOT",
-        1,
-    )[0]
-    requirements = requirements.replace("${RAY_VERSION}", version)
     requirements += "\ncupy-rocm-7-0==14.2.0\n"
     if add_cuda_extra:
         requirements += f"ray[cgraph]=={version}\n"
