@@ -802,25 +802,34 @@ def _load_scope_and_proposal_path(
         )
 
     for p_path in manifest_protected:
+        p_subtree = _as_protected_subtree_pattern(p_path)
+        # Only protected paths carved out of writable scope must exist in the candidate;
+        # outside-writable entries (e.g. symlink-only dirs stripped by source freezing) may be absent.
+        overlaps_writable = any(
+            _scope_patterns_may_intersect(w_path, p_subtree, case_insensitive=True)
+            for w_path in writable
+        )
         if p_path.endswith("/**") and "*" not in p_path[:-3] and "?" not in p_path[:-3]:
             dir_rel = p_path[:-3]
             target = _safe_path(root, dir_rel)
-            _require(
-                target.is_dir(),
-                f"protected directory missing from candidate: {p_path}",
-            )
+            if overlaps_writable or target.exists():
+                _require(
+                    target.is_dir(),
+                    f"protected directory missing from candidate: {p_path}",
+                )
         elif _is_bare_literal_scope_pattern(p_path):
             target = _safe_path(root, p_path)
-            _require(
-                target.exists(),
-                f"protected path missing from candidate: {p_path}",
-            )
-            _require(
-                not target.is_dir(),
-                f"directory protected path {p_path!r} must use explicit '{p_path}/**' glob",
-            )
+            if overlaps_writable:
+                _require(
+                    target.exists(),
+                    f"protected path missing from candidate: {p_path}",
+                )
+            if target.exists():
+                _require(
+                    not target.is_dir(),
+                    f"directory protected path {p_path!r} must use explicit '{p_path}/**' glob",
+                )
         else:
-            p_subtree = _as_protected_subtree_pattern(p_path)
             matched_any = False
             for entry in sorted(root.rglob("*")):
                 if (
@@ -833,10 +842,11 @@ def _load_scope_and_proposal_path(
                 if _matches_scope_pattern(p_subtree, rel_entry):
                     _safe_path(root, rel_entry)
                     matched_any = True
-            _require(
-                matched_any,
-                f"protected glob matched no files in candidate: {p_path}",
-            )
+            if overlaps_writable:
+                _require(
+                    matched_any,
+                    f"protected glob matched no files in candidate: {p_path}",
+                )
     return writable, effective_protected, manifest_protected, proposal_path
 
 

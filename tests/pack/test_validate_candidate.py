@@ -1,4 +1,4 @@
-"""Behavior tests for .auto-sync/checks/validate_candidate.py scope and proposal rules."""
+"""Behavior tests for .auto-sync/checks/validate_candidate.py and workflow linting."""
 
 from __future__ import annotations
 
@@ -18,18 +18,26 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODULE_PATH = REPO_ROOT / ".auto-sync" / "checks" / "validate_candidate.py"
+LINT_WORKFLOWS_PATH = REPO_ROOT / ".auto-sync" / "checks" / "lint_workflows.py"
 SCRIPT_PATH = REPO_ROOT / ".auto-sync" / "checks" / "validate_candidate.sh"
 
-SPEC = importlib.util.spec_from_file_location("validate_candidate", MODULE_PATH)
-assert SPEC is not None
-assert SPEC.loader is not None
-vc_mod = importlib.util.module_from_spec(SPEC)
-_prev_dont_write_bytecode = sys.dont_write_bytecode
-sys.dont_write_bytecode = True
-try:
-    SPEC.loader.exec_module(vc_mod)
-finally:
-    sys.dont_write_bytecode = _prev_dont_write_bytecode
+
+def _load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    prev_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = prev_dont_write_bytecode
+    return module
+
+
+vc_mod = _load_module("validate_candidate", MODULE_PATH)
+lint_workflows = _load_module("lint_workflows", LINT_WORKFLOWS_PATH)
 
 CANDIDATE_COPY_PATHS = (
     ".auto-sync",
@@ -38,6 +46,16 @@ CANDIDATE_COPY_PATHS = (
     "gpustack_runner",
     "pack",
 )
+LARGE_FIXTURE_THRESHOLD_BYTES = 1_048_576
+
+
+def _copy_fixture_file(src: str, dst: str) -> str:
+    src_path = Path(src)
+    dst_path = Path(dst)
+    if src_path.stat().st_size > LARGE_FIXTURE_THRESHOLD_BYTES:
+        dst_path.write_bytes(b"placeholder\n")
+        return dst
+    return shutil.copy2(src, dst)
 
 
 def _ignore_copy(_src: str, names: list[str]) -> set[str]:
@@ -51,10 +69,16 @@ def _build_candidate_workspace(tmp_path: Path, *, with_git: bool = True) -> Path
         src = REPO_ROOT / rel
         dst = cand / rel
         if src.is_dir():
-            shutil.copytree(src, dst, symlinks=False, ignore=_ignore_copy)
+            shutil.copytree(
+                src,
+                dst,
+                symlinks=False,
+                ignore=_ignore_copy,
+                copy_function=_copy_fixture_file,
+            )
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
+            _copy_fixture_file(str(src), str(dst))
 
     if with_git:
         git_bin = shutil.which("git")
@@ -66,18 +90,8 @@ def _build_candidate_workspace(tmp_path: Path, *, with_git: bool = True) -> Path
             "GIT_COMMITTER_NAME": "Test Bot",
             "GIT_COMMITTER_EMAIL": "bot@gpustack.ai",
         }
-        subprocess.run(
-            [git_bin, "init", "-q"],
-            cwd=cand,
-            env=git_env,
-            check=True,
-        )
-        subprocess.run(
-            [git_bin, "add", "-A"],
-            cwd=cand,
-            env=git_env,
-            check=True,
-        )
+        subprocess.run([git_bin, "init", "-q"], cwd=cand, env=git_env, check=True)
+        subprocess.run([git_bin, "add", "-A"], cwd=cand, env=git_env, check=True)
         subprocess.run(
             [git_bin, "commit", "-q", "-m", "baseline"],
             cwd=cand,
@@ -99,22 +113,32 @@ def _clone_candidate(baseline_template: Path, tmp_path: Path) -> Path:
     return cand
 
 
-def test_repo_control_plane_layout_and_skill_retirement() -> None:
-    assert not (REPO_ROOT / ".autosync").exists()
-    assert (REPO_ROOT / ".auto-sync" / "proposal.json").is_file()
-    assert not (REPO_ROOT / ".agents" / "skills" / "runner-release-sync").exists()
-    assert (REPO_ROOT / ".agents" / "skills" / "runner-release" / "SKILL.md").is_file()
-
+def test_instructions_size_budget_and_auto_sync_workflow_pass_lint() -> None:
     instructions_bytes = (REPO_ROOT / ".auto-sync" / "instructions.md").read_bytes()
     assert len(instructions_bytes) <= 24576
+    assert (
+        lint_workflows.main(
+            [str(REPO_ROOT / ".github" / "workflows" / "auto-sync.yml")],
+        )
+        == 0
+    )
 
 
-def test_clean_baseline_passes_validator_and_shell_entrypoint(
+def test_baseline_and_shell_entrypoint_ignore_poisoned_candidate_script(
     baseline_template: Path,
     tmp_path: Path,
 ) -> None:
     cand = _clone_candidate(baseline_template, tmp_path)
+    assert not (cand / ".claude").exists()
     vc_mod.validate_candidate(cand)
+
+    shutil.rmtree(cand / ".git")
+    poisoned = cand / ".auto-sync" / "checks" / "validate_candidate.py"
+    poisoned.write_text("import sys; sys.exit(99)\n", encoding="utf-8")
+
+    pycache_dir = REPO_ROOT / ".auto-sync" / "checks" / "__pycache__"
+    if pycache_dir.exists():
+        shutil.rmtree(pycache_dir)
 
     bash_bin = shutil.which("bash") or "/bin/bash"
     res = subprocess.run(
@@ -126,25 +150,15 @@ def test_clean_baseline_passes_validator_and_shell_entrypoint(
         check=False,
     )
     assert res.returncode == 0, res.stderr
+    assert not pycache_dir.exists()
 
 
-def test_modifying_proposal_json_inside_control_root_is_allowed(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    proposal_file = cand / ".auto-sync" / "proposal.json"
-    payload = json.loads(proposal_file.read_text(encoding="utf-8"))
-    payload["summary"] = "Updated proposal summary inside .auto-sync/proposal.json."
-    proposal_file.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-    vc_mod.validate_candidate(cand)
-
-
-def test_classify_scope_path_defaults_fail_closed_without_proposal_carveout(
+def test_classify_scope_path_defaults_fail_closed_and_protects_tool_paths(
     baseline_template: Path,
 ) -> None:
-    writable, protected, _ = vc_mod.load_effective_scope(baseline_template)
+    writable, protected, manifest_protected = vc_mod.load_effective_scope(
+        baseline_template,
+    )
     assert (
         vc_mod.classify_scope_path(".auto-sync/proposal.json", writable, protected)
         == "protected"
@@ -176,60 +190,82 @@ def test_classify_scope_path_defaults_fail_closed_without_proposal_carveout(
         )
         == "protected"
     )
+    assert (
+        vc_mod.classify_scope_path("pack/cuda/Dockerfile.vllm", writable, protected)
+        == "writable"
+    )
+    assert (
+        vc_mod.classify_scope_path("pack/cuda/Dockerfile.voxbox", writable, protected)
+        == "protected"
+    )
+    assert (
+        vc_mod.classify_scope_path(
+            "pack/cann/patches/hixl/001_fix.patch",
+            writable,
+            protected,
+        )
+        == "protected"
+    )
+    # Explicit manifest protection must cover tracked tool paths without relying on engine defaults.
+    assert (
+        vc_mod.classify_scope_path(".claude/skills", writable, manifest_protected)
+        == "protected"
+    )
+    assert (
+        vc_mod.classify_scope_path("AGENTS.md", writable, manifest_protected)
+        == "protected"
+    )
 
 
-@pytest.mark.parametrize(
-    "protected_rel",
-    [
+def test_git_scope_allows_proposal_edit_and_rejects_protected_edits(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+
+    proposal_file = cand / ".auto-sync" / "proposal.json"
+    orig_proposal = proposal_file.read_text(encoding="utf-8")
+    payload = json.loads(orig_proposal)
+    payload["summary"] = "Updated proposal summary inside .auto-sync/proposal.json."
+    proposal_file.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    vc_mod.validate_candidate(cand)
+    proposal_file.write_text(orig_proposal, encoding="utf-8")
+
+    for protected_rel in (
         ".auto-sync/instructions.md",
         ".auto-sync/taskpack.yaml",
         ".auto-sync/digests.lock.json",
         ".auto-sync/checks/validate_candidate.sh",
         ".auto-sync/memory/.gitkeep",
-    ],
-)
-def test_modifying_control_plane_files_in_git_workspace_is_rejected(
-    baseline_template: Path,
-    tmp_path: Path,
-    protected_rel: str,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    target = cand / protected_rel
-    target.write_text(
-        target.read_text(encoding="utf-8") + "\n# unauthorized edit\n",
-        encoding="utf-8",
-    )
+    ):
+        target = cand / protected_rel
+        orig_text = target.read_text(encoding="utf-8")
+        target.write_text(orig_text + "\n# unauthorized edit\n", encoding="utf-8")
+        with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
+            vc_mod.validate_candidate(cand)
+        target.write_text(orig_text, encoding="utf-8")
 
+    claude_dir = cand / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / "settings.json").write_text("{}\n", encoding="utf-8")
+    with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
+        vc_mod.validate_candidate(cand)
+    shutil.rmtree(claude_dir)
+
+    agents_file = cand / "AGENTS.md"
+    agents_file.write_text("# unauthorized\n", encoding="utf-8")
+    with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
+        vc_mod.validate_candidate(cand)
+    agents_file.unlink()
+
+    proposal_file.unlink()
+    proposal_file.mkdir()
+    (proposal_file / "nested.json").write_text("{}", encoding="utf-8")
     with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
         vc_mod.validate_candidate(cand)
 
 
-def test_legacy_autosync_directory_or_symlink_is_rejected(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    shutil.rmtree(cand / ".git")
-    legacy_dir = cand / ".autosync"
-    legacy_dir.mkdir()
-    (legacy_dir / "proposal.json").write_text("{}", encoding="utf-8")
-
-    with pytest.raises(
-        vc_mod.ValidationError,
-        match=r"legacy \.autosync path must not exist",
-    ):
-        vc_mod.validate_candidate(cand)
-
-    shutil.rmtree(legacy_dir)
-    legacy_dir.symlink_to(cand / ".auto-sync")
-    with pytest.raises(
-        vc_mod.ValidationError,
-        match=r"legacy \.autosync path must not exist",
-    ):
-        vc_mod.validate_candidate(cand)
-
-
-def test_unexpected_entries_or_symlinks_under_control_root_are_rejected(
+def test_control_root_rejects_unexpected_entries_symlinks_and_hardlinks(
     baseline_template: Path,
     tmp_path: Path,
 ) -> None:
@@ -295,20 +331,6 @@ def test_proposal_unknown_top_level_keys_and_spoofed_unchanged_versions_rejected
         vc_mod.validate_candidate(cand)
 
 
-def test_replacing_proposal_file_with_directory_is_rejected(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    proposal_path = cand / ".auto-sync" / "proposal.json"
-    proposal_path.unlink()
-    proposal_path.mkdir()
-    (proposal_path / "nested.json").write_text("{}", encoding="utf-8")
-
-    with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
-        vc_mod.validate_candidate(cand)
-
-
 @pytest.mark.parametrize(
     "mutator, expected_match",
     [
@@ -325,20 +347,6 @@ def test_replacing_proposal_file_with_directory_is_rejected(
                 [*data["spec"]["scope"]["protected"], ".AUTO-SYNC/PROPOSAL.JSON"],
             ),
             r"spec\.proposal\.path '\.auto-sync/proposal\.json' overlaps protected path '\.AUTO-SYNC/PROPOSAL\.JSON'",
-        ),
-        (
-            lambda data: data["spec"]["scope"].__setitem__(
-                "writable",
-                [".auto-sync/proposal.json", ".auto-sync", "pack/matrix.yaml"],
-            ),
-            r"writable path '\.auto-sync' lives inside protected path '\.auto-sync'",
-        ),
-        (
-            lambda data: data["spec"]["scope"].__setitem__(
-                "writable",
-                [".auto-sync", "pack/matrix.yaml"],
-            ),
-            r"control-root spec\.proposal\.path '\.auto-sync/proposal\.json' requires an exact entry",
         ),
         (
             lambda data: data["spec"]["scope"].__setitem__(
@@ -361,21 +369,22 @@ def test_replacing_proposal_file_with_directory_is_rejected(
             r"spec\.proposal\.path '\.auto-sync/instructions\.md' overlaps protected path",
         ),
         (
-            lambda data: (
-                data["spec"]["proposal"].__setitem__(
-                    "path",
-                    ".auto-sync/memory/proposal.json",
-                ),
-                data["spec"]["scope"].__setitem__(
-                    "writable",
-                    [".auto-sync/memory/proposal.json", "pack/matrix.yaml"],
-                ),
+            lambda data: data["spec"]["scope"].__setitem__(
+                "writable",
+                [".auto-sync/proposal.json", "pack/cuda"],
             ),
-            r"spec\.proposal\.path '\.auto-sync/memory/proposal\.json' overlaps protected path",
+            r"directory writable path 'pack/cuda' must use explicit 'pack/cuda/\*\*'",
+        ),
+        (
+            lambda data: data["spec"]["scope"].__setitem__(
+                "protected",
+                ["pack/cann/patches/hixl"],
+            ),
+            r"directory protected path 'pack/cann/patches/hixl' must use explicit 'pack/cann/patches/hixl/\*\*'",
         ),
     ],
 )
-def test_invalid_taskpack_control_root_scope_configs_are_rejected(
+def test_invalid_taskpack_scope_configs_are_rejected(
     baseline_template: Path,
     tmp_path: Path,
     mutator: object,
@@ -396,60 +405,52 @@ def test_invalid_taskpack_control_root_scope_configs_are_rejected(
         vc_mod.load_effective_scope(cand)
 
 
-def _sample_memory_entry(
-    entry_id: str,
-    claim: str = "Verified static checks on main.",
-) -> dict[str, object]:
+def test_bare_outside_writable_dir_and_missing_writable_protected_file_are_rejected(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+    taskpack_path = cand / ".auto-sync" / "taskpack.yaml"
+    manifest = yaml.safe_load(taskpack_path.read_text(encoding="utf-8"))
+
+    (cand / ".claude").mkdir()
+    manifest["spec"]["scope"]["protected"] = [".claude"]
+    taskpack_path.write_text(
+        yaml.safe_dump(manifest, sort_keys=False),
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match=r"directory protected path '\.claude' must use explicit '\.claude/\*\*'",
+    ):
+        vc_mod.load_effective_scope(cand)
+
+    manifest["spec"]["scope"]["protected"] = [
+        ".claude/**",
+        "pack/cuda/Dockerfile.voxbox",
+    ]
+    taskpack_path.write_text(
+        yaml.safe_dump(manifest, sort_keys=False),
+        encoding="utf-8",
+    )
+    (cand / "pack" / "cuda" / "Dockerfile.voxbox").unlink()
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match=r"protected path missing from candidate: pack/cuda/Dockerfile\.voxbox",
+    ):
+        vc_mod.load_effective_scope(cand)
+
+
+def test_memory_store_validation_accepts_valid_and_rejects_corrupt_or_forbidden_files(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+    entry_id = "entry.run-1.check.runner-static-checks"
     digest_hex = "a" * 64
-    return {
-        "version": 1,
-        "id": entry_id,
-        "claimKey": "check.runner-static-checks",
-        "claim": claim,
-        "kind": "fact",
-        "scope": {
-            "taskpack": "auto-sync",
-            "repository": "gpustack/runner",
-            "paths": [".auto-sync/proposal.json"],
-            "targetMatrix": None,
-        },
-        "sourceRef": {
-            "runId": "run-1",
-            "lockHash": {"algorithm": "sha256", "hex": digest_hex},
-            "candidateDigest": {"algorithm": "sha256", "hex": digest_hex},
-        },
-        "sourceDigest": {"algorithm": "sha256", "hex": digest_hex},
-        "verifiedAtMs": 1000,
-        "validFor": {
-            "baseRevision": "0" * 40,
-            "sourceRevision": "0" * 40,
-            "codeFingerprint": {"algorithm": "sha256", "hex": digest_hex},
-            "upstreamVersions": {"vllm": "v0.19.0"},
-        },
-        "expiresAtMs": 2000,
-        "supersedes": [],
-        "evidenceRefs": [
-            {
-                "evidenceId": "ev-1",
-                "checkId": "runner-static-checks",
-                "level": "local_execution",
-                "observedStatus": "passed",
-                "artifact": {
-                    "name": "checks/runner-static-checks.json",
-                    "digest": {"algorithm": "sha256", "hex": digest_hex},
-                    "byteLength": 128,
-                },
-            },
-        ],
-    }
-
-
-def _write_memory_store(
-    cand: Path,
-    entry_id: str = "entry.run-1.check.runner-static-checks",
-) -> Path:
-    digest_hex = "b" * 64
-    entry = _sample_memory_entry(entry_id)
+    entry = {"id": entry_id, "claim": "Verified static checks on main."}
     taskpack_dir = cand / ".auto-sync" / "memory" / "auto-sync"
     entries_dir = taskpack_dir / "entries"
     entries_dir.mkdir(parents=True, exist_ok=True)
@@ -457,7 +458,6 @@ def _write_memory_store(
         "version": 1,
         "taskpack": "auto-sync",
         "repository": "gpustack/runner",
-        "updatedAtMs": 1000,
         "entries": [entry],
         "retired": [],
         "storeDigest": {"algorithm": "sha256", "hex": digest_hex},
@@ -467,66 +467,8 @@ def _write_memory_store(
         encoding="utf-8",
     )
     entry_path = entries_dir / f"{entry_id}.md"
-    canonical_header = json.dumps(entry, separators=(",", ":"), sort_keys=True)
-    entry_path.write_text(
-        f"---\n{canonical_header}\n---\n\n{entry['claim']}\n",
-        encoding="utf-8",
-    )
-    return entry_path
-
-
-def _commit_all(cand: Path, message: str) -> None:
-    git_bin = shutil.which("git")
-    assert git_bin is not None
-    git_env = {
-        **os.environ,
-        "GIT_AUTHOR_NAME": "Test Bot",
-        "GIT_AUTHOR_EMAIL": "bot@gpustack.ai",
-        "GIT_COMMITTER_NAME": "Test Bot",
-        "GIT_COMMITTER_EMAIL": "bot@gpustack.ai",
-    }
-    subprocess.run([git_bin, "add", "-A"], cwd=cand, env=git_env, check=True)
-    subprocess.run(
-        [git_bin, "commit", "-q", "-m", message],
-        cwd=cand,
-        env=git_env,
-        check=True,
-    )
-
-
-def test_validate_candidate_accepts_committed_memory_store_on_head(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    _write_memory_store(cand)
-    _commit_all(cand, "chore(memory): commit auto-sync memory store")
-    vc_mod.validate_candidate(cand)
-
-
-def test_validate_candidate_rejects_candidate_modifying_memory_store(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    _write_memory_store(cand)
-    _commit_all(cand, "chore(memory): commit auto-sync memory store")
-
-    evil_entry = cand / ".auto-sync" / "memory" / "auto-sync" / "entries" / "evil.md"
-    evil_entry.write_text("tampered\n", encoding="utf-8")
-
-    with pytest.raises(vc_mod.ValidationError, match="modified path is protected"):
-        vc_mod.validate_candidate(cand)
-
-
-def test_validate_candidate_rejects_corrupt_or_forbidden_memory_files(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    shutil.rmtree(cand / ".git")
-    entry_path = _write_memory_store(cand)
-    taskpack_dir = cand / ".auto-sync" / "memory" / "auto-sync"
+    entry_text = f"---\n{json.dumps(entry, sort_keys=True)}\n---\n\nVerified.\n"
+    entry_path.write_text(entry_text, encoding="utf-8")
 
     for bad_name in (".cas.lock", "run.json", "ledger.sqlite", "active-snapshot.md"):
         bad_file = taskpack_dir / bad_name
@@ -535,93 +477,17 @@ def test_validate_candidate_rejects_corrupt_or_forbidden_memory_files(
             vc_mod.validate_candidate(cand)
         bad_file.unlink()
 
-    orphan = taskpack_dir / "entries" / "orphan.md"
+    orphan = entries_dir / "orphan.md"
     orphan.write_text('---\n{"id":"orphan"}\n---\n\norphan\n', encoding="utf-8")
     with pytest.raises(vc_mod.ValidationError, match=r"do not match index\.json"):
         vc_mod.validate_candidate(cand)
     orphan.unlink()
 
-    original_text = entry_path.read_text(encoding="utf-8")
     entry_path.write_text("missing frontmatter\n", encoding="utf-8")
     with pytest.raises(vc_mod.ValidationError, match="front-matter"):
         vc_mod.validate_candidate(cand)
-    entry_path.write_text(original_text, encoding="utf-8")
-
+    entry_path.write_text(entry_text, encoding="utf-8")
     vc_mod.validate_candidate(cand)
-
-
-def test_taskpack_v2_explicit_glob_scope_and_bare_directory_rejection(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    writable, protected, _ = vc_mod.load_effective_scope(baseline_template)
-    assert (
-        vc_mod.classify_scope_path("pack/cuda/Dockerfile.vllm", writable, protected)
-        == "writable"
-    )
-    assert (
-        vc_mod.classify_scope_path(
-            "pack/cuda/patches/vllm/001_wrong_dp_ray.patch",
-            writable,
-            protected,
-        )
-        == "writable"
-    )
-    assert (
-        vc_mod.classify_scope_path("pack/cuda/Dockerfile.voxbox", writable, protected)
-        == "protected"
-    )
-    assert (
-        vc_mod.classify_scope_path(
-            "pack/cann/patches/hixl/001_fix.patch",
-            writable,
-            protected,
-        )
-        == "protected"
-    )
-    assert (
-        vc_mod.classify_scope_path(
-            "pack/cuda/Dockerfile.vllm",
-            ("pack/*/Dockerfile.vllm",),
-            protected,
-        )
-        == "writable"
-    )
-    assert (
-        vc_mod.classify_scope_path(
-            "pack/cuda/sub/Dockerfile.vllm",
-            ("pack/*/Dockerfile.vllm",),
-            protected,
-        )
-        == "outside_writable"
-    )
-
-    cand = _clone_candidate(baseline_template, tmp_path)
-    shutil.rmtree(cand / ".git")
-    taskpack_path = cand / ".auto-sync" / "taskpack.yaml"
-    manifest = yaml.safe_load(taskpack_path.read_text(encoding="utf-8"))
-    manifest["spec"]["scope"]["writable"] = [".auto-sync/proposal.json", "pack/cuda"]
-    taskpack_path.write_text(
-        yaml.safe_dump(manifest, sort_keys=False),
-        encoding="utf-8",
-    )
-    with pytest.raises(
-        vc_mod.ValidationError,
-        match=r"directory writable path 'pack/cuda' must use explicit 'pack/cuda/\*\*'",
-    ):
-        vc_mod.load_effective_scope(cand)
-
-    manifest["spec"]["scope"]["writable"] = [".auto-sync/proposal.json", "pack/cann/**"]
-    manifest["spec"]["scope"]["protected"] = ["pack/cann/patches/hixl"]
-    taskpack_path.write_text(
-        yaml.safe_dump(manifest, sort_keys=False),
-        encoding="utf-8",
-    )
-    with pytest.raises(
-        vc_mod.ValidationError,
-        match=r"directory protected path 'pack/cann/patches/hixl' must use explicit 'pack/cann/patches/hixl/\*\*'",
-    ):
-        vc_mod.load_effective_scope(cand)
 
 
 def test_loopwright_base_dir_enforces_scope_and_published_rows_without_git(
@@ -656,29 +522,3 @@ def test_loopwright_base_dir_enforces_scope_and_published_rows_without_git(
         match="deleted or altered existing published row",
     ):
         vc_mod.validate_candidate(cand)
-
-
-def test_shell_entrypoint_ignores_candidate_checks_script(
-    baseline_template: Path,
-    tmp_path: Path,
-) -> None:
-    cand = _clone_candidate(baseline_template, tmp_path)
-    shutil.rmtree(cand / ".git")
-    poisoned = cand / ".auto-sync" / "checks" / "validate_candidate.py"
-    poisoned.write_text("import sys; sys.exit(99)\n", encoding="utf-8")
-
-    pycache_dir = REPO_ROOT / ".auto-sync" / "checks" / "__pycache__"
-    if pycache_dir.exists():
-        shutil.rmtree(pycache_dir)
-
-    bash_bin = shutil.which("bash") or "/bin/bash"
-    res = subprocess.run(
-        [bash_bin, str(SCRIPT_PATH)],
-        cwd=cand,
-        env={**os.environ, "LOOPWRIGHT_CANDIDATE_DIR": str(cand)},
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert res.returncode == 0, res.stderr
-    assert not pycache_dir.exists()

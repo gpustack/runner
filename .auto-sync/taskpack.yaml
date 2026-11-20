@@ -21,6 +21,8 @@ spec:
       - docs/supported-runners.md
       - README.md
     protected:
+      - .claude/**
+      - AGENTS.md
       - pack/cuda/Dockerfile.voxbox
       - pack/cann/Dockerfile.mindie
       - pack/cann/mindie-atb-models_2.3.0_linux-amd64_py3.11_torch2.1.0-abi0.tar.gz
