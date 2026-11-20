@@ -36,6 +36,10 @@ Protected or out-of-scope paths (NEVER edit):
 - `pack/corex/**`, `pack/dtk/**`, `pack/hggc/**`, `pack/maca/**`, `pack/musa/**`, `pack/shared/**`
 - `.auto-sync/**` (except `.auto-sync/proposal.json`; including `.auto-sync/taskpack.yaml`, `.auto-sync/digests.lock.json`, `.auto-sync/instructions.md`, `.auto-sync/checks/**`, and `.auto-sync/memory/**`), `.github/**`, `.agents/**`, `.claude/**`, `AGENTS.md`, `tests/**`, `docs/release-automation.md`, `docs/packaging.md`, `docs/dependency-metadata.md`, `docs/modules/**`
 
+Workspace and tool path rules:
+- Pass **repository-relative paths** (e.g. `pack/matrix.yaml`, `.auto-sync/proposal.json`, never `./candidate/...` or `/workspace/candidate/...`) to `read`, `write`, `edit`, and `delete`.
+- `bash` runs in an isolated, **offline** scratch directory (`$TMPDIR` writable; fresh scratch cwd per call) with the read-only candidate snapshot exposed at `./candidate` (`$CANDIDATE_DIR`, without `.git` in Turnkey mode). Never attempt to modify `$CANDIDATE_DIR` from `bash`; apply all candidate changes via `write`, `edit`, and `delete`.
+
 ## 2. Incremental Release-Line Chasing Policy
 
 - Chase one `(major, minor)` release line at a time per subscription under PEP 440 ordering.
@@ -51,11 +55,10 @@ Protected or out-of-scope paths (NEVER edit):
 
 ## 3. Research Constraints and Per-Subscription Recipe Upgrade Rules
 
-Use Loopwright's discovered upstream versions in the prompt context together with local repository files (`gpustack_runner/runner.py.json`, `docs/support-records.md`, `docs/supported-runners.md`, `pack/matrix.yaml`, `pack/*/Dockerfile.*`, `git log`).
-Prefer the configured read-only MCP tools when available: `mcp__github__*` (`github-mcp-server` for upstream release notes, exact tag/commit files, issues, and PRs) and `mcp__deepwiki__*` (`https://mcp.deepwiki.com/mcp` for upstream documentation).
-When outbound HTTPS and `crane` are available in `bash` (such as on GitHub Actions runners), inspect container image manifests (`crane manifest <image>`), upstream release tags, Dockerfiles, and requirements at the exact selected release tag or commit (never a moving branch) via `crane`, `curl -fsSL`, or shallow `git`.
-When running in an offline sandbox without MCP or network access and required upstream compatibility facts cannot be verified from the workspace or prompt context, NEVER fabricate URLs or evidence — set that subscription's `status` to `"blocked"` with the specific missing fact in `reason`.
-Read `docs/support-records.md` and `git log`/`git show` on files before changing existing pins, patches, variants, or support rows.
+- **Batch baseline reads on turn 1**: Read `.auto-sync/proposal.json`, `pack/matrix.yaml`, `pack/prereleases.yaml`, `docs/support-records.md`, `docs/supported-runners.md`, `gpustack_runner/runner.py.json`, and the `Dockerfile` / `.patch` files for subscriptions affected by discovered upstream updates (or `PACK_RUN_URL` / PR comment scope) together in one `bash` command over `$CANDIDATE_DIR` (or parallel `read` calls). For subscriptions whose upstream is `up_to_date` and unaffected by shared companion-package pins or `PACK_RUN_URL`, retain their baseline `"unchanged"` entries without redundant upstream queries.
+- **Offline `bash` and read-only MCP research**: Under Taskpack 2.0 `strict` execution (including on GitHub Actions runners), `bash` has **no outbound network access** (`curl`, `crane`, and remote `git` are blocked) and `$CANDIDATE_DIR` omits `.git`. Perform all upstream and `gpustack/runner` release, tag/commit file, workflow, issue, PR, and commit-history queries via the connected read-only MCP tools (`mcp__github__*` pinned to the exact release tag or commit SHA — never a moving branch — and `mcp__deepwiki__*`), batching independent MCP calls in parallel per turn. Use local `git log` or `crane manifest` only when driving locally in an environment where `.git` or outbound registry access is actually present.
+- **Fail closed as `"blocked"` when evidence is unavailable**: When a required compatibility or multi-arch image-manifest fact cannot be verified from the workspace, prompt context, or connected MCP tools (for example, registry-only child digests not recorded in upstream releases/workflows, or an offline run without MCP), NEVER probe blocked network endpoints in `bash` and NEVER fabricate URLs, digests, or evidence — set that subscription's `status` to `"blocked"` with the specific missing fact in `reason` while preserving independent subscriptions.
+- **Inspect prior declarations before editing**: Read `docs/support-records.md`, `.auto-sync/proposal.json`, inline comments in `pack/matrix.yaml` and `pack/*/Dockerfile.*`, and (via `mcp__github__list_commits` / `mcp__github__get_commit` on `gpustack/runner` when needed, or local `git log` when `.git` exists) relevant history before changing existing pins, patches, variants, or support rows.
 
 ### `cuda/vllm` (`pack/cuda/Dockerfile.vllm`)
 - `VLLM_TORCH_VERSION` / `VLLM_TORCH_CUDA_VERSION`: match the Torch version the vLLM release pins for this CUDA base.
@@ -82,7 +85,7 @@ Read `docs/support-records.md` and `git log`/`git show` on files before changing
 - `SGLANG_LMCACHE_VERSION`: built from source (`>= 0.4.6`); must support the new SGLang and stay **identical** to CUDA and vLLM LMCache pins (no MP wire handshake).
 
 ### `cann/vllm` (`pack/cann/Dockerfile.vllm`)
-- `VLLM_VERSION` / `CANN_BASE_IMAGE`: follow `vllm-project/vllm-ascend` releases; the base image and `VLLM_TORCH_VERSION` bound what the stable vLLM engine can be. Ascend base tags publish multi-platform manifest lists; inspect each platform's child manifest digest (`linux/amd64`, `linux/arm64`) and never narrow matrix platforms without listing the tag's children as evidence.
+- `VLLM_VERSION` / `CANN_BASE_IMAGE`: follow `vllm-project/vllm-ascend` releases; the base image and `VLLM_TORCH_VERSION` bound what the stable vLLM engine can be. Ascend base tags publish multi-platform manifest lists; verify `linux/amd64` and `linux/arm64` coverage (from upstream release/workflow metadata via `mcp__github__*`, or child manifest digests when `crane` is available locally) and never narrow matrix platforms without concrete evidence (set `"blocked"` if platform coverage is uncertain).
 - `VLLM_LMCACHE_VERSION` / `VLLM_LMCACHE_ASCEND_VERSION`: on CANN, companion packages follow their Ascend plugin's declared pairing anchor, never the reverse. `VLLM_LMCACHE_VERSION` MUST match the `LMCACHE_UPSTREAM_TAG` constant in `lmcache_ascend/__init__.py` of the selected `LMCache-Ascend` release (not a matching version number), and the pair must support the new vLLM KV connector; otherwise keep the old pair or disable LMCache — never mix lines.
 - `VLLM_MOONCAKE_VERSION`: must support the new vLLM KV connector; check `mooncake-transfer-engine` release notes.
 - `VLLM_OMNI_COMMIT`: prefer the `vllm-omni` release aligned with the new vLLM; when none exists, pin a main-branch commit (7–40 lowercase hex chars) that declares compatibility.
@@ -102,7 +105,9 @@ Read `docs/support-records.md` and `git log`/`git show` on files before changing
 
 ## 5. Patch Dispositions and Deletion
 
-- Review every patch under writable patch directories (`pack/cuda/patches`, `pack/rocm/patches`, `pack/cann/patches/vllm`, `pack/cann/patches/vllm_ascend`, `pack/cann/patches/vllm_omni`) against the exact selected upstream source revision using `git apply --check`.
+- Review every affected patch under writable patch directories (`pack/cuda/patches`, `pack/rocm/patches`, `pack/cann/patches/vllm`, `pack/cann/patches/vllm_ascend`, `pack/cann/patches/vllm_omni`, `pack/cann/patches/sglang`) against the exact selected upstream source revision using `git apply --check`:
+  - For `"unchanged"` subscriptions whose component versions did not change, retain baseline patch entries without re-fetching upstream sources.
+  - For updated components in offline `bash`, fetch the exact target file(s) touched by each patch at the selected tag/commit via `mcp__github__get_file_contents`, stage them at their patch-relative paths under `$TMPDIR` in one `bash` call, and verify with `git apply --check "$CANDIDATE_DIR/<patch-path>"`.
 - Assign each patch one disposition: `retain`, `adapt`, `remove`, or `add`.
 - When removing an obsolete patch (`remove`), delete the `.patch` file using the mediated `delete` tool and update Dockerfile references if needed; never leave an unreferenced or empty `.patch` file behind.
 - Patch `versions` in `.auto-sync/proposal.json` must be bare PEP 440 version strings (e.g. `0.33.0`, never `v0.33.0` or `vllm-0.33.0`).
@@ -139,5 +144,6 @@ Write valid UTF-8 JSON with no duplicate keys to `.auto-sync/proposal.json` (and
 
 ## 9. Final Turn Submission (`submission.v1`)
 
+Pace tool calls so you finish writing candidate edits and `.auto-sync/proposal.json` well within turn limits; if upstream compatibility evidence for a subscription remains inconclusive, mark that subscription `"blocked"` and submit cleanly rather than looping on exploratory queries.
 After writing `.auto-sync/proposal.json` and verifying the candidate workspace, your final assistant reply MUST be ONLY one raw UTF-8 JSON object (no surrounding prose, no Markdown summary, and no bare code fences):
 `{"version":1,"status":"completed","checks":[],"reason":"<single-line printable summary>"}` (or `"status":"no_change"` / `"blocked"` / `"failed"` as appropriate, with `"checks":[]` and no newlines or tabs in `"reason"`).

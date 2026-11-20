@@ -19,7 +19,7 @@ It checks out and verifies the trusted default branch and supplies these files t
 - `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic offline candidate checks mounted read-only as a SHA-256-verified directory under `command.v1` (with `$LOOPWRIGHT_CANDIDATE_DIR` and `$LOOPWRIGHT_BASE_DIR`).
 - `.auto-sync/checks/lint_workflows.py`: workflow linting.
 
-Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools, plus read-only MCP tools from `github-mcp-server` (`mcp__github__*`) and DeepWiki (`mcp__deepwiki__*`) and pinned `crane` for manifest inspection.
+Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash` (offline scratch sandbox with read-only `$CANDIDATE_DIR`), and `delete` tools, plus read-only MCP tools from `github-mcp-server` (`mcp__github__*`) and DeepWiki (`mcp__deepwiki__*`); `crane` is available for manifest inspection only when driving locally outside the strict offline sandbox.
 The taskpack defines writable and protected paths. The author cannot edit its controlling policy.
 The local checks are `runner-proposal-json` (`json-artifact.v1`), `runner-scope-guard` (`scope.v1`), and `runner-static-checks` (`command.v1`).
 The last runs `.auto-sync/checks/validate_candidate.sh`, which invokes `.auto-sync/checks/validate_candidate.py`.
