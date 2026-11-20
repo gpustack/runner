@@ -319,9 +319,30 @@ def test_proposal_unknown_top_level_keys_and_spoofed_unchanged_versions_rejected
     with pytest.raises(vc_mod.ValidationError, match="unknown top-level keys"):
         vc_mod.validate_candidate(cand)
 
+    raw_subs = original.get("subscriptions")
+    sub_items = (
+        list(raw_subs.items())
+        if isinstance(raw_subs, dict)
+        else [(item["subscription"], item) for item in raw_subs]
+    )
+    spoof_upstream = "vllm"
+    for sub_id, entry in sub_items:
+        if entry.get("status") not in {"ready", "unchanged"}:
+            continue
+        target_ver = (
+            entry.get("plugin_version")
+            if sub_id == "cann/vllm"
+            else entry.get("engine_version")
+        )
+        if target_ver is not None:
+            spoof_upstream = (
+                "vllm-ascend" if sub_id == "cann/vllm" else sub_id.split("/", 1)[1]
+            )
+            break
+
     spoofed_versions = {
         **original,
-        "versions": {**original["versions"], "vllm": "v9999.0.0"},
+        "versions": {**(original.get("versions") or {}), spoof_upstream: "v9999.0.0"},
     }
     proposal_file.write_text(
         json.dumps(spoofed_versions, indent=2) + "\n",
@@ -452,6 +473,8 @@ def test_memory_store_validation_accepts_valid_and_rejects_corrupt_or_forbidden_
     digest_hex = "a" * 64
     entry = {"id": entry_id, "claim": "Verified static checks on main."}
     taskpack_dir = cand / ".auto-sync" / "memory" / "auto-sync"
+    if taskpack_dir.exists():
+        shutil.rmtree(taskpack_dir)
     entries_dir = taskpack_dir / "entries"
     entries_dir.mkdir(parents=True, exist_ok=True)
     index_payload = {
@@ -469,6 +492,7 @@ def test_memory_store_validation_accepts_valid_and_rejects_corrupt_or_forbidden_
     entry_path = entries_dir / f"{entry_id}.md"
     entry_text = f"---\n{json.dumps(entry, sort_keys=True)}\n---\n\nVerified.\n"
     entry_path.write_text(entry_text, encoding="utf-8")
+    vc_mod.validate_candidate(cand)
 
     for bad_name in (".cas.lock", "run.json", "ledger.sqlite", "active-snapshot.md"):
         bad_file = taskpack_dir / bad_name

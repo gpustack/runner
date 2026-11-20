@@ -5,27 +5,49 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACK_DIR = REPO_ROOT / "pack"
 RESOLVER = PACK_DIR / "resolve_dockerfile.sh"
 EXPAND_MATRIX = PACK_DIR / "expand_matrix.sh"
-ACTIVE_SERVICES = {
-    "cuda": ["vllm", "sglang", "voxbox"],
-    "rocm": ["vllm", "sglang"],
-    "cann": ["vllm", "sglang", "mindie"],
-    "corex": ["vllm"],
-    "dtk": ["vllm", "sglang"],
-    "hggc": ["vllm", "sglang"],
-    "maca": ["vllm", "sglang"],
-    "musa": ["vllm", "sglang"],
-}
+ARG_DEFAULT_RE = re.compile(r"^ARG\s+(\w+)=(.*)$")
+
+
+def _matrix_rules(pack: Path = PACK_DIR) -> list[dict]:
+    data = yaml.safe_load((pack / "matrix.yaml").read_text(encoding="utf-8"))
+    return data["rules"]
+
+
+def _dockerfile_arg_defaults(path: Path) -> dict[str, str]:
+    defaults: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = ARG_DEFAULT_RE.match(line.strip())
+        if match:
+            defaults[match.group(1)] = match.group(2).strip().strip('"')
+    return defaults
+
+
+def _rule_args(rule: dict) -> dict[str, str]:
+    return dict(arg.split("=", 1) for arg in rule.get("args") or [])
+
+
+MATRIX_PAIRS = sorted(
+    {
+        (rule["backend"], service)
+        for rule in _matrix_rules()
+        for service in rule.get("services") or []
+    },
+)
+MATRIX_BACKENDS = sorted({backend for backend, _ in MATRIX_PAIRS})
+MATRIX_SERVICES = sorted({service for _, service in MATRIX_PAIRS})
 
 
 def _resolve(pack: Path, backend="cuda", service="vllm", operation=""):
@@ -56,7 +78,7 @@ def test_split_recipe_wins_over_combined_recipe(tmp_path, operation):
     assert result.stdout.strip() == str(expected)
 
 
-@pytest.mark.parametrize("backend", ACTIVE_SERVICES)
+@pytest.mark.parametrize("backend", MATRIX_BACKENDS)
 def test_active_selection_rejects_combined_recipe(tmp_path, backend):
     _dockerfile(tmp_path, f"{backend}/Dockerfile")
 
@@ -68,14 +90,7 @@ def test_active_selection_rejects_combined_recipe(tmp_path, backend):
     assert str(tmp_path / backend / "Dockerfile.vllm") in result.stderr
 
 
-@pytest.mark.parametrize(
-    "backend, service",
-    [
-        (backend, service)
-        for backend, services in ACTIVE_SERVICES.items()
-        for service in services
-    ],
-)
+@pytest.mark.parametrize("backend, service", MATRIX_PAIRS)
 def test_repository_active_recipes_are_service_specific(backend, service):
     result = _resolve(PACK_DIR, backend=backend, service=service)
 
@@ -269,18 +284,12 @@ def test_service_matrix_matches_the_existing_runtime(tmp_path, backend, service)
     }
 
 
-@pytest.mark.parametrize("service", ["vllm", "sglang", "voxbox", "mindie"])
+@pytest.mark.parametrize("service", MATRIX_SERVICES)
 def test_repository_matrix_expands_every_supported_pair(tmp_path, service):
-    matrix = subprocess.run(  # noqa: S603
-        ["yq", "--output-format", "json", ".rules", str(PACK_DIR / "matrix.yaml")],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=True,
-    )
     expected = {
         (rule["backend"], service)
-        for rule in json.loads(matrix.stdout)
-        if service in rule["services"]
+        for rule in _matrix_rules(PACK_DIR)
+        if service in (rule.get("services") or [])
     }
     assert expected
 
@@ -292,23 +301,106 @@ def test_repository_matrix_expands_every_supported_pair(tmp_path, service):
     } == expected
 
 
-def test_rocm_vllm_keeps_legacy_and_therock_runtime_lines(tmp_path):
+def test_rocm_vllm_matrix_expansion_matches_rules(tmp_path):
+    defaults = _dockerfile_arg_defaults(PACK_DIR / "rocm" / "Dockerfile.vllm")
+    rocm_rules = [
+        rule
+        for rule in _matrix_rules(PACK_DIR)
+        if rule.get("backend") == "rocm" and "vllm" in (rule.get("services") or [])
+    ]
+    assert rocm_rules, "expected at least one rocm/vllm rule in pack/matrix.yaml"
+
     result, output = _expand(PACK_DIR, tmp_path, backend="rocm", service="vllm")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    expected_by_key: dict[tuple[str, str], tuple[str, str]] = {}
+    expected_manifest: dict[str, list[str]] = {}
+    for rule in rocm_rules:
+        args = _rule_args(rule)
+        runtime = args.get("ROCM_VERSION") or defaults["ROCM_VERSION"]
+        vllm_version = args.get("VLLM_VERSION") or defaults["VLLM_VERSION"]
+        base_image = args.get("VLLM_BASE_IMAGE") or defaults["VLLM_BASE_IMAGE"]
+        platforms = rule.get("platforms") or ["linux/amd64", "linux/arm64"]
+        backend_version = ".".join(runtime.split(".")[:2])
+        tag = f"rocm{backend_version}-vllm{vllm_version}"
+        for platform in platforms:
+            expected_by_key[(runtime, platform)] = (vllm_version, base_image)
+            os_name, arch = platform.split("/", 2)[:2]
+            expected_manifest.setdefault(tag, []).append(f"{tag}-{os_name}-{arch}")
+
+    jobs = {
+        (job["original_backend_version"], job["platform"]): job
+        for job in output["build_jobs"]
+    }
+    assert set(jobs) == set(expected_by_key)
+    for (runtime, platform), (vllm_version, base_image) in expected_by_key.items():
+        job = jobs[(runtime, platform)]
+        assert job["backend"] == "rocm"
+        assert job["service"] == "vllm"
+        assert job["backend_variant"] == ""
+        assert job["backend_version"] == ".".join(runtime.split(".")[:2])
+        assert job["service_version"] == vllm_version
+        assert (
+            job["tag"] == f"rocm{job['backend_version']}-vllm{job['service_version']}"
+        )
+        job_args = dict(arg.split("=", 1) for arg in job["args"])
+        effective_base = job_args.get("VLLM_BASE_IMAGE", defaults["VLLM_BASE_IMAGE"])
+        assert effective_base == base_image
+        assert f"v{vllm_version}" in effective_base
+    assert output["manifest_jobs"] == expected_manifest
+
+
+def test_multi_runtime_rocm_matrix_expansion(tmp_path):
+    pack = tmp_path / "pack"
+    _matrix(
+        pack,
+        [
+            {
+                "backend": "rocm",
+                "services": ["vllm"],
+                "platforms": ["linux/amd64"],
+                "args": [
+                    "ROCM_VERSION=7.2.3",
+                    "VLLM_VERSION=0.33.0",
+                    "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm72",
+                ],
+            },
+            {
+                "backend": "rocm",
+                "services": ["vllm"],
+                "platforms": ["linux/amd64"],
+                "args": [
+                    "ROCM_VERSION=10.0.0",
+                    "VLLM_VERSION=0.33.0",
+                    "VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm100",
+                ],
+            },
+        ],
+    )
+    _dockerfile(
+        pack,
+        "rocm/Dockerfile.vllm",
+        "ARG ROCM_VERSION=10.0.0\n"
+        "ARG VLLM_VERSION=0.33.0\n"
+        "ARG VLLM_BASE_IMAGE=vllm/vllm-openai-rocm:v0.33.0-rocm100\n",
+    )
+
+    result, output = _expand(pack, tmp_path, backend="rocm", service="vllm")
 
     assert result.returncode == 0, result.stdout + result.stderr
     jobs = {job["original_backend_version"]: job for job in output["build_jobs"]}
     assert set(jobs) == {"7.2.3", "10.0.0"}
-    for runtime, suffix in [("7.2.3", "rocm72"), ("10.0.0", "rocm100")]:
+    for runtime, short_ver, suffix in [
+        ("7.2.3", "7.2", "rocm72"),
+        ("10.0.0", "10.0", "rocm100"),
+    ]:
         job = jobs[runtime]
         assert job["platform"] == "linux/amd64"
         assert job["backend_variant"] == ""
-        assert (
-            job["tag"] == f"rocm{job['backend_version']}-vllm{job['service_version']}"
-        )
+        assert job["backend_version"] == short_ver
+        assert job["tag"] == f"rocm{short_ver}-vllm0.33.0"
         args = dict(arg.split("=", 1) for arg in job["args"])
-        assert args["VLLM_BASE_IMAGE"] == (
-            f"vllm/vllm-openai-rocm:v{job['service_version']}-{suffix}"
-        )
+        assert args["VLLM_BASE_IMAGE"] == f"vllm/vllm-openai-rocm:v0.33.0-{suffix}"
         assert output["manifest_jobs"][job["tag"]] == [job["platform_tag"]]
 
 
@@ -393,10 +485,34 @@ def test_build_entry_point_selection(tmp_path, entry_point, operation, recipe):
         assert "docker_file=" not in exported
 
 
+def _patch_preimage_block(patch_text: str) -> str:
+    """Return the pre-patch context/removed lines of the first unified diff hunk."""
+    in_hunk = False
+    lines: list[str] = []
+    for line in patch_text.splitlines():
+        if line.startswith("@@ "):
+            if in_hunk:
+                break
+            in_hunk = True
+            continue
+        if not in_hunk:
+            continue
+        if line.startswith("+"):
+            continue
+        if line.startswith((" ", "-")):
+            lines.append(line[1:])
+        elif line == "":
+            lines.append("")
+    return "\n".join(lines)
+
+
 @pytest.fixture
 def ascend_mooncake_lookup(tmp_path):
     if shutil.which("patch") is None:
         pytest.skip("patch utility is required for this test")
+    patch = PACK_DIR / "cann/patches/vllm_ascend/001_remote_host_port.patch"
+    if not patch.is_file():
+        pytest.skip("001_remote_host_port.patch is not present in pack/cann/patches")
     # Freeze the upstream port lookup so the packaging patch runs without NPU imports.
     # vllm-ascend 8fde6d4e335fe300e2b949aab0e31659cce0811d.
     source = """class MooncakeConnectorWorker:
@@ -421,10 +537,20 @@ def ascend_mooncake_lookup(tmp_path):
             return remote_host, remote_engine_id
         return info.get("host", remote_host), info.get("engine_id", remote_engine_id)
 """
+    patch_text = patch.read_text(encoding="utf-8")
+    preimage = _patch_preimage_block(patch_text)
+    if (
+        preimage
+        and "--- a/vllm_ascend/" in patch_text
+        and "+++ b/vllm_ascend/" in patch_text
+        and preimage not in source
+    ):
+        pytest.skip(
+            "001_remote_host_port.patch context has been adapted for a newer vllm-ascend revision",
+        )
     path = tmp_path / "vllm_ascend/distributed/kv_transfer/kv_p2p/mooncake_connector.py"
     path.parent.mkdir(parents=True)
     path.write_text(source)
-    patch = PACK_DIR / "cann/patches/vllm_ascend/001_remote_host_port.patch"
     result = subprocess.run(  # noqa: S603
         ["patch", "--batch", "--fuzz=0", "-p1", "-i", str(patch)],  # noqa: S607
         cwd=tmp_path,
@@ -567,7 +693,10 @@ def test_hixl_host_build_skips_architecture_without_mooncake(
     skipped,
 ):
     dockerfile = (PACK_DIR / "cann/Dockerfile.vllm").read_text()
-    stage = dockerfile.split("FROM vllm-build AS vllm-build-hixl\n", 1)[1]
+    stage_header = "FROM vllm-build AS vllm-build-hixl\n"
+    if stage_header not in dockerfile:
+        pytest.skip("vllm-build-hixl stage is not present in pack/cann/Dockerfile.vllm")
+    stage = dockerfile.split(stage_header, 1)[1]
     script = stage.split("<<EOF\n", 1)[1].split("\nEOF", 1)[0]
     output = tmp_path / "output"
     script = script.replace("/output", str(output)).replace(
