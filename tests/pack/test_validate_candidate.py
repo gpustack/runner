@@ -558,8 +558,24 @@ def test_ready_subscription_allows_published_record_and_rejects_missing_prepared
     # Baseline on main may carry ready subscriptions already promoted to published.
     vc_mod.validate_candidate(cand)
 
-    # Removing both the catalog entry and support row for an already-ready
-    # subscription must still fail the missing-'prepared' gate.
+    # Removing the support row while keeping the published catalog entry should
+    # report that either 'prepared' or 'published' is required.
+    support_records = cand / "docs" / "support-records.md"
+    lines = support_records.read_text(encoding="utf-8").splitlines()
+    filtered = [
+        line
+        for line in lines
+        if not ("| cuda |" in line and "| vllm |" in line and "| 0.34.0 |" in line)
+    ]
+    support_records.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match=r"ready subscription cuda/vllm 0\.34\.0 requires at least one 'prepared' or 'published' row in docs/support-records\.md",
+    ):
+        vc_mod.validate_candidate(cand)
+
+    # Removing the catalog entry as well must still fail the missing-'prepared' gate.
     catalog_path = cand / "gpustack_runner" / "runner.py.json"
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     catalog = [
@@ -572,15 +588,6 @@ def test_ready_subscription_allows_published_record_and_rejects_missing_prepared
         )
     ]
     catalog_path.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
-
-    support_records = cand / "docs" / "support-records.md"
-    lines = support_records.read_text(encoding="utf-8").splitlines()
-    filtered = [
-        line
-        for line in lines
-        if not ("| cuda |" in line and "| vllm |" in line and "| 0.34.0 |" in line)
-    ]
-    support_records.write_text("\n".join(filtered) + "\n", encoding="utf-8")
 
     with pytest.raises(
         vc_mod.ValidationError,
