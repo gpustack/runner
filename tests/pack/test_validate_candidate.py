@@ -546,3 +546,44 @@ def test_loopwright_base_dir_enforces_scope_and_published_rows_without_git(
         match="deleted or altered existing published row",
     ):
         vc_mod.validate_candidate(cand)
+
+
+def test_ready_subscription_allows_published_record_and_rejects_missing_prepared(
+    baseline_template: Path,
+    tmp_path: Path,
+) -> None:
+    cand = _clone_candidate(baseline_template, tmp_path)
+    shutil.rmtree(cand / ".git")
+
+    # Baseline on main may carry ready subscriptions already promoted to published.
+    vc_mod.validate_candidate(cand)
+
+    # Removing both the catalog entry and support row for an already-ready
+    # subscription must still fail the missing-'prepared' gate.
+    catalog_path = cand / "gpustack_runner" / "runner.py.json"
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    catalog = [
+        item
+        for item in catalog
+        if not (
+            item.get("backend") == "cuda"
+            and item.get("service") == "vllm"
+            and item.get("service_version") == "0.34.0"
+        )
+    ]
+    catalog_path.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
+
+    support_records = cand / "docs" / "support-records.md"
+    lines = support_records.read_text(encoding="utf-8").splitlines()
+    filtered = [
+        line
+        for line in lines
+        if not ("| cuda |" in line and "| vllm |" in line and "| 0.34.0 |" in line)
+    ]
+    support_records.write_text("\n".join(filtered) + "\n", encoding="utf-8")
+
+    with pytest.raises(
+        vc_mod.ValidationError,
+        match=r"ready subscription cuda/vllm 0\.34\.0 requires at least one 'prepared' row in docs/support-records\.md",
+    ):
+        vc_mod.validate_candidate(cand)

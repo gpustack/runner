@@ -2331,8 +2331,16 @@ def _validate_support_records(root: Path, subs: dict[str, dict[str, object]]) ->
             if entry.get("plugin_version") is not None
             else None
         )
-        has_prepared = any(
-            record["status"] == "prepared"
+        is_published = any(
+            m[0] == backend
+            and m[2] == service
+            and m[4] == eng_ver
+            and (backend != "cann" or service != "vllm" or m[5] == plug_ver)
+            for m in measured_with_plugin
+        )
+        allowed_statuses = {"prepared", "published"} if is_published else {"prepared"}
+        has_record = any(
+            record["status"] in allowed_statuses
             and record["backend"] == backend
             and record["service"] == service
             and Version(str(record["engine"])) == eng_ver
@@ -2346,15 +2354,8 @@ def _validate_support_records(root: Path, subs: dict[str, dict[str, object]]) ->
             for record in records
         )
         _require(
-            has_prepared,
+            has_record,
             f"ready subscription {sub_id} {eng_ver} requires at least one 'prepared' row in docs/support-records.md",
-        )
-        is_published = any(
-            m[0] == backend
-            and m[2] == service
-            and m[4] == eng_ver
-            and (backend != "cann" or service != "vllm" or m[5] == plug_ver)
-            for m in measured_with_plugin
         )
         if not is_published:
             ready_new.add((backend, service, eng_ver, plug_ver))
