@@ -2353,9 +2353,12 @@ def _validate_support_records(root: Path, subs: dict[str, dict[str, object]]) ->
             )
             for record in records
         )
+        expected_status_desc = (
+            "'prepared' or 'published'" if is_published else "'prepared'"
+        )
         _require(
             has_record,
-            f"ready subscription {sub_id} {eng_ver} requires at least one 'prepared' row in docs/support-records.md",
+            f"ready subscription {sub_id} {eng_ver} requires at least one {expected_status_desc} row in docs/support-records.md",
         )
         if not is_published:
             ready_new.add((backend, service, eng_ver, plug_ver))
