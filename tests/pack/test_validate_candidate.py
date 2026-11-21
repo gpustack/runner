@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -113,7 +114,29 @@ def _clone_candidate(baseline_template: Path, tmp_path: Path) -> Path:
     return cand
 
 
-def test_instructions_size_budget_and_auto_sync_workflow_pass_lint() -> None:
+def _compute_lock_entry_sha256(root: Path, rel_path: str, kind: str) -> str:
+    target = root / rel_path
+    if kind == "file":
+        return hashlib.sha256(target.read_bytes()).hexdigest()
+    assert kind == "directory"
+    files: list[tuple[str, int, str]] = []
+    for item in sorted(target.rglob("*")):
+        if item.name in {"__pycache__", ".DS_Store"} or "__pycache__" in item.parts:
+            continue
+        if item.is_file():
+            data = item.read_bytes()
+            rel_child = item.relative_to(target).as_posix()
+            files.append((rel_child, len(data), hashlib.sha256(data).hexdigest()))
+    files.sort(key=lambda entry: entry[0])
+    tree_hash = hashlib.sha256(b"loopwright.dev/digests/tree/v1\n")
+    for rel_child, byte_len, digest_hex in files:
+        tree_hash.update(f"{rel_child}\0{byte_len}\0{digest_hex}\n".encode())
+    return tree_hash.hexdigest()
+
+
+def test_instructions_size_budget_and_auto_sync_workflow_pass_lint(
+    tmp_path: Path,
+) -> None:
     instructions_bytes = (REPO_ROOT / ".auto-sync" / "instructions.md").read_bytes()
     assert len(instructions_bytes) <= 24576
     assert (
@@ -121,6 +144,51 @@ def test_instructions_size_budget_and_auto_sync_workflow_pass_lint() -> None:
             [str(REPO_ROOT / ".github" / "workflows" / "auto-sync.yml")],
         )
         == 0
+    )
+
+    taskpack = yaml.safe_load(
+        (REPO_ROOT / ".auto-sync" / "taskpack.yaml").read_text(encoding="utf-8"),
+    )
+    assert taskpack["spec"]["baselineAlignment"] == {"policy": "extract-context"}
+
+    memory_index = REPO_ROOT / ".auto-sync" / "memory" / "auto-sync" / "index.json"
+    assert memory_index.read_bytes().endswith(b"\n")
+
+    pre_commit = yaml.safe_load(
+        (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"),
+    )
+    eof_hooks = [
+        hook
+        for repo in pre_commit["repos"]
+        for hook in repo.get("hooks", [])
+        if hook.get("id") == "end-of-file-fixer"
+    ]
+    assert len(eof_hooks) == 1
+    assert eof_hooks[0].get("exclude") == r"\.patch$"
+
+    lock_data = json.loads(
+        (REPO_ROOT / ".auto-sync" / "digests.lock.json").read_text(encoding="utf-8"),
+    )
+    for entry in lock_data["entries"]:
+        actual = _compute_lock_entry_sha256(REPO_ROOT, entry["path"], entry["kind"])
+        assert actual == entry["sha256"], f"stale digest lock entry for {entry['path']}"
+
+    drifted_root = tmp_path / "drifted"
+    shutil.copytree(
+        REPO_ROOT / ".auto-sync" / "checks",
+        drifted_root / ".auto-sync" / "checks",
+        ignore=_ignore_copy,
+    )
+    (drifted_root / ".auto-sync" / "checks" / "validate_candidate.sh").write_text(
+        "#!/usr/bin/env bash\nexit 1\n",
+        encoding="utf-8",
+    )
+    checks_expected = next(
+        e["sha256"] for e in lock_data["entries"] if e["path"] == ".auto-sync/checks"
+    )
+    assert (
+        _compute_lock_entry_sha256(drifted_root, ".auto-sync/checks", "directory")
+        != checks_expected
     )
 
 

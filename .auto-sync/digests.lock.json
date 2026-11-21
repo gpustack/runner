@@ -5,12 +5,12 @@
     {
       "path": ".auto-sync/checks",
       "kind": "directory",
-      "sha256": "03d7c156b2b447459e3bdbfe177eddf161db4e225e4143a1c64aed45b1d8c080"
+      "sha256": "1c13c9db8055def254e77328523aeba2d334416007e4c699ed0a56b2cac3187a"
     },
     {
       "path": ".auto-sync/instructions.md",
       "kind": "file",
-      "sha256": "41be3b99a6fab8dd02c84cbb2aafb1367283abf380057ce2c955bf47b15a01de"
+      "sha256": "8febb0acab0338cce71cb8977e5ece17fdc1e968413fca2e19d4568f032e07a6"
     }
   ]
 }

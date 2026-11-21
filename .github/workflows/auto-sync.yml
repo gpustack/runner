@@ -208,6 +208,7 @@ jobs:
             ${{ runner.temp }}/loopwright-runs/**/artifacts/**/*.json
             ${{ runner.temp }}/loopwright-runs/lw-action-*/config/config.yaml
             ${{ runner.temp }}/loopwright-runs/lw-action-*/registry/registry.yaml
+            ${{ runner.temp }}/loopwright-runs/lw-action-*/registry/.loopwright-baseline/conflicts.json
             !${{ runner.temp }}/loopwright-runs/**/secrets.json
             !${{ runner.temp }}/loopwright-runs/**/*.sqlite*
           retention-days: 30

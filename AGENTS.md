@@ -84,8 +84,10 @@ Use `loopwright step next --taskpack .auto-sync/taskpack.yaml` (with the portabl
 Use [runner-release](.agents/skills/runner-release/SKILL.md) to cut package releases (tag, notes, promotion) and to align README and supported-runners documentation with published support records.
 The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright@main` (`mode: auto`) with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
 The taskpack also owns `.auto-sync/proposal.json`, `.auto-sync/digests.lock.json`, `.auto-sync/checks/`, and `.auto-sync/memory/`.
+Refresh `.auto-sync/digests.lock.json` with `loopwright digest sync --taskpack .auto-sync/taskpack.yaml --repo .` whenever `.auto-sync/instructions.md` or `.auto-sync/checks/` changes.
 Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools.
 It enforces writable and protected scope with `scope.v1`, checks `.auto-sync/proposal.json` with `json-artifact.v1`, and runs `.auto-sync/checks/validate_candidate.sh` with `command.v1` before publishing or updating an `auto-sync/*` PR.
+On open `auto-sync/*` PR revisions, `spec.baselineAlignment` (`policy: extract-context`) checks 3-way alignment against `main` before model probes so concurrent `main` updates are preserved or surfaced explicitly.
 The agent cannot merge, publish images, invoke Pack, or edit its controlling policy.
 If a decision is ambiguous or compatibility evidence is missing, return `blocked` and end the affected work.
 If configuration, tools, deadlines, or output validation fail, return `failed`.

@@ -11,9 +11,9 @@ The job runs weekly on Sunday at 13:07 UTC, or by manual dispatch or an authoriz
 When subscribed upstream releases match `.auto-sync/proposal.json` (and neither `force` nor `pack-run-url` is set), `mode: auto` runs check-only `no_change` verification with zero model calls; otherwise it dispatches `candidate` mode.
 It checks out and verifies the trusted default branch and supplies these files to Loopwright:
 
-- `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` Taskpack 2.0 manifest declaring `spec.execution` (`mode: strict`, `digests.pinDigests: true`), explicit `/**` and single-file scope globs, upstreams, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, and model configuration (authenticated via `LOOPWRIGHT_PROVIDER_TOKEN`).
+- `.auto-sync/taskpack.yaml`: a `loopwright.dev/v1alpha1` Taskpack 2.0 manifest declaring `spec.execution` (`mode: strict`, `digests.pinDigests: true`), explicit `/**` and single-file scope globs, upstreams, read-only MCP servers (`github` stdio and `deepwiki` HTTP), execution limits, checks, publication, isolated 3-way `spec.baselineAlignment` (`policy: extract-context`), and model configuration (authenticated via `LOOPWRIGHT_PROVIDER_TOKEN`).
 - `.auto-sync/digests.lock.json`: deterministic SHA-256 lockfile pinning `.auto-sync/instructions.md` and the `.auto-sync/checks` directory tree (`loopwright digest sync --taskpack .auto-sync/taskpack.yaml --repo .`).
-- `.auto-sync/instructions.md`: the author instructions, limited to 24,576 UTF-8 bytes. They directly consolidate upgrade rules for all six recipes.
+- `.auto-sync/instructions.md`: the author instructions, limited to 24,576 UTF-8 bytes. They directly consolidate upgrade rules for all six recipes so initial `author` turns (where `changedPaths` is empty) retain full cross-backend context.
 - `.auto-sync/proposal.json`: the canonical proposal artifact inside the protected `.auto-sync/` control root, exposed as an exact single-file writable entry.
 - `.auto-sync/memory/`: protected root for Loopwright taskpack memory. Verified facts and failure observations for `auto-sync` live under `.auto-sync/memory/auto-sync/` (`index.json` and `entries/<id>.md`) and are proposed through a separate `loopwright/memory/auto-sync/main` pull request.
 - `.auto-sync/checks/validate_candidate.sh` and `validate_candidate.py`: deterministic offline candidate checks mounted read-only as a SHA-256-verified directory under `command.v1` (with `$LOOPWRIGHT_CANDIDATE_DIR` and `$LOOPWRIGHT_BASE_DIR`).
@@ -23,7 +23,10 @@ Loopwright runs the author in an isolated candidate workspace with mediated `rea
 The taskpack defines writable and protected paths. The author cannot edit its controlling policy.
 The local checks are `runner-proposal-json` (`json-artifact.v1`), `runner-scope-guard` (`scope.v1`), and `runner-static-checks` (`command.v1`).
 The last runs `.auto-sync/checks/validate_candidate.sh`, which invokes `.auto-sync/checks/validate_candidate.py`.
-These checks precede publication or update of an `auto-sync/*` pull request.
+These checks precede publication or update of an `auto-sync/*` pull request, and Loopwright renders deterministic `Run Health` (`RunEval`) telemetry in the GitHub Step Summary.
+
+When `sourceRevision` differs from `baseRevision` (such as `/auto-sync revise` or `/auto-sync retry` on an open `auto-sync/*` pull request after `main` advances), `spec.baselineAlignment` (`policy: extract-context`) runs an isolated 3-way merge check before any model probe.
+Disjoint edits merge cleanly without overwriting newer `main` lines; writable conflict hunks are scrubbed and staged read-only at `.loopwright-baseline/conflicts.json` (and archived in diagnostics) with mandatory conflict resolution before publication; protected or unbounded conflicts settle immediately as `blocked`.
 
 After the primary cycle settles, Loopwright finalizes deterministic run memory (`onNoModelBudget: deterministic-observations-only`) in an isolated clone of `main` without mutating the candidate branch.
 When new or updated memory entries are produced, Loopwright pushes `loopwright/memory/auto-sync/main`, opens or updates a dedicated memory pull request containing only `.auto-sync/memory/auto-sync/index.json` and `.auto-sync/memory/auto-sync/entries/<id>.md`, exports its URL as the `memory-pr-url` action output, and writes a scrubbed per-run `memory-publication.json` receipt under the diagnostics directory.

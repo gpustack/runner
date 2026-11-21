@@ -102,6 +102,8 @@ spec:
     targetBranch: main
     headBranchPrefix: auto-sync/
     titleTemplate: "feat(pack): sync upstream runner releases"
+  baselineAlignment:
+    policy: extract-context
   memory:
     directory: .auto-sync/memory
     apply: separate-pull-request
