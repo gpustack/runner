@@ -169,7 +169,7 @@ jobs:
           crane version
       - name: Run Loopwright
         id: loopwright
-        uses: gpustack/loopwright@main
+        uses: gpustack/loopwright@9fc93a1f0b48844f24d76dafb16575fd562947aa # v0.0.1
         with:
           taskpack-path: .auto-sync/taskpack.yaml
           mode: auto

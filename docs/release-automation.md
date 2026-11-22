@@ -6,7 +6,7 @@ Static checks do not prove runtime or GPU compatibility.
 
 ## Architecture
 
-`.github/workflows/auto-sync.yml` runs a single `sync` job using `gpustack/loopwright@main` in `mode: auto` with `allow-privileged-execution: 'false'` and `allow-workflow-writes: 'false'`.
+`.github/workflows/auto-sync.yml` runs a single `sync` job using `gpustack/loopwright` (pinned to `v0.0.1`) in `mode: auto` with `allow-privileged-execution: 'false'` and `allow-workflow-writes: 'false'`.
 The job runs weekly on Sunday at 13:07 UTC, or by manual dispatch or an authorized PR command.
 When subscribed upstream releases match `.auto-sync/proposal.json` (and neither `force` nor `pack-run-url` is set), `mode: auto` runs check-only `no_change` verification with zero model calls; otherwise it dispatches `candidate` mode.
 It checks out and verifies the trusted default branch and supplies these files to Loopwright:

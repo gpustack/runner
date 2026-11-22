@@ -82,7 +82,7 @@ Run `make package` or Pack only when image production is explicitly authorized.
 
 Use `loopwright step next --taskpack .auto-sync/taskpack.yaml` (with the portable `loopwright-step` skill from `gpustack/loopwright`) for local upstream discovery or an authorized `/auto-sync` revision; see [Release automation](docs/release-automation.md#local-verification).
 Use [runner-release](.agents/skills/runner-release/SKILL.md) to cut package releases (tag, notes, promotion) and to align README and supported-runners documentation with published support records.
-The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright@main` (`mode: auto`) with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
+The `sync` job in `.github/workflows/auto-sync.yml` invokes `gpustack/loopwright` (pinned to `v0.0.1`, `mode: auto`) with `.auto-sync/taskpack.yaml` and `.auto-sync/instructions.md`.
 The taskpack also owns `.auto-sync/proposal.json`, `.auto-sync/digests.lock.json`, `.auto-sync/checks/`, and `.auto-sync/memory/`.
 Refresh `.auto-sync/digests.lock.json` with `loopwright digest sync --taskpack .auto-sync/taskpack.yaml --repo .` whenever `.auto-sync/instructions.md` or `.auto-sync/checks/` changes.
 Loopwright runs the author in an isolated candidate workspace with mediated `read`, `write`, `edit`, `bash`, and `delete` tools.
