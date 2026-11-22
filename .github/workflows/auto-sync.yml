@@ -111,18 +111,12 @@ jobs:
             echo "Working tree became dirty after pull request object fetch." >&2
             exit 1
           fi
-      - name: Setup uv
-        if: ${{ !inputs.dry-run }}
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "0.8.24"
-          enable-cache: true
-          python-version: "3.10"
-      - name: Install dependencies
+      - name: Install validator dependencies
         if: ${{ !inputs.dry-run }}
         run: |
-          make prepare
-          uv sync --locked --all-packages
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-yaml python3-packaging
+          /usr/bin/python3 -c 'import yaml, packaging.version'
       - name: Cache research tools
         if: ${{ !inputs.dry-run }}
         uses: actions/cache@v4
@@ -196,7 +190,7 @@ jobs:
           LOOPWRIGHT_PROVIDER_TOKEN: ${{ secrets.CI_GPUSTACK_LOOPWRIGHT_LLM_AUTH_TOKEN || secrets.CI_GPUSTACK_CODEREVIEW_LLM_AUTH_TOKEN || secrets.CI_GPUSTACK_RUNNER_AUTOSYNC_LLM_AUTH_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACK_RUN_URL: ${{ inputs.pack-run-url }}
-          PYTHON_BIN: ${{ github.workspace }}/.venv/bin/python
+          PYTHON_BIN: /usr/bin/python3
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
