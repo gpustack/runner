@@ -121,6 +121,7 @@ Workspace and tool path rules:
 ## 7. Focused `/auto-sync` PR Revisions and `PACK_RUN_URL` Diagnosis
 
 - On `/auto-sync` comment revisions (`retry`, `revise`, `status`), preserve human commits, accepted choices, and unrelated subscriptions. Do not guess when feedback is ambiguous or conflicting; settle affected subscriptions as `blocked`.
+- When `.loopwright-baseline/conflicts.json` is mounted (`spec.baselineAlignment.policy: extract-context`), an open `auto-sync/*` branch conflicted with newer `main` commits (for example, `merge_runner` promoting rows to `published` in `docs/support-records.md` or updating `pack/matrix.yaml`, `docs/supported-runners.md`, or `README.md`). Read `.loopwright-baseline/conflicts.json`, preserve `main`'s published records and accepted updates, re-apply eligible candidate changes cleanly across every listed path without Git conflict markers (`<<<<<<<`, `|||||||`, `>>>>>>>`), or mark affected subscriptions `blocked` if concurrent `main` changes invalidate compatibility.
 - When `PACK_RUN_URL` is set in the environment, inspect the referenced failed Pack workflow run, map each failing job/step to its owning subscription, record that exact `PACK_RUN_URL` in `.auto-sync/proposal.json` (via top-level `"pack_run_url"` or in a subscription's `"sources"` / `"reason"`), and scope the fix to the failing recipe, patches, or pins while keeping the chasing rule.
 
 ## 8. Proposal Artifact Contract (`.auto-sync/proposal.json`)

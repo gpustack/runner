@@ -8,7 +8,7 @@ repos:
       - id: trailing-whitespace
         exclude: \.patch$
       - id: end-of-file-fixer
-        exclude: (\.patch$|^\.auto-sync/memory/)
+        exclude: \.patch$
       - id: check-symlinks
       - id: check-yaml
         args: [--allow-multiple-documents]
