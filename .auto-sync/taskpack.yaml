@@ -106,7 +106,7 @@ spec:
     policy: extract-context
   memory:
     directory: .auto-sync/memory
-    apply: separate-pull-request
+    apply: inline-with-candidate
     onNoModelBudget: deterministic-observations-only
   triggers:
     schedule: true
