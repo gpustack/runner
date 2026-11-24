@@ -1,0 +1,38 @@
+rules:
+
+  # Released Ascend CANN 9.2 vLLM 0.30.0 images, one rule per hardware variant.
+  #
+  # CANN_VERSION carries the major.minor the released tag uses; the recipe's
+  # patch component (9.2.1) is not part of the image tag.
+
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=9.2"
+      - "CANN_ARCHS=910b"
+      - "VLLM_VERSION=0.30.0"
+
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=9.2"
+      - "CANN_ARCHS=950"
+      - "VLLM_VERSION=0.30.0"
+
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=9.2"
+      - "CANN_ARCHS=a3"
+      - "VLLM_VERSION=0.30.0"
+
+  - backend: "cann"
+    services:
+      - "vllm"
+    args:
+      - "CANN_VERSION=9.2"
+      - "CANN_ARCHS=310p"
+      - "VLLM_VERSION=0.30.0"
