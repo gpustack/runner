@@ -71,6 +71,7 @@ Set `VLLM_TORCHCODEC_VERSION` only for a broken base wheel and clear it when fix
 Align `VLLM_HIXL_COMMIT` with the CANN host-library ABI.
 `SGLANG_NVIDIA_HPCX_VERSION` and `SGLANG_AWS_EFA_VERSION` track the CUDA base line, not SGLang.
 For Ascend base images, inspect each platform's child manifest before changing platform coverage.
+When upgrading an engine or source-built companion, also audit inline `pip install` / `uv pip install` pins in the affected Dockerfiles (such as `fastokens`, `ray`, and LMCache build-time `grpcio`/`grpcio-tools`) against both upstream requirements and runtime version guards in upstream source code, keeping `fastokens` in lockstep across CUDA, ROCm, and CANN vLLM recipes.
 
 Review each affected patch against the exact selected source revision with `git apply --check`.
 Record `retain`, `adapt`, `remove`, or `add`, with reasons, bare PEP 440 versions, platforms, and `https://` sources.
