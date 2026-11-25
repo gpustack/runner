@@ -72,3 +72,4 @@ refresh their existing catalog rows. If selected again, they use central collect
 - [x] 2026-09-20: Install `vllm-router` package for vLLM 0.27.1 of CUDA released images.
 - [x] 2026-09-24: Patch vLLM 0.29.0 of CUDA/ROCm released images to fix mooncake store pending load assertion.
 - [x] 2026-10-16: Disable the spec-less `humming` stub vllm-omni registers in `sys.modules` for vLLM 0.27.1/0.29.0/0.30.0/0.31.0 of ROCm/CANN released images.
+- [ ] 2026-11-24: Upgrade `vllm-router` to 0.1.17 for vLLM 0.30.0 of CANN 9.2 released images.

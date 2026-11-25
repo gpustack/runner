@@ -1,0 +1,40 @@
+ARG CANN_VERSION=9.2
+ARG CANN_ARCHS=910b
+ARG VLLM_VERSION=0.30.0
+ARG VLLM_ROUTER_VERSION=0.1.17
+
+FROM gpustack/runner:cann${CANN_VERSION}-${CANN_ARCHS}-vllm${VLLM_VERSION} AS vllm
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+
+ARG VLLM_ROUTER_VERSION
+
+## Upgrade vLLM Router
+##
+## vLLM Router 0.1.15 predates the fix that sets `min_tokens=1` alongside
+## `max_tokens=1` on the internal prefill request. Without it, a prefill-only
+## request can finish on its first token with FINISHED_STOPPED, and the Ascend
+## Mooncake connectors only return KV handoff parameters for
+## FINISHED_LENGTH_CAPPED -- so Decode is sent the original request with no
+## remote blocks and can recompute the whole prompt. 0.1.17 is the first
+## release carrying that fix.
+##
+## The wheel is prebuilt for aarch64 and x86_64 and declares the same
+## pure-Python web dependencies as 0.1.15, and `--no-deps` keeps the install
+## from resolving or moving anything else in the image. Only the router
+## changes.
+RUN <<EOF
+    # vLLM Router
+
+    UV_NO_CACHE=1 uv pip install --no-deps \
+        vllm-router==${VLLM_ROUTER_VERSION}
+
+    # Fail the build rather than ship an image whose router is missing or
+    # broken.
+    command -v vllm-router >/dev/null
+
+    # Review
+    uv pip tree
+EOF
+
+WORKDIR /
+ENTRYPOINT [ "tini", "--" ]
