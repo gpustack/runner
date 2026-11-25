@@ -67,7 +67,7 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
       "vllm-omni": "0.30.0+cpu",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -92,7 +92,7 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
       "vllm-omni": "0.30.0+cpu",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -905,7 +905,7 @@
       "transformers": "5.14.1",
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -928,7 +928,7 @@
       "transformers": "5.14.1",
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -1211,7 +1211,7 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
       "vllm-omni": "0.30.0+cpu",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -1236,7 +1236,7 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
       "vllm-omni": "0.30.0+cpu",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -2058,7 +2058,7 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
       "vllm-omni": "0.30.0+cpu",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
@@ -2080,7 +2080,7 @@
       "vllm": "0.30.0+empty",
       "vllm-ascend": "0.30.0",
       "vllm-omni": "0.30.0+cpu",
-      "vllm-router": "0.1.15"
+      "vllm-router": "0.1.17"
     }
   },
   {
